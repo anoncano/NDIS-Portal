@@ -3532,7 +3532,6 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     descSelect.className = 'invoice-input-condensed description-select';
     descSelect.innerHTML = `<option value="">-- Select Service --</option>`;
     
-    // Filter services based on worker's authorizedServiceCodes
     const availableServices = adminManagedServices.filter(s =>
         profile.authorizedServiceCodes?.includes(s.code)
     );
@@ -3783,7 +3782,7 @@ function calculateInvoiceTotals() {
     $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
 }
 
-function loadAdminInvoiceCustomizations() { // Removed duplicate declaration
+function loadAdminInvoiceCustomizations() {
     console.log("loadAdminInvoiceCustomizations called - placeholder");
     const container = $("#adminInvoiceCustomization");
     if (container && !container.innerHTML.trim()) { 
@@ -3796,7 +3795,7 @@ function loadAdminInvoiceCustomizations() { // Removed duplicate declaration
                                </ul>`;
     }
 }
-// Placeholder
+
 async function saveAdminInvoiceCustomizations() {
     showMessage("Info", "Saving invoice customizations is not yet implemented.")
 }
