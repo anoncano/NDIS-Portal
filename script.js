@@ -2098,7 +2098,7 @@ function handleAdminTabClick(event) {
 }
 
 
-function loadAdminInvoiceCustomizations() {
+function loadAdminInvoiceCustomizations() { // Single declaration now
     console.log("loadAdminInvoiceCustomizations called - placeholder");
     const container = $("#adminInvoiceCustomization");
     if (container && !container.innerHTML.trim()) { 
@@ -3799,4 +3799,3 @@ function loadAdminInvoiceCustomizations() {
 async function saveAdminInvoiceCustomizations() {
     showMessage("Info", "Saving invoice customizations is not yet implemented.")
 }
-
