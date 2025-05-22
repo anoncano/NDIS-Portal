@@ -22,8 +22,13 @@ import {
     where,
     serverTimestamp, 
     writeBatch,
-    runTransaction
+    runTransaction,
+    arrayUnion,
+    arrayRemove
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// Firebase Storage imports (Add if/when implementing file uploads)
+// import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
 
 /* ========== DOM helpers ========== */
 const $ = q => document.querySelector(q);
@@ -33,6 +38,7 @@ const $$ = q => [...document.querySelectorAll(q)];
 let fbApp;
 let fbAuth;
 let fsDb; 
+// let fbStorage; // Uncomment when Firebase Storage is implemented
 let currentUserId = null; 
 
 const firebaseConfig = window.firebaseConfigForApp; 
@@ -50,6 +56,7 @@ let currentUserEmail = null;
 let profile = {}; 
 let globalSettings = {}; 
 let adminManagedServices = []; 
+let currentInvoiceData = { items: [], invoiceNumber: "", invoiceDate: "", subtotal: 0, gst: 0, grandTotal: 0 }; // Holds current invoice state
 
 let agreementCustomData; 
 try {
@@ -151,7 +158,31 @@ function formatDateForInvoiceDisplay(dateInput) {
     return `${correctedDate.getDate()} ${correctedDate.toLocaleString('en-AU', { month: 'short' })} ${correctedDate.getFullYear().toString().slice(-2)}`;
 }
 function timeToMinutes(timeStr) { if (!timeStr) return 0; const [h, m] = timeStr.split(':').map(Number); return h * 60 + m; }
-function determineRateType(dateStr, startTime24) { if (!dateStr || !startTime24) return "weekday"; const date = new Date(dateStr); const day = date.getDay(); const hr = parseInt(startTime24.split(':')[0],10); if (day === 0) return "sunday"; if (day === 6) return "saturday"; if (hr >= 20) return "evening"; if (hr < 6) return "night"; return "weekday"; }
+
+function calculateHours(startTime24, endTime24) {
+    if (!startTime24 || !endTime24) return 0;
+    const startMinutes = timeToMinutes(startTime24);
+    const endMinutes = timeToMinutes(endTime24);
+    if (endMinutes < startMinutes) return 0; // Or handle overnight logic if needed
+    return (endMinutes - startMinutes) / 60;
+}
+
+function determineRateType(dateStr, startTime24) { 
+    if (!dateStr || !startTime24) return "weekday"; 
+    const date = new Date(dateStr); 
+    const day = date.getDay(); // 0 for Sunday, 6 for Saturday
+    const hr = parseInt(startTime24.split(':')[0],10); 
+
+    // Placeholder for Public Holiday check - this would require a list of PH dates
+    // if (isPublicHoliday(date)) return "public"; 
+
+    if (day === 0) return "sunday"; 
+    if (day === 6) return "saturday"; 
+    // Standard NDIS times: Evening 8pm-12am, Night 12am-6am
+    if (hr >= 20) return "evening"; // 8 PM onwards
+    if (hr < 6) return "night";   // Before 6 AM
+    return "weekday"; 
+}
 function formatTime12Hour(t24){if(!t24)return"";const [h,m]=t24.split(':'),hr=parseInt(h,10);if(isNaN(hr)||isNaN(parseInt(m,10)))return"";const ap=hr>=12?'PM':'AM';let hr12=hr%12;hr12=hr12?hr12:12;return`${String(hr12).padStart(2,'0')}:${m} ${ap}`;}
 
 /* ========== Firebase Initialization and Auth State ========== */
@@ -176,6 +207,7 @@ async function initializeFirebase() {
         fbApp = initializeApp(firebaseConfig);
         fbAuth = getAuth(fbApp);
         fsDb = getFirestore(fbApp); 
+        // fbStorage = getStorage(fbApp); // Uncomment when Firebase Storage is implemented
 
         if (!fbAuth || !fsDb) { 
             console.error("Failed to get Firebase Auth or Firestore instance.");
@@ -189,6 +221,9 @@ async function initializeFirebase() {
 
         isFirebaseInitialized = true;
         console.log("Firebase initialized with Cloud Firestore.");
+        // For development, you might want more detailed logs from Firestore. Remove for production.
+        // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // setLogLevel('debug'); 
         await setupAuthListener(); 
     } catch (error) {
         console.error("Firebase initialization error:", error);
@@ -249,7 +284,7 @@ async function setupAuthListener() {
                             enterPortal(true);
                         }
                     } else if (!userProfileData && currentUserEmail && currentUserEmail.toLowerCase() !== "admin@portal.com") { 
-                        profile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, createdAt: serverTimestamp(), abn: "", gstRegistered: false, bsb: "", acc: "", files: [], authorizedServiceCodes: [], profileSetupComplete: false };
+                        profile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, createdAt: serverTimestamp(), abn: "", gstRegistered: false, bsb: "", acc: "", files: [], authorizedServiceCodes: [], profileSetupComplete: false, nextInvoiceNumber: 1001 };
                         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
                         await setDoc(userProfileDocRef, profile);
                         accounts[currentUserEmail] = { name: profile.name, profile: profile };
@@ -558,27 +593,315 @@ window.modalRegister = async function () {
   }
 };
 
-window.editProfile = function() { console.warn("editProfile function placeholder triggered."); showMessage("Coming Soon", "Profile editing will be available here."); };
-window.uploadProfileDocuments = function() { console.warn("uploadProfileDocuments function placeholder triggered."); showMessage("Coming Soon", "Document uploading will be available here."); };
-window.addInvRowUserAction = function() { console.warn("addInvRowUserAction function placeholder triggered."); showMessage("Information", "Adding invoice row manually.");};
-window.saveDraft = function() { console.warn("saveDraft function placeholder triggered."); showMessage("Information", "Invoice draft saving placeholder.");};
-window.generateInvoicePdf = function() { console.warn("generateInvoicePdf function placeholder triggered."); showMessage("Information", "PDF generation placeholder.");};
-window.saveSig = function() { console.warn("saveSig function placeholder triggered."); showMessage("Information", "Signature saving placeholder."); closeModal('sigModal');};
+window.editProfile = function() {
+    // This function is triggered by the "Edit Profile Details" button.
+    // It should allow users to modify their name, ABN, GST status, BSB, and Account Number.
+    // For simplicity, we'll reuse the user setup wizard (`#wiz`) for editing.
+    if (!currentUserId || !profile) {
+        showMessage("Error", "User not logged in or profile not loaded.");
+        return;
+    }
+    openUserSetupWizard(true); // Pass a flag to indicate it's for editing
+};
 
-function openUserSetupWizard() {
+window.uploadProfileDocuments = async function() {
+    if (!currentUserId || !fsDb) {
+        showMessage("Error", "User not logged in or database not ready.");
+        return;
+    }
+    const fileInput = $("#profileFileUpload");
+    if (!fileInput || fileInput.files.length === 0) {
+        showMessage("No Files", "Please select one or more files to upload.");
+        return;
+    }
+
+    showLoading("Uploading documents...");
+    // Firebase Storage integration is needed here.
+    // For each file in fileInput.files:
+    // 1. Create a unique file name (e.g., using timestamp or UUID).
+    // 2. Create a Firebase Storage reference: `ref(fbStorage, `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`)`
+    // 3. Upload the file: `await uploadBytes(storageRef, file)`
+    // 4. Get the download URL: `const downloadURL = await getDownloadURL(storageRef)`
+    // 5. Store metadata (name, downloadURL, timestamp) in Firestore user's profile (e.g., in the `files` array).
+
+    // --- Placeholder for Firestore update (actual Storage upload needed above) ---
+    const filesToUpload = Array.from(fileInput.files);
+    const newFileEntries = [];
+
+    for (const file of filesToUpload) {
+        // Simulate upload and get a placeholder URL
+        const uniqueFileName = `${Date.now()}-${file.name}`; 
+        // const downloadURL = "https://placeholder.co/600x400?text=Uploaded+File"; // Replace with actual fbStorage downloadURL
+        
+        // In a real scenario, you would get the downloadURL from Firebase Storage
+        // For now, we'll just store the name and a placeholder.
+        // This part needs to be replaced with actual Firebase Storage upload logic.
+        console.warn(`Placeholder: File "${file.name}" would be uploaded to Firebase Storage here.`);
+        newFileEntries.push({
+            name: file.name,
+            // url: downloadURL, // This would be the actual URL from Storage
+            storagePath: `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`, // Store path for deletion
+            uploadedAt: serverTimestamp()
+        });
+    }
+
+    if (newFileEntries.length > 0) {
+        try {
+            const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+            await updateDoc(userProfileDocRef, {
+                files: arrayUnion(...newFileEntries) // Add new files to existing array
+            });
+            profile.files = [...(profile.files || []), ...newFileEntries.map(f => ({...f, uploadedAt: new Date()}))]; // Update local profile
+            loadProfileData(); // Refresh profile display
+            showMessage("Documents Updated", "File metadata added to profile. Full upload requires Storage setup.");
+        } catch (error) {
+            console.error("Error updating profile with file metadata:", error);
+            showMessage("Error", "Could not update profile with file information: " + error.message);
+        }
+    }
+    // --- End Placeholder ---
+    
+    fileInput.value = ""; // Clear file input
+    hideLoading();
+};
+
+window.addInvRowUserAction = function() { 
+    addInvoiceRow(); // Call the existing function to add a blank row
+    showMessage("Row Added", "A new row has been added to the invoice. Please fill in the details.");
+};
+
+window.saveDraft = async function() {
+    if (!currentUserId || !fsDb) {
+        showMessage("Error", "Cannot save draft. User not logged in or database not ready.");
+        return;
+    }
+    showLoading("Saving invoice draft...");
+
+    // 1. Gather data from the invoice table and header fields
+    currentInvoiceData.invoiceNumber = $("#invNo")?.value || "";
+    currentInvoiceData.invoiceDate = $("#invDate")?.value || new Date().toISOString().split('T')[0];
+    currentInvoiceData.providerName = $("#provName")?.value || "";
+    currentInvoiceData.providerAbn = $("#provAbn")?.value || "";
+    currentInvoiceData.gstRegistered = ($("#gstFlag")?.value.toLowerCase() === 'yes');
+    
+    currentInvoiceData.items = [];
+    const rows = $$("#invTbl tbody tr");
+    rows.forEach((row, index) => {
+        if (row.classList.contains('deleted-row')) return; // Skip rows marked for deletion if any
+
+        const itemDateEl = row.querySelector(`input[id^="itemDate${index}"]`);
+        const itemDescEl = row.querySelector(`select[id^="itemDesc${index}"]`); // This is a select
+        const itemStartTimeEl = row.querySelector(`input[id^="itemStart${index}"]`);
+        const itemEndTimeEl = row.querySelector(`input[id^="itemEnd${index}"]`);
+        const itemTravelKmEl = row.querySelector(`input[id^="itemTravel${index}"]`);
+        const itemClaimTravelEl = row.querySelector(`input[id^="itemClaimTravel${index}"]`);
+
+        const serviceCode = itemDescEl ? itemDescEl.value : "";
+        const service = adminManagedServices.find(s => s.code === serviceCode);
+
+        currentInvoiceData.items.push({
+            date: itemDateEl ? itemDateEl.value : "",
+            serviceCode: serviceCode,
+            description: service ? service.description : "N/A",
+            startTime: itemStartTimeEl ? itemStartTimeEl.dataset.value24 : "",
+            endTime: itemEndTimeEl ? itemEndTimeEl.dataset.value24 : "",
+            hoursOrKm: parseFloat(row.cells[8].textContent) || 0, // Calculated hours/km
+            total: parseFloat(row.cells[10].textContent.replace('$', '')) || 0, // Calculated total
+            travelKmInput: itemTravelKmEl ? parseFloat(itemTravelKmEl.value) || 0 : 0,
+            claimTravel: itemClaimTravelEl ? itemClaimTravelEl.checked : false,
+            rateType: determineRateType(itemDateEl?.value, itemStartTimeEl?.dataset.value24) // Store rate type
+        });
+    });
+
+    // 2. Recalculate totals (already done by calculateInvoiceTotals, but ensure it's up-to-date)
+    calculateInvoiceTotals(); 
+    currentInvoiceData.subtotal = parseFloat($("#sub")?.textContent.replace('$', '')) || 0;
+    currentInvoiceData.gst = parseFloat($("#gst")?.textContent.replace('$', '')) || 0;
+    currentInvoiceData.grandTotal = parseFloat($("#grand")?.textContent.replace('$', '')) || 0;
+    currentInvoiceData.lastUpdated = serverTimestamp();
+
+    // 3. Save to Firestore
+    try {
+        // Using invoice number as document ID for drafts. Or use a dedicated "draft" ID.
+        // For simplicity, let's assume one draft per user for now, or use invoice number if unique.
+        // A better approach might be a dedicated 'drafts' collection or a specific 'draftInvoice' document.
+        const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, `draft-${currentInvoiceData.invoiceNumber || 'current'}`);
+        await setDoc(draftDocRef, currentInvoiceData);
+        showMessage("Draft Saved", `Invoice draft "${currentInvoiceData.invoiceNumber || 'current'}" has been saved.`);
+    } catch (error) {
+        console.error("Error saving invoice draft:", error);
+        showMessage("Storage Error", "Could not save invoice draft: " + error.message);
+    } finally {
+        hideLoading();
+    }
+};
+
+window.generateInvoicePdf = function() {
+    const invoiceContentElement = $("#invoicePdfContent"); // The div containing all invoice details for PDF
+    if (!invoiceContentElement) {
+        showMessage("Error", "Invoice content area not found for PDF generation.");
+        return;
+    }
+
+    // Temporarily show print-only columns for PDF generation
+    $$('.print-only, .pdf-show').forEach(el => el.style.display = 'table-cell'); // or 'block' if not in table
+    $$('.no-print, .pdf-hide').forEach(el => el.style.display = 'none');
+
+
+    const opt = {
+        margin:       [10, 10, 10, 10], // top, left, bottom, right in mm
+        filename:     `Invoice-${$("#invNo")?.value || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false }, // Increased scale for better quality
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // html2pdf().set(opt).from(invoiceContentElement).save(); // Simpler version
+     html2pdf().from(invoiceContentElement).set(opt).toPdf().get('pdf').then(function (pdf) {
+        // Optional: Add page numbers or headers/footers if needed using pdf.internal.getNumberOfPages() etc.
+        // Example:
+        // var totalPages = pdf.internal.getNumberOfPages();
+        // for (var i = 1; i <= totalPages; i++) {
+        //   pdf.setPage(i);
+        //   pdf.setFontSize(10);
+        //   pdf.setTextColor(150);
+        //   pdf.text('Page ' + i + ' of ' + totalPages, pdf.internal.pageSize.getWidth() - 20, pdf.internal.pageSize.getHeight() - 10);
+        // }
+    }).save().then(() => {
+        // Revert visibility of print/no-print columns
+        $$('.print-only, .pdf-show').forEach(el => el.style.display = ''); // Revert to CSS default
+        $$('.no-print, .pdf-hide').forEach(el => el.style.display = ''); // Revert to CSS default
+        showMessage("PDF Generated", "Invoice PDF has been downloaded.");
+    }).catch(err => {
+        console.error("Error generating PDF:", err);
+        showMessage("PDF Error", "Could not generate PDF: " + err.message);
+        // Revert visibility even on error
+        $$('.print-only, .pdf-show').forEach(el => el.style.display = '');
+        $$('.no-print, .pdf-hide').forEach(el => el.style.display = '');
+    });
+};
+
+window.saveSig = async function() {
+    if (!canvas || !ctx) {
+        showMessage("Error", "Signature pad not ready.");
+        closeModal('sigModal');
+        return;
+    }
+    if (isCanvasBlank(canvas)) {
+        showMessage("Signature Required", "Please draw your signature before saving.");
+        return;
+    }
+
+    const signatureDataUrl = canvas.toDataURL('image/png');
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas after getting data
+
+    if (!currentUserId || !fsDb) {
+        showMessage("Error", "Cannot save signature. User or database not ready.");
+        closeModal('sigModal');
+        return;
+    }
+    showLoading("Saving signature...");
+
+    let agreementDocPath;
+    let workerProfileForAgreement;
+
+    if (profile.isAdmin && currentAgreementWorkerEmail) {
+        workerProfileForAgreement = accounts[currentAgreementWorkerEmail]?.profile;
+        if (!workerProfileForAgreement) {
+            hideLoading();
+            showMessage("Error", "Selected worker profile not found for agreement.");
+            closeModal('sigModal');
+            return;
+        }
+        agreementDocPath = `artifacts/${appId}/users/${workerProfileForAgreement.uid}/agreements/main`;
+    } else if (!profile.isAdmin && currentUserId) {
+        workerProfileForAgreement = profile;
+        agreementDocPath = `artifacts/${appId}/users/${currentUserId}/agreements/main`;
+    } else {
+        hideLoading();
+        showMessage("Error", "Cannot determine whose agreement to update.");
+        closeModal('sigModal');
+        return;
+    }
+    
+    const updateData = {};
+    if (signingAs === 'worker') {
+        updateData.workerSigUrl = signatureDataUrl;
+        updateData.workerSignDate = serverTimestamp();
+        updateData.workerSigned = true;
+    } else if (signingAs === 'participant') {
+        updateData.participantSigUrl = signatureDataUrl;
+        updateData.participantSignDate = serverTimestamp();
+        updateData.participantSigned = true;
+    } else {
+        hideLoading();
+        showMessage("Error", "Invalid signing role.");
+        closeModal('sigModal');
+        return;
+    }
+    updateData.lastUpdated = serverTimestamp();
+
+    try {
+        const agreementInstanceRef = doc(fsDb, agreementDocPath);
+        await setDoc(agreementInstanceRef, updateData, { merge: true });
+        
+        // Update local agreement instance data if it exists for the current view
+        // This part might need refinement based on how agreementInstanceData is managed globally or per load
+        const currentAgreementInstance = await getDoc(agreementInstanceRef);
+        if(currentAgreementInstance.exists()){
+            const updatedInstance = currentAgreementInstance.data();
+            if (signingAs === 'worker') {
+                if($("#sigW")) $("#sigW").src = updatedInstance.workerSigUrl;
+                if($("#dW")) $("#dW").textContent = formatDateForInvoiceDisplay(updatedInstance.workerSignDate.toDate());
+            } else {
+                if($("#sigP")) $("#sigP").src = updatedInstance.participantSigUrl;
+                if($("#dP")) $("#dP").textContent = formatDateForInvoiceDisplay(updatedInstance.participantSignDate.toDate());
+            }
+        }
+        
+        loadServiceAgreement(); // Reload to reflect changes and update chip/buttons
+        showMessage("Signature Saved", "Your signature has been saved to the agreement.");
+    } catch (error) {
+        console.error("Error saving signature:", error);
+        showMessage("Storage Error", "Could not save signature: " + error.message);
+    } finally {
+        hideLoading();
+        closeModal('sigModal');
+    }
+};
+
+function isCanvasBlank(cvs) {
+  const blank = document.createElement('canvas');
+  blank.width = cvs.width;
+  blank.height = cvs.height;
+  return cvs.toDataURL() === blank.toDataURL();
+}
+
+
+function openUserSetupWizard(isEditing = false) {
     const wizModal = $("#wiz");
     if (wizModal) {
         userWizStep = 1;
-        updateUserWizardView(); 
+        
+        const wHead = $("#wHead");
+        if (wHead) wHead.textContent = isEditing ? "Edit Your Profile" : "Step 1: Basic Info";
+        
+        // Pre-fill fields from profile object
         if ($("#wName") && profile && profile.name) $("#wName").value = profile.name;
         if ($("#wAbn") && profile && profile.abn) $("#wAbn").value = profile.abn;
         if ($("#wGst") && profile && profile.gstRegistered !== undefined) $("#wGst").checked = profile.gstRegistered;
         if ($("#wBsb") && profile && profile.bsb) $("#wBsb").value = profile.bsb;
         if ($("#wAcc") && profile && profile.acc) $("#wAcc").value = profile.acc;
         
+        // If editing, might want to hide/skip certain steps like file uploads if they are separate
+        // For now, we show all steps.
+        updateUserWizardView(); 
+
         wizModal.classList.remove('hide');
         wizModal.style.display = "flex";
-        showMessage("Welcome!", "Please complete your profile setup to continue.");
+        if (!isEditing) {
+            showMessage("Welcome!", "Please complete your profile setup to continue.");
+        }
     }
 }
 
@@ -592,13 +915,13 @@ function updateUserWizardView() {
     if (currentStepContent) currentStepContent.classList.remove('hide');
     if (currentStepIndicator) currentStepIndicator.classList.add('active');
     
-    const wHead = $("#wHead");
-    if (wHead) {
-        if (userWizStep === 1) wHead.textContent = "Step 1: Basic Info";
-        else if (userWizStep === 2) wHead.textContent = "Step 2: Bank Details";
-        else if (userWizStep === 3) wHead.textContent = "Step 3: Docs (Optional)";
-        else if (userWizStep === 4) wHead.textContent = "Step 4: All Done!";
-    }
+    const wHead = $("#wHead"); // Title is now set in openUserSetupWizard
+    // if (wHead) {
+    //     if (userWizStep === 1) wHead.textContent = "Step 1: Basic Info";
+    //     else if (userWizStep === 2) wHead.textContent = "Step 2: Bank Details";
+    //     else if (userWizStep === 3) wHead.textContent = "Step 3: Docs (Optional)";
+    //     else if (userWizStep === 4) wHead.textContent = "Step 4: All Done!";
+    // }
 }
 
 window.wizNext = function() {
@@ -606,12 +929,14 @@ window.wizNext = function() {
         const name = $("#wName")?.value.trim();
         const abn = $("#wAbn")?.value.trim();
         if (!name) { return showMessage("Validation Error", "Full name is required."); }
-        if (!abn) { return showMessage("Validation Error", "ABN is required."); }
+        if (globalSettings.portalType === 'organization' && !abn) { return showMessage("Validation Error", "ABN is required for organization workers."); }
     } else if (userWizStep === 2) {
         const bsb = $("#wBsb")?.value.trim();
         const acc = $("#wAcc")?.value.trim();
-        if (!bsb) { return showMessage("Validation Error", "BSB is required."); }
-        if (!acc) { return showMessage("Validation Error", "Account number is required."); }
+         if (globalSettings.portalType === 'organization') {
+            if (!bsb) { return showMessage("Validation Error", "BSB is required for organization workers."); }
+            if (!acc) { return showMessage("Validation Error", "Account number is required for organization workers."); }
+        }
     }
     if (userWizStep < 4) { 
         userWizStep++;
@@ -642,9 +967,12 @@ window.wizFinish = async function() {
     };
 
     if (!profileUpdates.name) { hideLoading(); return showMessage("Validation Error", "Full name is required to finish setup."); }
-    if (!profileUpdates.abn) { hideLoading(); return showMessage("Validation Error", "ABN is required to finish setup."); }
-    if (!profileUpdates.bsb) { hideLoading(); return showMessage("Validation Error", "BSB is required to finish setup."); }
-    if (!profileUpdates.acc) { hideLoading(); return showMessage("Validation Error", "Account number is required to finish setup."); }
+    if (globalSettings.portalType === 'organization') {
+        if (!profileUpdates.abn) { hideLoading(); return showMessage("Validation Error", "ABN is required to finish setup."); }
+        if (!profileUpdates.bsb) { hideLoading(); return showMessage("Validation Error", "BSB is required to finish setup."); }
+        if (!profileUpdates.acc) { hideLoading(); return showMessage("Validation Error", "Account number is required to finish setup."); }
+    }
+
 
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
@@ -660,7 +988,7 @@ window.wizFinish = async function() {
         hideLoading();
         closeModal('wiz');
         showMessage("Profile Updated", "Your profile details have been saved successfully.");
-        enterPortal(false); 
+        enterPortal(profile.isAdmin); // Re-evaluate entry based on current profile
         if(location.hash === "#profile") loadProfileData(); 
 
     } catch (error) {
@@ -670,21 +998,160 @@ window.wizFinish = async function() {
     }
 };
 
-window.saveRequest = function() { console.warn("saveRequest function placeholder triggered."); showMessage("Information", "Shift request saving placeholder."); closeModal('rqModal');};
-window.saveInitialInvoiceNumber = function() { console.warn("saveInitialInvoiceNumber function placeholder triggered."); showMessage("Information", "Initial invoice number saving placeholder."); closeModal('setInitialInvoiceModal');};
-window.saveShiftFromModalToInvoice = function() { console.warn("saveShiftFromModalToInvoice function placeholder triggered."); showMessage("Information", "Saving shift to invoice placeholder."); closeModal('logShiftModal');};
+window.saveRequest = async function() {
+    if (!currentUserId || !fsDb) {
+        showMessage("Error", "Cannot save request. User not logged in or database not ready.");
+        return;
+    }
+
+    const requestDate = $("#rqDate")?.value;
+    const requestStartTime = $("#rqStart")?.dataset.value24; // Use 24hr format from custom picker
+    const requestEndTime = $("#rqEnd")?.dataset.value24;
+    const requestReason = $("#rqReason")?.value.trim();
+
+    if (!requestDate || !requestStartTime || !requestEndTime) {
+        return showMessage("Validation Error", "Please select a date, start time, and end time for the shift request.");
+    }
+    if (timeToMinutes(requestEndTime) <= timeToMinutes(requestStartTime)) {
+        return showMessage("Validation Error", "End time must be after start time.");
+    }
+
+    showLoading("Submitting shift request...");
+    const requestData = {
+        userId: currentUserId,
+        userName: profile.name || currentUserEmail,
+        date: requestDate,
+        startTime: requestStartTime,
+        endTime: requestEndTime,
+        reason: requestReason || "",
+        status: "pending", // Initial status
+        requestedAt: serverTimestamp()
+    };
+
+    try {
+        // Store shift requests in a public collection for admin review, or user-specific if only for user tracking
+        // For admin review, a public path is better. Ensure Firestore rules allow user to write, admin to read/update.
+        const requestsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`);
+        const newRequestRef = await addDoc(requestsCollectionRef, requestData);
+        
+        hideLoading();
+        closeModal('rqModal');
+        showMessage("Request Submitted", "Your shift request has been submitted successfully.");
+        // Optionally, refresh the shift requests display on the home page
+        if (location.hash === "#home") {
+            // Call a function to reload and display shift requests
+            // loadShiftRequestsForUser(); // Example function name
+        }
+    } catch (error) {
+        hideLoading();
+        console.error("Error submitting shift request:", error);
+        showMessage("Storage Error", "Could not submit your shift request: " + error.message);
+    }
+};
+
+window.saveInitialInvoiceNumber = async function() {
+    if (!currentUserId || !fsDb || !profile) {
+        showMessage("Error", "User not logged in or profile not ready.");
+        return;
+    }
+    const initialNumberInput = $("#initialInvoiceNumberInput");
+    const initialNumber = parseInt(initialNumberInput?.value, 10);
+
+    if (isNaN(initialNumber) || initialNumber <= 0) {
+        return showMessage("Validation Error", "Please enter a valid positive starting invoice number.");
+    }
+
+    showLoading("Saving invoice number...");
+    try {
+        const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+        await updateDoc(userProfileDocRef, {
+            nextInvoiceNumber: initialNumber,
+            lastUpdated: serverTimestamp()
+        });
+        profile.nextInvoiceNumber = initialNumber; // Update local profile
+        
+        // Update invoice page if currently viewed
+        if (location.hash === "#invoice") {
+            $("#invNo").value = formatInvoiceNumber(initialNumber); 
+        }
+        
+        hideLoading();
+        closeModal('setInitialInvoiceModal');
+        showMessage("Invoice Number Set", `Starting invoice number set to ${initialNumber}.`);
+    } catch (error) {
+        hideLoading();
+        console.error("Error saving initial invoice number:", error);
+        showMessage("Storage Error", "Could not save starting invoice number: " + error.message);
+    }
+};
+
+window.saveShiftFromModalToInvoice = function() {
+    const shiftDate = $("#logShiftDate")?.value;
+    const supportTypeCode = $("#logShiftSupportType")?.value;
+    const startTime = $("#logShiftStartTime")?.dataset.value24;
+    const endTime = $("#logShiftEndTime")?.dataset.value24;
+    const claimTravel = $("#logShiftClaimTravelToggle")?.checked;
+    const startKm = parseFloat($("#logShiftStartKm")?.value);
+    const endKm = parseFloat($("#logShiftEndKm")?.value);
+
+    if (!shiftDate || !supportTypeCode || !startTime || !endTime) {
+        return showMessage("Validation Error", "Please fill in all required shift details (Date, Support Type, Start/End Times).");
+    }
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+        return showMessage("Validation Error", "Shift end time must be after start time.");
+    }
+
+    const service = adminManagedServices.find(s => s.code === supportTypeCode);
+    if (!service) {
+        return showMessage("Error", "Selected support type not found.");
+    }
+
+    // Add service row
+    addInvoiceRow({
+        date: shiftDate,
+        serviceCode: supportTypeCode,
+        startTime: startTime,
+        endTime: endTime,
+        // Travel details will be handled by the row's logic if claimTravel is true
+    });
+
+    // If claiming travel, add a travel row
+    if (claimTravel) {
+        const calculatedKm = parseFloat($("#logShiftCalculatedKm")?.textContent) || 0;
+        if (calculatedKm <= 0) {
+            showMessage("Travel Warning", "Calculated travel is 0 Km. Travel row not added. Please check odometer readings.");
+        } else {
+            const travelServiceCode = service.travelCode; // Get associated travel code from the main service
+            const travelService = adminManagedServices.find(s => s.code === travelServiceCode && s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
+            if (travelService) {
+                addInvoiceRow({
+                    date: shiftDate,
+                    serviceCode: travelService.code,
+                    travelKmInput: calculatedKm, // Pass the calculated Km
+                    claimTravel: true // Ensure this is marked as a travel item
+                });
+            } else {
+                showMessage("Travel Error", `Associated travel service code (${travelServiceCode || 'N/A'}) not found or not configured as 'Travel - Per Kilometre'. Travel not added.`);
+            }
+        }
+    }
+    
+    calculateInvoiceTotals(); // Recalculate after adding rows
+    closeModal('logShiftModal');
+    showMessage("Shift Added", "Shift details have been added to the current invoice.");
+};
+
 
 // --- Admin Setup Wizard (#adminSetupWizard) Functions ---
 function openAdminSetupWizard() { 
     const modal = $("#adminSetupWizard"); 
     if(modal) { 
         adminWizStep = 1; 
-        // Pre-fill Step 1 radio based on current globalSettings if they exist
         const currentPortalType = globalSettings.portalType || 'organization';
         const portalTypeRadio = $(`input[name="adminWizPortalType"][value="${currentPortalType}"]`);
         if (portalTypeRadio) portalTypeRadio.checked = true;
 
-        updateAdminWizardView(); // This will show/hide fields based on the (potentially pre-filled) radio
+        updateAdminWizardView(); 
         modal.style.display = "flex"; 
     } 
 }
@@ -705,7 +1172,6 @@ function updateAdminWizardView() {
     const adminWizOrgFields = $("#adminWizOrgFields");
     const adminWizUserFields = $("#adminWizUserFields");
 
-    // Pre-fill fields based on globalSettings if available (especially when navigating back/forth)
     if (adminWizStep === 1) {
         if (adminWizHead) adminWizHead.innerHTML = `<i class="fas fa-magic"></i> Portal Setup - Step 1: Portal Type`;
         const portalType = globalSettings.portalType || 'organization';
@@ -723,7 +1189,7 @@ function updateAdminWizardView() {
             if ($("#adminWizOrgAbn")) $("#adminWizOrgAbn").value = globalSettings.organizationAbn || "";
             if ($("#adminWizOrgContactEmail")) $("#adminWizOrgContactEmail").value = globalSettings.organizationContactEmail || "";
             if ($("#adminWizOrgContactPhone")) $("#adminWizOrgContactPhone").value = globalSettings.organizationContactPhone || "";
-        } else { // participant
+        } else { 
             if (adminWizStep2Title) adminWizStep2Title.textContent = "Step 2: Your Details";
             if (adminWizOrgFields) adminWizOrgFields.classList.add('hide');
             if (adminWizUserFields) adminWizUserFields.classList.remove('hide');
@@ -744,10 +1210,8 @@ function updateAdminWizardView() {
 }
 
 window.adminWizNext = function() {
-    // No specific validation here, validation happens on finish or can be added per step
     if (adminWizStep === 1) {
-        // Update view for step 2 based on selection
-        updateAdminWizardView(); // Call to ensure step 2 fields are correctly shown/hidden
+        updateAdminWizardView(); 
     } else if (adminWizStep === 2) {
         const portalType = document.querySelector('input[name="adminWizPortalType"]:checked')?.value;
         if (portalType === 'organization') {
@@ -755,14 +1219,13 @@ window.adminWizNext = function() {
                 showMessage("Validation Error", "Organization Name is required for 'Organization' type.");
                 return;
             }
-        } else { // participant
+        } else { 
             if (!$("#adminWizUserName")?.value.trim()) {
                 showMessage("Validation Error", "Your Name is required for 'Self-Managed Participant' type.");
                 return;
             }
         }
     }
-
 
     if (adminWizStep < 3) { 
         adminWizStep++;
@@ -790,7 +1253,7 @@ window.adminWizFinish = async function() {
     if (!portalTypeSelected) {
         hideLoading();
         showMessage("Validation Error", "Please select a Portal Type in Step 1.");
-        adminWizStep = 1; // Go back to step 1
+        adminWizStep = 1; 
         updateAdminWizardView();
         return;
     }
@@ -805,7 +1268,6 @@ window.adminWizFinish = async function() {
         planEndDate: $("#adminWizPlanEndDate")?.value || "",
         setupComplete: true,
         lastUpdated: serverTimestamp(),
-        // Preserve existing rateMultipliers and agreementStartDate if they exist
         rateMultipliers: globalSettings.rateMultipliers || { weekday: 1.00, evening: 1.10, night: 1.14, saturday: 1.41, sunday: 1.81, public: 2.22 },
         agreementStartDate: globalSettings.agreementStartDate || new Date().toISOString().split('T')[0]
     };
@@ -822,17 +1284,15 @@ window.adminWizFinish = async function() {
             showMessage("Validation Error", "Organization Name is required for 'Organization' type (Step 2).");
             adminWizStep = 2; updateAdminWizardView(); return;
         }
-    } else { // participant
+    } else { 
         tempGlobalSettings.adminUserName = $("#adminWizUserName")?.value.trim();
-        tempGlobalSettings.organizationName = tempGlobalSettings.adminUserName || profile.name || "Participant Portal"; // Portal name is admin's name
+        tempGlobalSettings.organizationName = tempGlobalSettings.adminUserName || profile.name || "Participant Portal"; 
         
         if (!tempGlobalSettings.adminUserName) {
             hideLoading();
             showMessage("Validation Error", "Your Name is required for 'Self-Managed Participant' type (Step 2).");
             adminWizStep = 2; updateAdminWizardView(); return;
         }
-        // For participant type, the main participant is the admin themselves.
-        // Update their name in their own profile if it changed in the wizard.
         if (profile.uid === currentUserId && tempGlobalSettings.adminUserName !== profile.name) {
             const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
             try {
@@ -840,31 +1300,29 @@ window.adminWizFinish = async function() {
                 profile.name = tempGlobalSettings.adminUserName; 
             } catch (e) { console.error("Error updating admin's name during participant setup:", e); }
         }
-         // Participant details from step 3 become the primary participant info
-        tempGlobalSettings.participantName = tempGlobalSettings.adminUserName; // Participant name is the admin's name
+        tempGlobalSettings.participantName = tempGlobalSettings.adminUserName; 
     }
     
-    if (!tempGlobalSettings.participantName && portalTypeSelected === 'organization') { // For org, default participant name is required
+    if (!tempGlobalSettings.participantName && portalTypeSelected === 'organization') { 
         hideLoading(); 
         showMessage("Validation Error", "Default Participant Name is required (Step 3).");
         adminWizStep = 3; updateAdminWizardView(); return;
     }
-     if (!tempGlobalSettings.participantName && portalTypeSelected === 'participant') { // For self-managed, this comes from admin's name
+     if (!tempGlobalSettings.participantName && portalTypeSelected === 'participant') { 
         tempGlobalSettings.participantName = tempGlobalSettings.adminUserName;
     }
-
 
     globalSettings = { ...globalSettings, ...tempGlobalSettings }; 
 
     try {
-        await saveGlobalSettingsToFirestore(); // This saves the merged globalSettings
+        await saveGlobalSettingsToFirestore(); 
         hideLoading();
         closeModal('adminSetupWizard');
         showMessage("Setup Complete", "Portal has been configured successfully.");
         enterPortal(true); 
         if(location.hash === "#admin") {
-            loadAdminPortalSettings(); // Refresh admin settings page to show new values
-            setActive("#admin"); // Ensure admin page remains active and title updates
+            loadAdminPortalSettings(); 
+            setActive("#admin"); 
         }
 
     } catch (error) {
@@ -966,7 +1424,8 @@ function displayServicesForWorkerAuth(workerProfileData) {
     
     let servicesAvailable = false;
     adminManagedServices.forEach(service => { 
-        if (service.isActiveInAgreement && service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) { 
+        // Only allow authorization for services that are NOT travel items themselves
+        if (service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) { 
             servicesAvailable = true;
             const li = document.createElement("li");
             const label = document.createElement("label"); 
@@ -982,7 +1441,7 @@ function displayServicesForWorkerAuth(workerProfileData) {
         } 
     });
     if (!servicesAvailable) {
-        ul.innerHTML = "<li>No suitable (non-travel, active) NDIS services defined for authorization.</li>";
+        ul.innerHTML = "<li>No suitable (non-travel) NDIS services defined for authorization.</li>";
     }
 }
 
@@ -1040,7 +1499,6 @@ function setActive(hash) {
       if (globalSettings?.organizationName && globalSettings.portalType === 'organization') {
           portalTitleElement.innerHTML = `<i class="fas fa-cogs"></i> ${globalSettings.organizationName}`;
       } else if (globalSettings?.portalType === 'participant' && globalSettings?.participantName) {
-          // For participant type, the portal name might be the participant's name (which is also admin's name)
           portalTitleElement.innerHTML = `<i class="fas fa-cogs"></i> ${globalSettings.organizationName || globalSettings.participantName}'s Portal`;
       } else if (profile && profile.isAdmin && globalSettings?.organizationName) { 
           portalTitleElement.innerHTML = `<i class="fas fa-cogs"></i> ${globalSettings.organizationName}`;
@@ -1074,7 +1532,7 @@ function setActive(hash) {
       const adminSelector = $("#adminAgreementWorkerSelector");
       const agreementContainer = $("#agreementContentContainer");
       const agrChipEl = $("#agrChip");
-      const signBtnEl = $("#signBtn");
+      const signBtnEl = $("#signBtn"); 
       const participantSignBtnEl = $("#participantSignBtn");
       const pdfBtnEl = $("#pdfBtn");
 
@@ -1266,8 +1724,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const agreementPdfBtn = $("#pdfBtn"); 
     if (agreementPdfBtn) agreementPdfBtn.addEventListener('click', () => { 
-        console.warn("Agreement PDF generation placeholder triggered.");
-        showMessage("Coming Soon", "Service Agreement PDF generation will be implemented here.");
+        generateAgreementPdf(); // Call the actual PDF generation function
     });
 
     const inviteLinkElement = $("#invite");
@@ -1279,6 +1736,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const requestShiftBtn = $("#rqBtn");
     if (requestShiftBtn) requestShiftBtn.addEventListener('click', () => { 
         const rqModalEl = $("#rqModal"); if (rqModalEl) rqModalEl.style.display = "flex";
+        // Pre-fill request modal if needed
+        $("#rqDate").value = new Date().toISOString().split('T')[0];
+        $("#rqStart").value = ""; $("#rqStart").dataset.value24 = "";
+        $("#rqEnd").value = ""; $("#rqEnd").dataset.value24 = "";
+        $("#rqReason").value = "";
     });
 
     const logShiftBtn = $("#logTodayShiftBtn");
@@ -1288,12 +1750,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (signAgreementBtn) signAgreementBtn.addEventListener('click', async () => { 
         signingAs = 'worker'; 
         const sigModalEl = $("#sigModal"); if (sigModalEl) sigModalEl.style.display = "flex";
+        if(canvas && ctx) ctx.clearRect(0,0,canvas.width,canvas.height);
     });
 
     const participantSignBtnEl = $("#participantSignBtn"); 
     if (participantSignBtnEl) participantSignBtnEl.addEventListener('click', async () => { 
         signingAs = 'participant'; 
         const sigModalEl = $("#sigModal"); if (sigModalEl) sigModalEl.style.display = "flex";
+        if(canvas && ctx) ctx.clearRect(0,0,canvas.width,canvas.height);
     });
     
     canvas = $("#pad"); 
@@ -1364,19 +1828,68 @@ function handleHomePageDisplay() {
         const userNameDisplaySpan = $("#userNameDisplay");
         if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUserEmail.split('@')[0] : "User");
         
-        const shiftRequestsContainer = $("#shiftRequestsContainer");
-        if(shiftRequestsContainer) {
-            // Placeholder: Actual data loading for shift requests needed
-            // shiftRequestsContainer.classList.remove('hide'); 
-            // const rqTblBody = $("#rqTbl tbody");
-            // if(rqTblBody) rqTblBody.innerHTML = "<tr><td colspan='5'>No shift requests (placeholder).</td></tr>";
-        }
+        // Load and display shift requests if any
+        loadShiftRequestsForUserDisplay();
 
     } else {
         const homeUserDiv = $("#homeUser");
         if (homeUserDiv) homeUserDiv.classList.add('hide');
     }
 }
+
+async function loadShiftRequestsForUserDisplay() {
+    const shiftRequestsContainer = $("#shiftRequestsContainer");
+    const rqTblBody = $("#rqTbl tbody");
+    if (!shiftRequestsContainer || !rqTblBody || !currentUserId || !isFirebaseInitialized) return;
+
+    showLoading("Loading shift requests...");
+    rqTblBody.innerHTML = "<tr><td colspan='5'>Loading requests...</td></tr>";
+
+    try {
+        // Query requests made by the current user OR all requests if admin
+        let q;
+        if (profile.isAdmin) {
+            // Admin sees all requests, might want to sort by newest
+            q = query(collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`)); // Consider adding orderBy and limit
+        } else {
+            // User sees their own requests
+            q = query(collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`), where("userId", "==", currentUserId));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            rqTblBody.innerHTML = "<tr><td colspan='5'>No shift requests found.</td></tr>";
+        } else {
+            rqTblBody.innerHTML = ""; // Clear loading message
+            querySnapshot.forEach(docSnap => {
+                const req = docSnap.data();
+                const tr = rqTblBody.insertRow();
+                tr.insertCell().textContent = formatDateForInvoiceDisplay(req.date);
+                tr.insertCell().textContent = formatTime12Hour(req.startTime);
+                tr.insertCell().textContent = formatTime12Hour(req.endTime);
+                tr.insertCell().textContent = req.reason || "N/A";
+                
+                const statusCell = tr.insertCell();
+                statusCell.textContent = req.status.charAt(0).toUpperCase() + req.status.slice(1);
+                statusCell.className = `status-${req.status}`; // For styling if needed
+
+                // Add actions for admin (approve/deny) - Placeholder
+                // if (profile.isAdmin) {
+                //     const actionsCell = tr.insertCell();
+                //     actionsCell.innerHTML = `<button class="btn-ok btn-small">Approve</button> <button class="btn-danger btn-small">Deny</button>`;
+                // }
+            });
+        }
+        shiftRequestsContainer.classList.remove('hide');
+    } catch (error) {
+        console.error("Error loading shift requests:", error);
+        rqTblBody.innerHTML = "<tr><td colspan='5'>Error loading requests.</td></tr>";
+        showMessage("Data Error", "Could not load shift requests: " + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
 
 function filterTravelCodeList() { 
     const filterInputElement = $("#travelCodeFilterInput");
@@ -1424,6 +1937,9 @@ function openLogShiftModal() {
                         supportTypeSelect.appendChild(opt);
                     }
                 });
+                 if (supportTypeSelect.options.length <= 1) { // Only has the "-- Select --" option
+                    supportTypeSelect.innerHTML = "<option value=''>No suitable services authorized.</option>";
+                }
             } else if (adminManagedServices.length === 0) {
                  supportTypeSelect.innerHTML = "<option value=''>No services defined by admin</option>";
             } else {
@@ -1434,10 +1950,15 @@ function openLogShiftModal() {
         const startTimeInput = $("#logShiftStartTime"); if (startTimeInput) { startTimeInput.value = ""; startTimeInput.dataset.value24 = "";}
         const endTimeInput = $("#logShiftEndTime"); if (endTimeInput) { endTimeInput.value = ""; endTimeInput.dataset.value24 = "";}
         
-        const claimTravelToggle = $("#logShiftClaimTravelToggle"); if (claimTravelToggle) claimTravelToggle.checked = false;
+        const claimTravelToggle = $("#logShiftClaimTravelToggle"); 
+        if (claimTravelToggle) {
+            claimTravelToggle.checked = false;
+            claimTravelToggle.removeEventListener('change', handleLogShiftTravelToggle); // Remove old listener
+            claimTravelToggle.addEventListener('change', handleLogShiftTravelToggle); // Add new one
+        }
         const kmFieldsContainer = $("#logShiftKmFieldsContainer"); if (kmFieldsContainer) kmFieldsContainer.classList.add('hide');
-        const startKmInput = $("#logShiftStartKm"); if (startKmInput) startKmInput.value = "";
-        const endKmInput = $("#logShiftEndKm"); if (endKmInput) endKmInput.value = "";
+        const startKmInput = $("#logShiftStartKm"); if (startKmInput) { startKmInput.value = ""; startKmInput.oninput = calculateLogShiftTravelKm; }
+        const endKmInput = $("#logShiftEndKm"); if (endKmInput) { endKmInput.value = ""; endKmInput.oninput = calculateLogShiftTravelKm; }
         const calculatedKmSpan = $("#logShiftCalculatedKm"); if (calculatedKmSpan) calculatedKmSpan.textContent = "0.0 Km";
 
         logShiftModalEl.style.display = "flex";
@@ -1445,6 +1966,29 @@ function openLogShiftModal() {
         showMessage("Error", "Log shift modal element not found.");
     }
 }
+
+function handleLogShiftTravelToggle() {
+    const kmFieldsContainer = $("#logShiftKmFieldsContainer");
+    if (this.checked) {
+        kmFieldsContainer.classList.remove('hide');
+    } else {
+        kmFieldsContainer.classList.add('hide');
+        $("#logShiftStartKm").value = "";
+        $("#logShiftEndKm").value = "";
+        $("#logShiftCalculatedKm").textContent = "0.0 Km";
+    }
+}
+function calculateLogShiftTravelKm() {
+    const startKm = parseFloat($("#logShiftStartKm")?.value) || 0;
+    const endKm = parseFloat($("#logShiftEndKm")?.value) || 0;
+    const calculatedKmSpan = $("#logShiftCalculatedKm");
+    if (endKm > startKm) {
+        calculatedKmSpan.textContent = `${(endKm - startKm).toFixed(1)} Km`;
+    } else {
+        calculatedKmSpan.textContent = "0.0 Km";
+    }
+}
+
 
 function updateRateFieldsVisibility(categoryType) { 
     const container = $("#adminServiceRateFieldsContainer"); 
@@ -1611,6 +2155,13 @@ window.saveAdminService = async function() {
         if (weekdayRateField) weekdayRateField.focus(); 
         return; 
     }
+     if (serviceCategoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM && (rates.perKmRate === undefined || rates.perKmRate <= 0)) {
+        showMessage("Validation Error", "Rate per KM must be greater than 0 for Travel services.");
+        const perKmRateField = $("#adminServiceRate_perKmRate");
+        if (perKmRateField) perKmRateField.focus();
+        return;
+    }
+
 
     const servicePayload = { 
         code: serviceCode, 
@@ -1800,12 +2351,15 @@ async function loadServiceAgreement() {
     const agreementContainer = $("#agreementContentContainer");
     if (!agreementContainer) return;
 
-    let agreementInstanceData = { workerSigned: false, participantSigned: false, workerSigUrl: null, participantSigUrl: null, workerSignDate: null, participantSignDate: null };
+    let agreementInstanceData = { workerSigned: false, participantSigned: false, workerSigUrl: null, participantSigUrl: null, workerSignDate: null, participantSignDate: null, agreementStartDate: globalSettings.agreementStartDate };
     try {
         const agreementInstanceRef = doc(fsDb, agreementDocPath);
         const agreementInstanceSnap = await getDoc(agreementInstanceRef);
         if (agreementInstanceSnap.exists()) {
             agreementInstanceData = { ...agreementInstanceData, ...agreementInstanceSnap.data() };
+        } else {
+            // If no instance, create one with default start date
+            await setDoc(agreementInstanceRef, { agreementStartDate: globalSettings.agreementStartDate || new Date().toISOString().split('T')[0], lastUpdated: serverTimestamp() });
         }
     } catch (e) {
         console.warn("Could not load existing agreement instance data:", e);
@@ -1818,8 +2372,8 @@ async function loadServiceAgreement() {
                                .replace(/{{participantNdisNo}}/g, globalSettings.participantNdisNo || "[NDIS No]")
                                .replace(/{{workerName}}/g, workerName || "[Worker Name]")
                                .replace(/{{workerAbn}}/g, workerAbn || "[Worker ABN]")
-                               .replace(/{{agreementStartDate}}/g, agreementInstanceData.agreementStartDate || globalSettings.agreementStartDate || "[Start Date]") 
-                               .replace(/{{agreementEndDate}}/g, globalSettings.planEndDate || "[End Date]"); 
+                               .replace(/{{agreementStartDate}}/g, formatDateForInvoiceDisplay(agreementInstanceData.agreementStartDate || globalSettings.agreementStartDate || new Date())) 
+                               .replace(/{{agreementEndDate}}/g, formatDateForInvoiceDisplay(globalSettings.planEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)))); 
 
         let serviceListHtml = "<ul>";
         const authorizedCodes = workerProfileToUse.authorizedServiceCodes || [];
@@ -1842,10 +2396,10 @@ async function loadServiceAgreement() {
     const sigWImg = $("#sigW"); const dWEl = $("#dW");
 
     if (agreementInstanceData.participantSigUrl && sigPImg) sigPImg.src = agreementInstanceData.participantSigUrl; else if (sigPImg) sigPImg.src = "";
-    if (agreementInstanceData.participantSignDate && dPEl) dPEl.textContent = formatDateForInvoiceDisplay(agreementInstanceData.participantSignDate); else if (dPEl) dPEl.textContent = "___";
+    if (agreementInstanceData.participantSignDate && dPEl) dPEl.textContent = formatDateForInvoiceDisplay(agreementInstanceData.participantSignDate.toDate ? agreementInstanceData.participantSignDate.toDate() : agreementInstanceData.participantSignDate); else if (dPEl) dPEl.textContent = "___";
     
     if (agreementInstanceData.workerSigUrl && sigWImg) sigWImg.src = agreementInstanceData.workerSigUrl; else if (sigWImg) sigWImg.src = "";
-    if (agreementInstanceData.workerSignDate && dWEl) dWEl.textContent = formatDateForInvoiceDisplay(agreementInstanceData.workerSignDate); else if (dWEl) dWEl.textContent = "___";
+    if (agreementInstanceData.workerSignDate && dWEl) dWEl.textContent = formatDateForInvoiceDisplay(agreementInstanceData.workerSignDate.toDate ? agreementInstanceData.workerSignDate.toDate() : agreementInstanceData.workerSignDate); else if (dWEl) dWEl.textContent = "___";
 
     const agrChipEl = $("#agrChip");
     const signBtnEl = $("#signBtn"); 
@@ -1872,19 +2426,63 @@ async function loadServiceAgreement() {
     
     if (pdfBtnEl) pdfBtnEl.classList.remove("hide"); 
 
-    if (profile.isAdmin) { 
-        if (signBtnEl) signBtnEl.classList.add("hide");
-        if (participantSignBtnEl) participantSignBtnEl.classList.add("hide");
-    } else { 
-        if (currentUserId === workerProfileToUse.uid) { 
-            if (agreementInstanceData.workerSigned && signBtnEl) signBtnEl.classList.add("hide");
-            if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); 
-        } else { 
-            if (agreementInstanceData.participantSigned && participantSignBtnEl) participantSignBtnEl.classList.add("hide");
-            if (signBtnEl) signBtnEl.classList.add("hide"); 
+    // Adjust button visibility based on who is viewing
+    if (profile.isAdmin) { // Admin is viewing
+        if (signBtnEl) signBtnEl.classList.add("hide"); // Admin doesn't sign directly for worker here
+        if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); // Admin doesn't sign for participant here
+    } else { // Worker is viewing their own agreement
+        if (currentUserId === workerProfileToUse.uid) { // It's the worker's own agreement
+            if (agreementInstanceData.workerSigned && signBtnEl) signBtnEl.classList.add("hide"); else if (signBtnEl) signBtnEl.classList.remove("hide");
+            if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); // Worker doesn't sign for participant
+        } else { // Should not happen if not admin, but as a fallback
+             if (signBtnEl) signBtnEl.classList.add("hide");
+             if (participantSignBtnEl) participantSignBtnEl.classList.add("hide");
         }
     }
 }
+
+async function generateAgreementPdf() {
+    const agreementContentWrapper = $("#agreementContentWrapper");
+    if (!agreementContentWrapper) {
+        showMessage("Error", "Agreement content not found for PDF.");
+        return;
+    }
+    
+    // Prepare a clone for PDF generation to avoid altering live display too much
+    const pdfClone = agreementContentWrapper.cloneNode(true);
+    
+    // Ensure signatures are visible if present
+    const sigPImgSrc = $("#sigP")?.src;
+    const sigWImgSrc = $("#sigW")?.src;
+    if(sigPImgSrc) pdfClone.querySelector("#sigP").src = sigPImgSrc;
+    if(sigWImgSrc) pdfClone.querySelector("#sigW").src = sigWImgSrc;
+
+    // Add header for PDF if needed (e.g. Org Name, Agreement Title)
+    const agreementHeaderForPdf = $("#agreementHeaderForPdf");
+    if (agreementHeaderForPdf) {
+        const clonedHeader = agreementHeaderForPdf.cloneNode(true);
+        clonedHeader.style.display = 'block'; // Make it visible for PDF
+        clonedHeader.innerHTML = `<h1>${globalSettings.organizationName || 'Service Provider'}</h1><h2>${$("#agreementDynamicTitle")?.textContent || 'Service Agreement'}</h2>`;
+        pdfClone.insertBefore(clonedHeader, pdfClone.firstChild);
+    }
+
+
+    const opt = {
+        margin: [15, 15, 15, 15],
+        filename: `ServiceAgreement-${profile.name || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().from(pdfClone).set(opt).save().then(() => {
+        showMessage("PDF Generated", "Service Agreement PDF has been downloaded.");
+    }).catch(err => {
+        console.error("Error generating agreement PDF:", err);
+        showMessage("PDF Error", "Could not generate PDF: " + err.message);
+    });
+}
+
 
 function loadProfileData() { 
     if (!profile || !isFirebaseInitialized) return; 
@@ -1900,8 +2498,10 @@ function loadProfileData() {
             filesListUl.innerHTML = "";
             profile.files.forEach(file => {
                 const li = document.createElement('li');
-                li.innerHTML = `<a href="${file.url || '#'}" target="_blank">${file.name || 'Unnamed File'}</a> 
-                                <button class="btn-danger btn-small" onclick="deleteProfileDocument('${file.name}')" title="Delete ${file.name}"><i class="fas fa-trash-alt"></i></button>`;
+                // The file.url would come from Firebase Storage. For now, it's a placeholder.
+                // If file.url is not available, link will be '#'
+                li.innerHTML = `<a href="${file.url || '#'}" target="_blank" title="${file.url ? 'Open file' : 'File URL not available'}">${file.name || 'Unnamed File'}</a> 
+                                <button class="btn-danger btn-small" onclick="deleteProfileDocument('${file.name}', '${file.storagePath || ''}')" title="Delete ${file.name}"><i class="fas fa-trash-alt"></i></button>`;
                 filesListUl.appendChild(li);
             });
         } else {
@@ -1909,9 +2509,64 @@ function loadProfileData() {
         }
     }
 }
-window.deleteProfileDocument = function(fileName) {
-    console.warn(`deleteProfileDocument placeholder for: ${fileName}`);
-    showMessage("Coming Soon", `Deletion for ${fileName} is not yet implemented.`);
+window.deleteProfileDocument = async function(fileName, storagePath) {
+    if (!currentUserId || !fsDb) {
+        showMessage("Error", "User not logged in or database not ready.");
+        return;
+    }
+    if (!fileName) {
+        showMessage("Error", "File name not provided for deletion.");
+        return;
+    }
+
+    // Confirm deletion
+    showMessage("Confirm Delete", 
+        `Are you sure you want to delete the document "${fileName}"? This action cannot be undone.<br><br>
+         <div class='modal-actions' style='justify-content: center; margin-top: 15px;'>
+           <button onclick='_confirmDeleteProfileDocument("${fileName}", "${storagePath}")' class='btn-danger'><i class="fas fa-trash-alt"></i> Yes, Delete</button>
+           <button class='btn-secondary' onclick='closeModal("messageModal")'><i class="fas fa-times"></i> No, Cancel</button>
+         </div>`);
+};
+
+window._confirmDeleteProfileDocument = async function(fileName, storagePath) {
+    closeModal("messageModal");
+    showLoading("Deleting document...");
+
+    // Firebase Storage deletion needed here:
+    // if (storagePath && fbStorage) {
+    //     const fileRef = ref(fbStorage, storagePath);
+    //     try {
+    //         await deleteObject(fileRef);
+    //         console.log(`File deleted from Storage: ${storagePath}`);
+    //     } catch (storageError) {
+    //         console.error("Error deleting file from Storage:", storageError);
+    //         // Decide if you want to stop or just log if Storage deletion fails
+    //         // showMessage("Storage Error", "Could not delete file from cloud storage. Metadata might still be removed.");
+    //     }
+    // } else {
+    //     console.warn("Storage path not provided or Storage not initialized. Skipping cloud deletion for:", fileName);
+    // }
+    console.warn(`Placeholder: File at path "${storagePath}" would be deleted from Firebase Storage here.`);
+
+
+    // Remove metadata from Firestore
+    try {
+        const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+        // Atomically remove the file object from the 'files' array
+        await updateDoc(userProfileDocRef, {
+            files: arrayRemove(profile.files.find(f => f.name === fileName && f.storagePath === storagePath))
+        });
+
+        // Update local profile state
+        profile.files = profile.files.filter(f => !(f.name === fileName && f.storagePath === storagePath));
+        loadProfileData(); // Refresh the list
+        showMessage("Document Deleted", `Document "${fileName}" metadata removed from your profile.`);
+    } catch (error) {
+        console.error("Error deleting document metadata from Firestore:", error);
+        showMessage("Error", "Could not delete document metadata: " + error.message);
+    } finally {
+        hideLoading();
+    }
 };
 
 
@@ -1931,9 +2586,14 @@ function enterPortal(isAdmin) {
     if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUserEmail.split('@')[0] : "User"); 
 }
 
-function handleInvoicePageLoad() { 
+function formatInvoiceNumber(num) {
+    // Example: Pad with leading zeros to a certain length, e.g., INV-001001
+    return `INV-${String(num).padStart(6, '0')}`;
+}
+
+async function handleInvoicePageLoad() { 
     const wkLblEl = $("#wkLbl"); if (wkLblEl) wkLblEl.textContent = new Date().getWeek(); 
-    const invNoInput = $("#invNo"); if (invNoInput) invNoInput.value = profile.nextInvoiceNumber || "INV-001"; 
+    const invNoInput = $("#invNo"); 
     const invDateInput = $("#invDate"); if (invDateInput) invDateInput.value = new Date().toISOString().split('T')[0];
     
     const provNameInput = $("#provName"); 
@@ -1947,11 +2607,67 @@ function handleInvoicePageLoad() {
     if (gstFlagInput) gstFlagInput.value = isGstRegistered ? "Yes" : "No";
     
     const gstRowDiv = $("#gstRow"); 
-    if (gstRowDiv) gstRowDiv.style.display = isGstRegistered ? "flex" : "none"; // Use flex for totals alignment
+    if (gstRowDiv) gstRowDiv.style.display = isGstRegistered ? "flex" : "none";
 
-    const invTblBody = $("#invTbl tbody");
-    if (invTblBody) invTblBody.innerHTML = "<tr><td colspan='12' style='text-align:center;'>No services added yet. (Placeholder)</td></tr>";
+    // Check if user has set their initial invoice number
+    if (!profile.nextInvoiceNumber && invNoInput) {
+        const setInitialModal = $("#setInitialInvoiceModal");
+        if (setInitialModal) {
+            setInitialModal.style.display = "flex";
+            $("#initialInvoiceNumberInput").value = 1001; // Default suggestion
+        }
+        invNoInput.value = ""; // Clear until set
+    } else if (invNoInput) {
+        invNoInput.value = formatInvoiceNumber(profile.nextInvoiceNumber);
+    }
+    
+    // Load draft invoice if exists, or clear table
+    await loadDraftInvoice(); 
 }
+
+async function loadDraftInvoice() {
+    const invTblBody = $("#invTbl tbody");
+    if (!invTblBody || !currentUserId || !isFirebaseInitialized) {
+        if (invTblBody) invTblBody.innerHTML = "<tr><td colspan='12' style='text-align:center;'>Error loading invoice data.</td></tr>";
+        return;
+    }
+    
+    showLoading("Loading invoice draft...");
+    try {
+        const draftInvoiceNumber = profile.nextInvoiceNumber ? formatInvoiceNumber(profile.nextInvoiceNumber) : 'current';
+        const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, `draft-${draftInvoiceNumber}`);
+        const docSnap = await getDoc(draftDocRef);
+
+        if (docSnap.exists()) {
+            currentInvoiceData = docSnap.data();
+            $("#invNo").value = currentInvoiceData.invoiceNumber || draftInvoiceNumber;
+            $("#invDate").value = currentInvoiceData.invoiceDate || new Date().toISOString().split('T')[0];
+            // Provider details are usually from profile, but if saved in draft, could load here.
+            
+            invTblBody.innerHTML = ""; // Clear placeholder
+            if (currentInvoiceData.items && currentInvoiceData.items.length > 0) {
+                currentInvoiceData.items.forEach(item => addInvoiceRow(item, true)); // Pass true to indicate loading from draft
+            } else {
+                addInvoiceRow(); // Add one blank row if no items
+            }
+        } else {
+            // No draft found, start fresh
+            currentInvoiceData = { items: [], invoiceNumber: draftInvoiceNumber, invoiceDate: new Date().toISOString().split('T')[0], subtotal: 0, gst: 0, grandTotal: 0 };
+            invTblBody.innerHTML = "";
+            addInvoiceRow(); // Add one blank row
+        }
+    } catch (error) {
+        console.error("Error loading invoice draft:", error);
+        invTblBody.innerHTML = "<tr><td colspan='12' style='text-align:center;'>Could not load invoice draft.</td></tr>";
+        currentInvoiceData = { items: [], invoiceNumber: profile.nextInvoiceNumber ? formatInvoiceNumber(profile.nextInvoiceNumber) : 'current', invoiceDate: new Date().toISOString().split('T')[0], subtotal: 0, gst: 0, grandTotal: 0 };
+        addInvoiceRow();
+    } finally {
+        calculateInvoiceTotals();
+        hideLoading();
+    }
+}
+
+
 Date.prototype.getWeek = function() {
   var date = new Date(this.getTime());
    date.setHours(0, 0, 0, 0);
@@ -2141,4 +2857,307 @@ window._confirmResetGlobalSettingsFirestore = async function() {
 
 window.saveAdminAgreementCustomizations = saveAdminAgreementCustomizationsToFirestore; 
 window.clearAdminServiceForm = clearAdminServiceForm;
+
+// ========== INVOICE SPECIFIC LOGIC ==========
+let invoiceItemCounter = 0;
+
+function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
+    const tbody = $("#invTbl tbody");
+    if (!tbody) return;
+
+    // If the only row is a placeholder, remove it
+    if (tbody.rows.length === 1 && tbody.rows[0].cells.length === 1 && tbody.rows[0].cells[0].colSpan === 12) {
+        tbody.innerHTML = "";
+    }
+
+    const rowIndex = invoiceItemCounter++;
+    const tr = tbody.insertRow();
+
+    // Column 0: # (Row number)
+    tr.insertCell().textContent = tbody.rows.length;
+
+    // Column 1: Date
+    const dateCell = tr.insertCell();
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.id = `itemDate${rowIndex}`;
+    dateInput.className = 'invoice-input-condensed';
+    dateInput.value = itemData?.date || new Date().toISOString().split('T')[0];
+    dateInput.onchange = calculateInvoiceTotals;
+    dateCell.appendChild(dateInput);
+
+    // Column 2: NDIS Item Code (Print Only)
+    const codeCellPrint = tr.insertCell();
+    codeCellPrint.className = 'column-code print-only pdf-show';
+    const codePrintSpan = document.createElement('span');
+    codePrintSpan.id = `itemCodePrint${rowIndex}`;
+    codePrintSpan.className = 'code-print-value';
+    codePrintSpan.textContent = itemData?.serviceCode || "";
+    codeCellPrint.appendChild(codePrintSpan);
+
+
+    // Column 3: Description (Support Item)
+    const descCell = tr.insertCell();
+    const descSelect = document.createElement('select');
+    descSelect.id = `itemDesc${rowIndex}`;
+    descSelect.className = 'invoice-input-condensed description-select';
+    descSelect.innerHTML = `<option value="">-- Select Service --</option>`;
+    (profile.authorizedServiceCodes || []).forEach(code => {
+        const service = adminManagedServices.find(s => s.code === code);
+        if (service) {
+            const opt = document.createElement('option');
+            opt.value = service.code;
+            opt.textContent = `${service.description} (${service.code})`;
+            if (itemData?.serviceCode === service.code) opt.selected = true;
+            descSelect.appendChild(opt);
+        }
+    });
+    descSelect.onchange = (e) => {
+        const selectedService = adminManagedServices.find(s => s.code === e.target.value);
+        if (codePrintSpan) codePrintSpan.textContent = selectedService ? selectedService.code : "";
+        if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24); // Update rate type on service change too
+        calculateInvoiceTotals();
+    };
+    descCell.appendChild(descSelect);
+    // For print:
+    const descPrintSpan = document.createElement('span');
+    descPrintSpan.id = `itemDescPrint${rowIndex}`;
+    descPrintSpan.className = 'description-print-value';
+    descPrintSpan.textContent = itemData?.description || (adminManagedServices.find(s=>s.code === itemData?.serviceCode)?.description || "");
+    descCell.appendChild(descPrintSpan);
+
+
+    // Column 4: Start Time
+    const startCell = tr.insertCell();
+    const startTimeInput = document.createElement('input');
+    startTimeInput.type = 'text';
+    startTimeInput.id = `itemStart${rowIndex}`;
+    startTimeInput.className = 'custom-time-input invoice-input-condensed';
+    startTimeInput.readOnly = true;
+    startTimeInput.placeholder = "Select Time";
+    startTimeInput.value = itemData?.startTime ? formatTime12Hour(itemData.startTime) : "";
+    startTimeInput.dataset.value24 = itemData?.startTime || "";
+    startTimeInput.onclick = () => openCustomTimePicker(startTimeInput, () => {
+        if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24);
+        calculateInvoiceTotals();
+    });
+    startCell.appendChild(startTimeInput);
+
+    // Column 5: End Time
+    const endCell = tr.insertCell();
+    const endTimeInput = document.createElement('input');
+    endTimeInput.type = 'text';
+    endTimeInput.id = `itemEnd${rowIndex}`;
+    endTimeInput.className = 'custom-time-input invoice-input-condensed';
+    endTimeInput.readOnly = true;
+    endTimeInput.placeholder = "Select Time";
+    endTimeInput.value = itemData?.endTime ? formatTime12Hour(itemData.endTime) : "";
+    endTimeInput.dataset.value24 = itemData?.endTime || "";
+    endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, calculateInvoiceTotals);
+    endCell.appendChild(endTimeInput);
+
+    // Column 6: Rate Type (Print Only)
+    const rateTypeCellPrint = tr.insertCell();
+    rateTypeCellPrint.className = 'column-rate-type print-only pdf-show';
+    const rateTypePrintSpan = document.createElement('span');
+    rateTypePrintSpan.id = `itemRateTypePrint${rowIndex}`;
+    rateTypePrintSpan.className = 'rate-type-print-value';
+    rateTypePrintSpan.textContent = itemData?.rateType || determineRateType(dateInput.value, startTimeInput.dataset.value24);
+    rateTypeCellPrint.appendChild(rateTypePrintSpan);
+
+
+    // Column 7: Rate/Unit ($) (Print Only)
+    const rateUnitCellPrint = tr.insertCell();
+    rateUnitCellPrint.className = 'print-only-column pdf-show';
+    rateUnitCellPrint.id = `itemRateUnitPrint${rowIndex}`;
+    rateUnitCellPrint.textContent = "$0.00"; // Will be updated by calculateInvoiceTotals
+
+    // Column 8: Hours / Km (Calculated)
+    const hoursKmCell = tr.insertCell();
+    hoursKmCell.id = `itemHoursKm${rowIndex}`;
+    hoursKmCell.textContent = itemData?.hoursOrKm?.toFixed(2) || "0.00";
+
+    // Column 9: Travel Input (Km) (No Print)
+    const travelInputCell = tr.insertCell();
+    travelInputCell.className = 'no-print pdf-hide';
+    const travelKmInput = document.createElement('input');
+    travelKmInput.type = 'number';
+    travelKmInput.id = `itemTravel${rowIndex}`;
+    travelKmInput.className = 'invoice-input-condensed';
+    travelKmInput.placeholder = "Km";
+    travelKmInput.step = "0.1";
+    travelKmInput.min = "0";
+    travelKmInput.value = itemData?.travelKmInput || "";
+    travelKmInput.oninput = calculateInvoiceTotals;
+    travelInputCell.appendChild(travelKmInput);
+    // Hide if not a travel item initially
+    const selectedServiceForTravel = adminManagedServices.find(s => s.code === descSelect.value);
+    travelKmInput.style.display = (selectedServiceForTravel && selectedServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+    descSelect.addEventListener('change', (e) => { // Show/hide Km input based on service type
+        const service = adminManagedServices.find(s => s.code === e.target.value);
+        travelKmInput.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+        if (service && service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) travelKmInput.value = ""; // Clear if not travel
+        calculateInvoiceTotals();
+    });
+     if (itemData && itemData.serviceCode) { // Ensure correct display on load from draft
+        const service = adminManagedServices.find(s => s.code === itemData.serviceCode);
+        travelKmInput.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+    }
+
+
+    // Column 10: Claim Travel Checkbox (No Print)
+    const claimTravelCell = tr.insertCell();
+    claimTravelCell.className = 'no-print pdf-hide';
+    const claimTravelLabel = document.createElement('label');
+    claimTravelLabel.className = 'chk no-margin km-claim-toggle';
+    const claimTravelCheckbox = document.createElement('input');
+    claimTravelCheckbox.type = 'checkbox';
+    claimTravelCheckbox.id = `itemClaimTravel${rowIndex}`;
+    claimTravelCheckbox.checked = itemData?.claimTravel || false;
+    claimTravelCheckbox.onchange = calculateInvoiceTotals;
+    claimTravelLabel.appendChild(claimTravelCheckbox);
+    claimTravelLabel.appendChild(document.createTextNode(" Claim"));
+    claimTravelCell.appendChild(claimTravelLabel);
+    // Hide if it's a travel item itself
+    claimTravelLabel.style.display = (selectedServiceForTravel && selectedServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
+     descSelect.addEventListener('change', (e) => {
+        const service = adminManagedServices.find(s => s.code === e.target.value);
+        claimTravelLabel.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
+        if (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) claimTravelCheckbox.checked = false; // Uncheck if it becomes a travel item
+        calculateInvoiceTotals();
+    });
+    if (itemData && itemData.serviceCode) { // Ensure correct display on load from draft
+        const service = adminManagedServices.find(s => s.code === itemData.serviceCode);
+        claimTravelLabel.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
+    }
+
+
+    // Column 11: Total ($)
+    const totalCell = tr.insertCell();
+    totalCell.id = `itemTotal${rowIndex}`;
+    totalCell.textContent = itemData?.total ? `$${itemData.total.toFixed(2)}` : "$0.00";
+
+    // Column 12: Actions (No Print)
+    const actionsCell = tr.insertCell();
+    actionsCell.className = 'no-print pdf-hide';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+    deleteBtn.className = 'btn-danger btn-small delete-row-btn';
+    deleteBtn.title = "Delete Row";
+    deleteBtn.onclick = () => {
+        tr.remove();
+        // Re-number rows
+        $$("#invTbl tbody tr").forEach((row, idx) => {
+            row.cells[0].textContent = idx + 1;
+        });
+        calculateInvoiceTotals();
+    };
+    actionsCell.appendChild(deleteBtn);
+
+    if (isLoadingFromDraft && itemData) { // Pre-fill print spans if loading
+        if (codePrintSpan) codePrintSpan.textContent = itemData.serviceCode || "";
+        if (descPrintSpan) descPrintSpan.textContent = itemData.description || "";
+        if (rateTypePrintSpan) rateTypePrintSpan.textContent = itemData.rateType || "";
+    } else { // Set initial print values for new rows
+         if (codePrintSpan && descSelect.value) codePrintSpan.textContent = descSelect.value;
+         if (descPrintSpan && descSelect.options[descSelect.selectedIndex]) descPrintSpan.textContent = descSelect.options[descSelect.selectedIndex].text.split(' (')[0];
+         if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24);
+    }
+
+
+    // Trigger initial calculation for the row if data provided
+    if (itemData) calculateInvoiceTotals();
+}
+
+function calculateInvoiceTotals() {
+    let subtotal = 0;
+    const rows = $$("#invTbl tbody tr");
+
+    rows.forEach((row, rowIndexInTable) => { // Use actual rowIndex from the table for ID construction
+        const actualRowIndex = parseInt(row.cells[0].textContent) - 1; // Get the #
+        // Find elements using a more robust way if IDs are not perfectly sequential due to deletions
+        const dateInput = row.querySelector(`input[id^="itemDate"]`);
+        const descSelect = row.querySelector(`select[id^="itemDesc"]`);
+        const startTimeInput = row.querySelector(`input[id^="itemStart"]`);
+        const endTimeInput = row.querySelector(`input[id^="itemEnd"]`);
+        const travelKmInput = row.querySelector(`input[id^="itemTravel"]`);
+        const claimTravelCheckbox = row.querySelector(`input[id^="itemClaimTravel"]`);
+        
+        const hoursKmCell = row.cells[8]; // Assuming this is the structure
+        const totalCell = row.cells[10];  // Assuming this is the structure
+        const rateUnitPrintCell = row.cells[7]; // Assuming this is the structure for print rate/unit
+
+        const serviceCode = descSelect?.value;
+        const service = adminManagedServices.find(s => s.code === serviceCode);
+        let itemTotal = 0;
+        let hours = 0;
+        let km = 0;
+        let rateForPrint = 0;
+
+        if (service) {
+            const itemDate = dateInput?.value;
+            const startTime = startTimeInput?.dataset.value24;
+            const endTime = endTimeInput?.dataset.value24;
+            
+            // Update print-only description
+            const descPrintSpan = row.querySelector(`span[id^="itemDescPrint"]`);
+            if(descPrintSpan) descPrintSpan.textContent = service.description;
+            const codePrintSpan = row.querySelector(`span[id^="itemCodePrint"]`);
+            if(codePrintSpan) codePrintSpan.textContent = service.code;
+
+
+            if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
+                km = parseFloat(travelKmInput?.value) || 0;
+                hoursKmCell.textContent = km.toFixed(2);
+                const rate = service.rates?.perKmRate || 0;
+                itemTotal = km * rate;
+                rateForPrint = rate;
+            } else { // Time-based services
+                hours = calculateHours(startTime, endTime);
+                hoursKmCell.textContent = hours.toFixed(2);
+                
+                const rateType = determineRateType(itemDate, startTime);
+                const rateTypePrintSpan = row.querySelector(`span[id^="itemRateTypePrint"]`);
+                if(rateTypePrintSpan) rateTypePrintSpan.textContent = rateType;
+
+                let rate = 0;
+                if (service.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || service.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
+                    rate = service.rates?.[rateType] || service.rates?.weekday || 0;
+                } else if (service.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || service.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || service.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+                    rate = service.rates?.standardRate || 0;
+                }
+                itemTotal = hours * rate;
+                rateForPrint = rate;
+
+                // Add travel cost if claimed for this service
+                if (claimTravelCheckbox?.checked && service.travelCode) {
+                    const travelService = adminManagedServices.find(ts => ts.code === service.travelCode && ts.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
+                    const travelKmForThisService = parseFloat(travelKmInput?.value) || 0; // User might input travel KM here too
+                    if (travelService && travelKmForThisService > 0) {
+                        const travelRate = travelService.rates?.perKmRate || 0;
+                        itemTotal += travelKmForThisService * travelRate;
+                        // Note: This adds travel to the main item's total.
+                        // Alternatively, add a separate travel row (done by saveShiftFromModalToInvoice).
+                        // For manual row addition, user should add a separate travel line item.
+                    }
+                }
+            }
+        }
+        totalCell.textContent = `$${itemTotal.toFixed(2)}`;
+        if(rateUnitPrintCell) rateUnitPrintCell.textContent = `$${parseFloat(rateForPrint).toFixed(2)}`;
+        subtotal += itemTotal;
+    });
+
+    $("#sub").textContent = `$${subtotal.toFixed(2)}`;
+    let gstAmount = 0;
+    if (profile.gstRegistered) {
+        gstAmount = subtotal * 0.10;
+        $("#gst").textContent = `$${gstAmount.toFixed(2)}`;
+        $("#gstRow").style.display = 'flex';
+    } else {
+        $("#gst").textContent = "$0.00";
+        $("#gstRow").style.display = 'none';
+    }
+    $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
+}
 
