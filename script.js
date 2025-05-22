@@ -142,7 +142,6 @@ window.closeModal = function(modalId) {
     if (modalId === 'messageModal' && authStatusMessageElement) { 
         showAuthStatusMessage(""); 
     }
-     // Ensure custom time picker is also hidden if its modal is closed by other means
     if (modalId === 'customTimePicker') {
         const picker = $("#customTimePicker");
         if (picker) picker.classList.add('hide');
@@ -168,24 +167,20 @@ function calculateHours(startTime24, endTime24) {
     if (!startTime24 || !endTime24) return 0;
     const startMinutes = timeToMinutes(startTime24);
     const endMinutes = timeToMinutes(endTime24);
-    if (endMinutes < startMinutes) return 0; // Or handle overnight logic if needed
+    if (endMinutes < startMinutes) return 0; 
     return (endMinutes - startMinutes) / 60;
 }
 
 function determineRateType(dateStr, startTime24) { 
     if (!dateStr || !startTime24) return "weekday"; 
     const date = new Date(dateStr); 
-    const day = date.getDay(); // 0 for Sunday, 6 for Saturday
+    const day = date.getDay(); 
     const hr = parseInt(startTime24.split(':')[0],10); 
-
-    // Placeholder for Public Holiday check - this would require a list of PH dates
-    // if (isPublicHoliday(date)) return "public"; 
 
     if (day === 0) return "sunday"; 
     if (day === 6) return "saturday"; 
-    // Standard NDIS times: Evening 8pm-12am, Night 12am-6am
-    if (hr >= 20) return "evening"; // 8 PM onwards
-    if (hr < 6) return "night";   // Before 6 AM
+    if (hr >= 20) return "evening"; 
+    if (hr < 6) return "night";   
     return "weekday"; 
 }
 function formatTime12Hour(t24){if(!t24)return"";const [h,m]=t24.split(':'),hr=parseInt(h,10);if(isNaN(hr)||isNaN(parseInt(m,10)))return"";const ap=hr>=12?'PM':'AM';let hr12=hr%12;hr12=hr12?hr12:12;return`${String(hr12).padStart(2,'0')}:${m} ${ap}`;}
@@ -193,15 +188,14 @@ function formatTime12Hour(t24){if(!t24)return"";const [h,m]=t24.split(':'),hr=pa
 /* ========== Input Validation Helpers ========== */
 function isValidABN(abn) {
     if (!abn || typeof abn !== 'string') return false;
-    const cleanedAbn = abn.replace(/\s/g, ''); // Remove spaces
-    if (!/^\d{11}$/.test(cleanedAbn)) return false; // Check if 11 digits
+    const cleanedAbn = abn.replace(/\s/g, ''); 
+    if (!/^\d{11}$/.test(cleanedAbn)) return false; 
 
-    // ABN checksum validation (Australian Taxation Office algorithm)
     const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
     let sum = 0;
     for (let i = 0; i < 11; i++) {
         let digit = parseInt(cleanedAbn[i], 10);
-        if (i === 0) digit -= 1; // Subtract 1 from the first digit
+        if (i === 0) digit -= 1; 
         sum += digit * weights[i];
     }
     return (sum % 89) === 0;
@@ -209,27 +203,30 @@ function isValidABN(abn) {
 
 function isValidBSB(bsb) {
     if (!bsb || typeof bsb !== 'string') return false;
-    const cleanedBsb = bsb.replace(/[\s-]/g, ''); // Remove spaces and hyphens
-    return /^\d{6}$/.test(cleanedBsb); // Check if 6 digits
+    const cleanedBsb = bsb.replace(/[\s-]/g, ''); 
+    return /^\d{6}$/.test(cleanedBsb); 
 }
 
 function isValidAccountNumber(acc) {
     if (!acc || typeof acc !== 'string') return false;
-    const cleanedAcc = acc.replace(/\s/g, ''); // Remove spaces
-    return /^\d{6,10}$/.test(cleanedAcc); // Check if 6-10 digits
+    const cleanedAcc = acc.replace(/\s/g, ''); 
+    return /^\d{6,10}$/.test(cleanedAcc); 
 }
 
 
 /* ========== Firebase Initialization and Auth State ========== */
 async function initializeFirebase() {
-    if (!firebaseConfig || 
-        !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR_") ||
-        !firebaseConfig.authDomain || 
-        !firebaseConfig.projectId || 
-        !firebaseConfig.storageBucket || 
-        !firebaseConfig.messagingSenderId || 
-        !firebaseConfig.appId || firebaseConfig.appId.startsWith("YOUR_") || firebaseConfig.appId === "") {
-        console.error("Firebase configuration is missing or incomplete.");
+    console.log("Attempting to initialize Firebase with config:", JSON.stringify(window.firebaseConfigForApp, null, 2));
+    
+    const currentFirebaseConfig = window.firebaseConfigForApp; // Use a local const for checks
+    if (!currentFirebaseConfig || 
+        !currentFirebaseConfig.apiKey || currentFirebaseConfig.apiKey.startsWith("YOUR_") ||
+        !currentFirebaseConfig.authDomain || 
+        !currentFirebaseConfig.projectId || 
+        !currentFirebaseConfig.storageBucket || 
+        !currentFirebaseConfig.messagingSenderId || 
+        !currentFirebaseConfig.appId || currentFirebaseConfig.appId.startsWith("YOUR_") || currentFirebaseConfig.appId === "") {
+        console.error("Firebase configuration is missing or incomplete in window.firebaseConfigForApp.");
         if (authScreenElement) authScreenElement.style.display = "flex";
         if (portalAppElement) portalAppElement.style.display = "none";
         showAuthStatusMessage("System Error: Portal configuration is invalid. Cannot connect.");
@@ -239,10 +236,10 @@ async function initializeFirebase() {
     }
 
     try {
-        fbApp = initializeApp(firebaseConfig);
+        fbApp = initializeApp(currentFirebaseConfig); // Use the validated config
         fbAuth = getAuth(fbApp);
         fsDb = getFirestore(fbApp); 
-        // fbStorage = getStorage(fbApp); // Uncomment when Firebase Storage is implemented
+        // fbStorage = getStorage(fbApp); 
 
         if (!fbAuth || !fsDb) { 
             console.error("Failed to get Firebase Auth or Firestore instance.");
@@ -256,9 +253,6 @@ async function initializeFirebase() {
 
         isFirebaseInitialized = true;
         console.log("Firebase initialized with Cloud Firestore.");
-        // For development, you might want more detailed logs from Firestore. Remove for production.
-        // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        // setLogLevel('debug'); 
         await setupAuthListener(); 
     } catch (error) {
         console.error("Firebase initialization error:", error);
@@ -629,14 +623,11 @@ window.modalRegister = async function () {
 };
 
 window.editProfile = function() {
-    // This function is triggered by the "Edit Profile Details" button.
-    // It should allow users to modify their name, ABN, GST status, BSB, and Account Number.
-    // For simplicity, we'll reuse the user setup wizard (`#wiz`) for editing.
     if (!currentUserId || !profile) {
         showMessage("Error", "User not logged in or profile not loaded.");
         return;
     }
-    openUserSetupWizard(true); // Pass a flag to indicate it's for editing
+    openUserSetupWizard(true); 
 };
 
 window.uploadProfileDocuments = async function() {
@@ -651,32 +642,18 @@ window.uploadProfileDocuments = async function() {
     }
 
     showLoading("Uploading documents...");
-    // Firebase Storage integration is needed here.
-    // For each file in fileInput.files:
-    // 1. Create a unique file name (e.g., using timestamp or UUID).
-    // 2. Create a Firebase Storage reference: `ref(fbStorage, `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`)`
-    // 3. Upload the file: `await uploadBytes(storageRef, file)`
-    // 4. Get the download URL: `const downloadURL = await getDownloadURL(storageRef)`
-    // 5. Store metadata (name, downloadURL, timestamp) in Firestore user's profile (e.g., in the `files` array).
-
-    // --- Placeholder for Firestore update (actual Storage upload needed above) ---
+    // --- Placeholder for Firebase Storage upload ---
+    console.warn("Firebase Storage upload logic needs to be implemented here.");
     const filesToUpload = Array.from(fileInput.files);
     const newFileEntries = [];
 
     for (const file of filesToUpload) {
-        // Simulate upload and get a placeholder URL
         const uniqueFileName = `${Date.now()}-${file.name}`; 
-        // const downloadURL = "https://placeholder.co/600x400?text=Uploaded+File"; // Replace with actual fbStorage downloadURL
-        
-        // In a real scenario, you would get the downloadURL from Firebase Storage
-        // For now, we'll just store the name and a placeholder.
-        // This part needs to be replaced with actual Firebase Storage upload logic.
-        console.warn(`Placeholder: File "${file.name}" would be uploaded to Firebase Storage here.`);
         newFileEntries.push({
             name: file.name,
-            // url: downloadURL, // This would be the actual URL from Storage
-            storagePath: `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`, // Store path for deletion
+            storagePath: `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`, 
             uploadedAt: serverTimestamp()
+            // url: downloadURL, // This would come from Firebase Storage after successful upload
         });
     }
 
@@ -684,24 +661,22 @@ window.uploadProfileDocuments = async function() {
         try {
             const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
             await updateDoc(userProfileDocRef, {
-                files: arrayUnion(...newFileEntries) // Add new files to existing array
+                files: arrayUnion(...newFileEntries) 
             });
-            profile.files = [...(profile.files || []), ...newFileEntries.map(f => ({...f, uploadedAt: new Date()}))]; // Update local profile
-            loadProfileData(); // Refresh profile display
-            showMessage("Documents Updated", "File metadata added to profile. Full upload requires Storage setup.");
+            profile.files = [...(profile.files || []), ...newFileEntries.map(f => ({...f, uploadedAt: new Date()}))]; 
+            loadProfileData(); 
+            showMessage("Documents Updated", "File metadata added. Full upload requires Storage setup.");
         } catch (error) {
             console.error("Error updating profile with file metadata:", error);
             showMessage("Error", "Could not update profile with file information: " + error.message);
         }
     }
-    // --- End Placeholder ---
-    
-    fileInput.value = ""; // Clear file input
+    fileInput.value = ""; 
     hideLoading();
 };
 
 window.addInvRowUserAction = function() { 
-    addInvoiceRow(); // Call the existing function to add a blank row
+    addInvoiceRow(); 
     showMessage("Row Added", "A new row has been added to the invoice. Please fill in the details.");
 };
 
@@ -712,7 +687,6 @@ window.saveDraft = async function() {
     }
     showLoading("Saving invoice draft...");
 
-    // 1. Gather data from the invoice table and header fields
     currentInvoiceData.invoiceNumber = $("#invNo")?.value || "";
     currentInvoiceData.invoiceDate = $("#invDate")?.value || new Date().toISOString().split('T')[0];
     currentInvoiceData.providerName = $("#provName")?.value || "";
@@ -721,10 +695,8 @@ window.saveDraft = async function() {
     
     currentInvoiceData.items = [];
     const rows = $$("#invTbl tbody tr");
-    rows.forEach((row, index) => {
-        if (row.classList.contains('deleted-row')) return; // Skip rows marked for deletion if any
-
-        const itemDateEl = row.querySelector(`input[id^="itemDate"]`); // More robust selector
+    rows.forEach((row) => {
+        const itemDateEl = row.querySelector(`input[id^="itemDate"]`);
         const itemDescEl = row.querySelector(`select[id^="itemDesc"]`); 
         const itemStartTimeEl = row.querySelector(`input[id^="itemStart"]`);
         const itemEndTimeEl = row.querySelector(`input[id^="itemEnd"]`);
@@ -740,22 +712,20 @@ window.saveDraft = async function() {
             description: service ? service.description : "N/A",
             startTime: itemStartTimeEl ? itemStartTimeEl.dataset.value24 : "",
             endTime: itemEndTimeEl ? itemEndTimeEl.dataset.value24 : "",
-            hoursOrKm: parseFloat(row.cells[8].textContent) || 0, // Calculated hours/km
-            total: parseFloat(row.cells[10].textContent.replace('$', '')) || 0, // Calculated total
+            hoursOrKm: parseFloat(row.cells[8].textContent) || 0, 
+            total: parseFloat(row.cells[10].textContent.replace('$', '')) || 0, 
             travelKmInput: itemTravelKmEl ? parseFloat(itemTravelKmEl.value) || 0 : 0,
             claimTravel: itemClaimTravelEl ? itemClaimTravelEl.checked : false,
-            rateType: determineRateType(itemDateEl?.value, itemStartTimeEl?.dataset.value24) // Store rate type
+            rateType: determineRateType(itemDateEl?.value, itemStartTimeEl?.dataset.value24) 
         });
     });
 
-    // 2. Recalculate totals (already done by calculateInvoiceTotals, but ensure it's up-to-date)
     calculateInvoiceTotals(); 
     currentInvoiceData.subtotal = parseFloat($("#sub")?.textContent.replace('$', '')) || 0;
     currentInvoiceData.gst = parseFloat($("#gst")?.textContent.replace('$', '')) || 0;
     currentInvoiceData.grandTotal = parseFloat($("#grand")?.textContent.replace('$', '')) || 0;
     currentInvoiceData.lastUpdated = serverTimestamp();
 
-    // 3. Save to Firestore
     try {
         const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, `draft-${currentInvoiceData.invoiceNumber || 'current'}`);
         await setDoc(draftDocRef, currentInvoiceData);
@@ -769,76 +739,128 @@ window.saveDraft = async function() {
 };
 
 window.generateInvoicePdf = function() {
-    const invoiceContentElement = $("#invoicePdfContent"); 
-    if (!invoiceContentElement) {
-        showMessage("Error", "Invoice content area not found for PDF generation.");
+    if (!currentUserId || !profile) {
+        showMessage("Error", "Cannot generate PDF. User data not loaded.");
         return;
     }
 
-    // Temporarily show print-only columns for PDF generation
-    $$('.print-only, .pdf-show').forEach(el => el.style.display = 'table-cell'); 
-    $$('.no-print, .pdf-hide').forEach(el => el.style.display = 'none');
+    // 1. Construct HTML string for PDF content based on currentInvoiceData
+    let pdfHtml = `
+        <style>
+            body { font-family: 'Inter', sans-serif; font-size: 10pt; }
+            .pdf-invoice-container { padding: 20px; }
+            .pdf-header { text-align: center; margin-bottom: 30px; }
+            .pdf-header h1 { margin: 0; font-size: 24pt; color: #333; }
+            .pdf-header p { margin: 5px 0; font-size: 9pt; color: #555; }
+            .pdf-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; font-size: 9pt;}
+            .pdf-details-grid div { margin-bottom: 5px; }
+            .pdf-details-grid strong { font-weight: 600; }
+            .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 8pt; }
+            .pdf-table th, .pdf-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+            .pdf-table th { background-color: #f0f0f0; font-weight: 600; }
+            .pdf-table td.number { text-align: right; }
+            .pdf-totals { float: right; width: 250px; margin-top: 20px; font-size: 10pt; }
+            .pdf-totals div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .pdf-totals strong { font-weight: 600; }
+        </style>
+        <div class="pdf-invoice-container">
+            <div class="pdf-header">
+                <h1>Tax Invoice</h1>
+                <p>${globalSettings.organizationName || profile.name}</p>
+                <p>ABN: ${globalSettings.organizationAbn || profile.abn}</p>
+                ${profile.gstRegistered ? '<p>GST Registered</p>' : ''}
+            </div>
 
-    // Ensure values from inputs/selects are populated into their print spans if not already
-    $$("#invTbl tbody tr").forEach(row => {
-        const descSelect = row.querySelector('select[id^="itemDesc"]');
-        const descPrintSpan = row.querySelector('span[id^="itemDescPrint"]');
-        const codePrintSpan = row.querySelector('span[id^="itemCodePrint"]');
-        const rateTypePrintSpan = row.querySelector('span[id^="itemRateTypePrint"]');
-        const rateUnitPrintSpan = row.querySelector('td[id^="itemRateUnitPrint"]'); // This is a TD
+            <div class="pdf-details-grid">
+                <div>
+                    <strong>To:</strong> ${globalSettings.participantName || 'N/A'}<br>
+                    NDIS No: ${globalSettings.participantNdisNo || 'N/A'}<br>
+                    ${globalSettings.planManagerName ? `Plan Manager: ${globalSettings.planManagerName}<br>` : ''}
+                    ${globalSettings.planManagerEmail ? `Email: ${globalSettings.planManagerEmail}<br>` : ''}
+                </div>
+                <div>
+                    <strong>Invoice #:</strong> ${currentInvoiceData.invoiceNumber || 'N/A'}<br>
+                    <strong>Date Issued:</strong> ${formatDateForInvoiceDisplay(currentInvoiceData.invoiceDate) || 'N/A'}<br>
+                    <strong>Support Worker:</strong> ${profile.name || 'N/A'}                 
+                </div>
+            </div>
 
-        const dateInput = row.querySelector(`input[id^="itemDate"]`);
-        const startTimeInput = row.querySelector(`input[id^="itemStart"]`);
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>NDIS Code</th>
+                        <th>Description</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Rate Type</th>
+                        <th class="number">Rate/Unit ($)</th>
+                        <th class="number">Hours/Km</th>
+                        <th class="number">Total ($)</th>
+                    </tr>
+                </thead>
+                <tbody>`;
 
-        if (descSelect && descPrintSpan) {
-            const selectedService = adminManagedServices.find(s => s.code === descSelect.value);
-            if (selectedService) {
-                descPrintSpan.textContent = selectedService.description;
-                if(codePrintSpan) codePrintSpan.textContent = selectedService.code;
-                
-                const rateType = determineRateType(dateInput?.value, startTimeInput?.dataset.value24);
-                if(rateTypePrintSpan) rateTypePrintSpan.textContent = rateType;
+    currentInvoiceData.items.forEach(item => {
+        const service = adminManagedServices.find(s => s.code === item.serviceCode);
+        let rateForPdf = 0;
+        let rateTypeForPdf = item.rateType || determineRateType(item.date, item.startTime);
 
-                let rateForPrint = 0;
-                 if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
-                    rateForPrint = selectedService.rates?.perKmRate || 0;
-                } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
-                    rateForPrint = selectedService.rates?.[rateType] || selectedService.rates?.weekday || 0;
-                } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || selectedService.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-                    rateForPrint = selectedService.rates?.standardRate || 0;
-                }
-                if(rateUnitPrintSpan) rateUnitPrintSpan.textContent = `$${parseFloat(rateForPrint).toFixed(2)}`;
-            } else {
-                descPrintSpan.textContent = "N/A";
-                if(codePrintSpan) codePrintSpan.textContent = "N/A";
-                if(rateTypePrintSpan) rateTypePrintSpan.textContent = "N/A";
-                if(rateUnitPrintSpan) rateUnitPrintSpan.textContent = "$0.00";
+        if (service) {
+            if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
+                rateForPdf = service.rates?.perKmRate || 0;
+                rateTypeForPdf = "Travel";
+            } else if (service.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || service.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
+                rateForPdf = service.rates?.[rateTypeForPdf] || service.rates?.weekday || 0;
+            } else { // Capacity building, other flat rate
+                rateForPdf = service.rates?.standardRate || 0;
             }
         }
+
+        pdfHtml += `
+                    <tr>
+                        <td>${formatDateForInvoiceDisplay(item.date)}</td>
+                        <td>${item.serviceCode || 'N/A'}</td>
+                        <td>${item.description || 'N/A'}</td>
+                        <td>${formatTime12Hour(item.startTime) || 'N/A'}</td>
+                        <td>${formatTime12Hour(item.endTime) || 'N/A'}</td>
+                        <td>${rateTypeForPdf}</td>
+                        <td class="number">${rateForPdf.toFixed(2)}</td>
+                        <td class="number">${item.hoursOrKm.toFixed(2)}</td>
+                        <td class="number">${item.total.toFixed(2)}</td>
+                    </tr>`;
     });
 
+    pdfHtml += `
+                </tbody>
+            </table>
 
+            <div class="pdf-totals">
+                <div><span>Subtotal:</span> <strong>$${currentInvoiceData.subtotal.toFixed(2)}</strong></div>`;
+    if (currentInvoiceData.gstRegistered || profile.gstRegistered) { // Check both just in case
+        pdfHtml += `<div><span>GST (10%):</span> <strong>$${currentInvoiceData.gst.toFixed(2)}</strong></div>`;
+    }
+    pdfHtml += `   <div><span>Total:</span> <strong>$${currentInvoiceData.grandTotal.toFixed(2)}</strong></div>
+            </div>
+        </div>`;
+    
+    // 2. Use html2pdf on the constructed HTML
     const opt = {
         margin:       [10, 10, 10, 10], 
-        filename:     `Invoice-${$("#invNo")?.value || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        filename:     `Invoice-${currentInvoiceData.invoiceNumber || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY }, 
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-     html2pdf().from(invoiceContentElement).set(opt).toPdf().get('pdf').then(function (pdf) {
-        // Optional: Add page numbers or headers/footers
-    }).save().then(() => {
-        $$('.print-only, .pdf-show').forEach(el => el.style.display = ''); 
-        $$('.no-print, .pdf-hide').forEach(el => el.style.display = ''); 
+    html2pdf().from(pdfHtml).set(opt).save().then(() => {
         showMessage("PDF Generated", "Invoice PDF has been downloaded.");
     }).catch(err => {
         console.error("Error generating PDF:", err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
-        $$('.print-only, .pdf-show').forEach(el => el.style.display = '');
-        $$('.no-print, .pdf-hide').forEach(el => el.style.display = '');
     });
 };
+
 
 window.saveSig = async function() {
     if (!canvas || !ctx) {
@@ -852,7 +874,7 @@ window.saveSig = async function() {
     }
 
     const signatureDataUrl = canvas.toDataURL('image/png');
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas after getting data
+    ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
     if (!currentUserId || !fsDb) {
         showMessage("Error", "Cannot save signature. User or database not ready.");
@@ -1399,69 +1421,112 @@ window.adminWizFinish = async function() {
 window.copyLink = function(){ const inviteLinkElement = $("#invite"); const link = inviteLinkElement ? inviteLinkElement.textContent : null; if (link && navigator.clipboard) { navigator.clipboard.writeText(link).then(()=>showMessage("Copied","Invite link copied to clipboard!")).catch(err=>showMessage("Copy Error","Could not copy link: " + err)); } else if (link) { const textArea = document.createElement("textarea"); textArea.value = link; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showMessage("Copied","Invite link copied!"); } catch (err) { showMessage("Copy Error","Failed to copy link."); } document.body.removeChild(textArea); } else { showMessage("Error", "Invite link not found."); }};
 
 async function loadAllUserAccountsForAdminFromFirestore() {
-    if (!isFirebaseInitialized || !(profile && profile.isAdmin)) return;
+    if (!isFirebaseInitialized || !(profile && profile.isAdmin)) {
+        console.warn("Admin data load skipped: Firebase not ready or user not admin.");
+        return;
+    }
+    showLoading("Loading worker accounts...");
     try {
-        const usersBaseCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
-        const usersSnapshot = await getDocs(usersBaseCollectionRef);
+        const usersCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
+        const usersSnapshot = await getDocs(usersCollectionRef);
         
-        accounts = {}; 
+        accounts = {}; // Reset accounts
         const profilePromises = [];
 
-        usersSnapshot.forEach((userDoc) => {
-            const userId = userDoc.id;
+        usersSnapshot.forEach((userDocSnapshot) => { // Renamed to avoid conflict
+            const userId = userDocSnapshot.id;
+            // Skip the admin user itself from being listed as a 'worker' to manage
+            if (userId === currentUserId && profile.isAdmin) { 
+                // Store admin's own profile if needed, but don't add to list of workers for auth
+                if (profile.email) accounts[profile.email] = { name: profile.name, profile: profile };
+                else accounts[userId] = { name: profile.name, profile: profile };
+                return;
+            }
+
             const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${userId}/profile`, "details");
-            profilePromises.push(getDoc(userProfileDocRef).then(profileSnap => {
-                if (profileSnap.exists()) {
-                    const userData = profileSnap.data();
-                     if (userData.email && userData.email.toLowerCase() !== "admin@portal.com") { 
-                        accounts[userData.email] = { name: userData.name || 'Unnamed User', profile: { uid: userId, ...userData } };
-                    } else if (userData.isAdmin && !userData.email) { 
-                        accounts[userId] = { name: userData.name || 'Admin User', profile: { uid: userId, ...userData}};
+            profilePromises.push(
+                getDoc(userProfileDocRef).then(profileSnap => {
+                    if (profileSnap.exists()) {
+                        const userData = profileSnap.data();
+                        // Ensure only non-admin users are added to the 'accounts' for worker management
+                        if (!userData.isAdmin) { 
+                            if (userData.email) {
+                                accounts[userData.email] = { name: userData.name || 'Unnamed Worker', profile: { uid: userId, ...userData } };
+                            } else {
+                                // Fallback if email is somehow missing, though unlikely for registered users
+                                accounts[userId] = { name: userData.name || 'Unnamed Worker', profile: { uid: userId, ...userData } };
+                            }
+                        } else if (userId === currentUserId) { // Store admin's own profile
+                             if (userData.email) accounts[userData.email] = { name: userData.name, profile: { uid: userId, ...userData } };
+                             else accounts[userId] = { name: userData.name, profile: { uid: userId, ...userData } };
+                        }
+                    } else {
+                        console.warn(`Profile details not found for user ID: ${userId}`);
                     }
-                }
-            }));
+                }).catch(err => {
+                    console.error(`Error fetching profile for user ID ${userId}:`, err);
+                })
+            );
         });
         await Promise.all(profilePromises); 
+        console.log("Loaded accounts for admin:", accounts);
 
         if(location.hash === "#agreement" && $("#adminAgreementWorkerSelector")) populateAdminWorkerSelectorForAgreement();
         if(location.hash === "#admin" && $(".admin-tab-btn.active")?.dataset.target === "adminWorkerManagement") displayWorkersForAuth(); 
+    
     } catch (error) { 
         console.error("Error loading user accounts for admin from Firestore:", error); 
-        showMessage("Data Error", "Could not load worker accounts for admin."); 
+        showMessage("Data Error", "Could not load worker accounts for admin: " + error.message); 
+    } finally {
+        hideLoading();
     }
 }
 
+
 function displayWorkersForAuth() {
-    const ul = $("#workersListForAuth"); if (!ul) return; ul.innerHTML = ""; 
-    const workerAccounts = Object.entries(accounts).filter(([key, acc]) => acc && acc.profile && !acc.profile.isAdmin);
+    const ul = $("#workersListForAuth"); 
+    if (!ul) {
+        console.error("Element #workersListForAuth not found");
+        return;
+    }
+    ul.innerHTML = ""; 
     
+    // Filter out the admin user from the list of workers to be managed
+    const workerAccounts = Object.entries(accounts).filter(([key, acc]) => {
+        return acc && acc.profile && !acc.profile.isAdmin;
+    });
+    
+    console.log("Displaying workers for auth:", workerAccounts);
+
     if (workerAccounts.length === 0) { 
         ul.innerHTML = "<li>No workers found to authorize.</li>"; 
         const selectedWorkerNameEl = $("#selectedWorkerNameForAuth");
-        if (selectedWorkerNameEl) selectedWorkerNameEl.textContent = "Select a Worker";
+        if (selectedWorkerNameEl) selectedWorkerNameEl.innerHTML = `<i class="fas fa-user-check"></i> Select a Worker`;
         const servicesContainerEl = $("#servicesForWorkerContainer");
         if (servicesContainerEl) servicesContainerEl.classList.add("hide");
         return; 
     }
+
     workerAccounts.forEach(([key, worker]) => { 
         const displayIdentifier = worker.profile.email || key; 
         const li = document.createElement("li"); 
         li.innerHTML = `<i class="fas fa-user-tie"></i> ${worker.profile.name || 'Unnamed Worker'} <small>(${displayIdentifier})</small>`; 
-        li.dataset.key = key; 
+        li.dataset.key = key; // Use the key from accounts (email or UID)
         li.onclick = () => selectWorkerForAuth(key); 
         ul.appendChild(li); 
     });
 }
 
+
 function selectWorkerForAuth(key) { 
-    selectedWorkerEmailForAuth = key; 
+    selectedWorkerEmailForAuth = key; // This key is the email or UID used in the 'accounts' object
     const worker = accounts[selectedWorkerEmailForAuth]; 
     const nameEl = $("#selectedWorkerNameForAuth");
     const containerEl = $("#servicesForWorkerContainer");
 
     if (!worker || !worker.profile) { 
         showMessage("Error", "Selected worker data not found."); 
-        if(nameEl) nameEl.textContent = "Error loading worker"; 
+        if(nameEl) nameEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error loading worker`; 
         if(containerEl) containerEl.classList.add("hide"); 
         return; 
     }
@@ -1486,7 +1551,6 @@ function displayServicesForWorkerAuth(workerProfileData) {
     
     let servicesAvailable = false;
     adminManagedServices.forEach(service => { 
-        // Only allow authorization for services that are NOT travel items themselves
         if (service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) { 
             servicesAvailable = true;
             const li = document.createElement("li");
@@ -2002,13 +2066,13 @@ function openLogShiftModal() {
         if (startTimeInput) { 
             startTimeInput.value = ""; 
             startTimeInput.dataset.value24 = "";
-            startTimeInput.onclick = () => openCustomTimePicker(startTimeInput, null); // Ensure picker is attached
+            startTimeInput.onclick = () => openCustomTimePicker(startTimeInput, null); 
         }
         const endTimeInput = $("#logShiftEndTime"); 
         if (endTimeInput) { 
             endTimeInput.value = ""; 
             endTimeInput.dataset.value24 = "";
-            endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, null); // Ensure picker is attached
+            endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, null); 
         }
         
         const claimTravelToggle = $("#logShiftClaimTravelToggle"); 
@@ -2380,9 +2444,14 @@ async function loadServiceAgreement() {
         return;
     }
     if (typeof agreementCustomData !== 'object' || agreementCustomData === null) {
-        $("#agreementContentContainer").innerHTML = "<p><em>Error: Agreement template data is missing.</em></p>";
-        return;
+         // Attempt to load it if it's missing, then proceed or show error
+        await loadAgreementCustomizationsFromFirestore();
+        if (typeof agreementCustomData !== 'object' || agreementCustomData === null) {
+            $("#agreementContentContainer").innerHTML = "<p><em>Error: Agreement template data is missing and could not be loaded.</em></p>";
+            return;
+        }
     }
+
 
     let workerProfileToUse;
     let workerName, workerAbn;
@@ -2419,7 +2488,6 @@ async function loadServiceAgreement() {
         if (agreementInstanceSnap.exists()) {
             agreementInstanceData = { ...agreementInstanceData, ...agreementInstanceSnap.data() };
         } else {
-            // If no instance, create one with default start date
             await setDoc(agreementInstanceRef, { agreementStartDate: globalSettings.agreementStartDate || new Date().toISOString().split('T')[0], lastUpdated: serverTimestamp() });
         }
     } catch (e) {
@@ -2502,36 +2570,114 @@ async function loadServiceAgreement() {
 }
 
 async function generateAgreementPdf() {
-    const agreementContentWrapper = $("#agreementContentWrapper");
-    if (!agreementContentWrapper) {
-        showMessage("Error", "Agreement content not found for PDF.");
+    if (!currentUserId || !profile || !agreementCustomData) {
+        showMessage("Error", "Required data for PDF generation is missing.");
         return;
     }
-    
-    const pdfClone = agreementContentWrapper.cloneNode(true);
-    
-    const sigPImgSrc = $("#sigP")?.src;
-    const sigWImgSrc = $("#sigW")?.src;
-    if(sigPImgSrc) pdfClone.querySelector("#sigP").src = sigPImgSrc;
-    if(sigWImgSrc) pdfClone.querySelector("#sigW").src = sigWImgSrc;
 
-    const agreementHeaderForPdf = $("#agreementHeaderForPdf");
-    if (agreementHeaderForPdf) {
-        const clonedHeader = agreementHeaderForPdf.cloneNode(true);
-        clonedHeader.style.display = 'block'; 
-        clonedHeader.innerHTML = `<h1>${globalSettings.organizationName || 'Service Provider'}</h1><h2>${$("#agreementDynamicTitle")?.textContent || 'Service Agreement'}</h2>`;
-        pdfClone.insertBefore(clonedHeader, pdfClone.firstChild);
+    let workerProfileToUse = profile; // Default to current user
+    let workerName = profile.name;
+    let workerAbn = profile.abn;
+
+    if (profile.isAdmin && currentAgreementWorkerEmail) {
+        const selectedWorker = accounts[currentAgreementWorkerEmail]?.profile;
+        if (selectedWorker) {
+            workerProfileToUse = selectedWorker;
+            workerName = selectedWorker.name;
+            workerAbn = selectedWorker.abn;
+        } else {
+            showMessage("Error", "Selected worker profile for PDF not found.");
+            return;
+        }
     }
+    
+    let agreementInstanceData = { workerSigUrl: $("#sigW")?.src, participantSigUrl: $("#sigP")?.src, workerSignDate: $("#dW")?.textContent, participantSignDate: $("#dP")?.textContent, agreementStartDate: globalSettings.agreementStartDate };
+    // Attempt to load more accurate instance data if available from Firestore (might be redundant if loadServiceAgreement was just called)
+    try {
+        const agreementDocPath = `artifacts/${appId}/users/${workerProfileToUse.uid}/agreements/main`;
+        const agreementInstanceRef = doc(fsDb, agreementDocPath);
+        const agreementInstanceSnap = await getDoc(agreementInstanceRef);
+        if (agreementInstanceSnap.exists()) {
+            const firestoreData = agreementInstanceSnap.data();
+            agreementInstanceData.workerSigUrl = firestoreData.workerSigUrl || agreementInstanceData.workerSigUrl;
+            agreementInstanceData.participantSigUrl = firestoreData.participantSigUrl || agreementInstanceData.participantSigUrl;
+            agreementInstanceData.workerSignDate = firestoreData.workerSignDate ? formatDateForInvoiceDisplay(firestoreData.workerSignDate.toDate()) : agreementInstanceData.workerSignDate;
+            agreementInstanceData.participantSignDate = firestoreData.participantSignDate ? formatDateForInvoiceDisplay(firestoreData.participantSignDate.toDate()) : agreementInstanceData.participantSignDate;
+            agreementInstanceData.agreementStartDate = firestoreData.agreementStartDate || agreementInstanceData.agreementStartDate;
+        }
+    } catch(e) { console.warn("Could not fetch latest agreement instance for PDF:", e); }
 
+
+    let pdfHtml = `
+        <style>
+            body { font-family: 'Inter', sans-serif; font-size: 10pt; color: #333; }
+            .pdf-agreement-container { padding: 20mm; }
+            .pdf-agreement-header h1 { font-size: 18pt; text-align: center; margin-bottom: 5mm; color: #000; }
+            .pdf-agreement-header h2 { font-size: 14pt; text-align: center; margin-bottom: 10mm; color: #222; }
+            .pdf-clause h4 { font-size: 12pt; margin-top: 8mm; margin-bottom: 3mm; color: #111; border-bottom: 1px solid #eee; padding-bottom: 2mm;}
+            .pdf-clause div { margin-bottom: 5mm; line-height: 1.5; text-align: justify; }
+            .pdf-clause ul { padding-left: 20px; margin-bottom: 5mm; }
+            .pdf-clause li { margin-bottom: 2mm; }
+            .pdf-signatures { margin-top: 15mm; display: flex; justify-content: space-around; page-break-inside: avoid; }
+            .pdf-signature-block { width: 45%; text-align: center; }
+            .pdf-signature-block img { width: 150px; height: 50px; border: 1px dashed #ccc; margin-bottom: 5mm; background-color: #f9f9f9; object-fit: contain; }
+            .pdf-signature-block p { margin: 2mm 0; font-size: 9pt; }
+        </style>
+        <div class="pdf-agreement-container">
+            <div class="pdf-agreement-header">
+                 <h1>${globalSettings.organizationName || 'Service Provider'}</h1>
+                 <h2>${agreementCustomData.overallTitle || "Service Agreement"}</h2>
+            </div>`;
+
+    (agreementCustomData.clauses || []).forEach(clause => {
+        let clauseBody = clause.body || "";
+        clauseBody = clauseBody.replace(/{{participantName}}/g, globalSettings.participantName || "[Participant Name]")
+                               .replace(/{{participantNdisNo}}/g, globalSettings.participantNdisNo || "[NDIS No]")
+                               .replace(/{{workerName}}/g, workerName || "[Worker Name]")
+                               .replace(/{{workerAbn}}/g, workerAbn || "[Worker ABN]")
+                               .replace(/{{agreementStartDate}}/g, formatDateForInvoiceDisplay(agreementInstanceData.agreementStartDate || globalSettings.agreementStartDate || new Date()))
+                               .replace(/{{agreementEndDate}}/g, formatDateForInvoiceDisplay(globalSettings.planEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1))));
+        
+        let serviceListHtml = "<ul>";
+        const authorizedCodes = workerProfileToUse.authorizedServiceCodes || [];
+        if (authorizedCodes.length > 0) {
+            authorizedCodes.forEach(code => {
+                const serviceDetail = adminManagedServices.find(s => s.code === code);
+                serviceListHtml += `<li>${serviceDetail ? serviceDetail.description : code}</li>`;
+            });
+        } else {
+            serviceListHtml += "<li>No specific services listed/authorized.</li>";
+        }
+        serviceListHtml += "</ul>";
+        clauseBody = clauseBody.replace(/{{serviceList}}/g, serviceListHtml);
+
+        pdfHtml += `<div class="pdf-clause"><h4>${clause.heading || ""}</h4><div>${clauseBody.replace(/\n/g, '<br>')}</div></div>`;
+    });
+
+    pdfHtml += `
+            <div class="pdf-signatures">
+                <div class="pdf-signature-block">
+                    <p><strong>Participant</strong></p>
+                    ${agreementInstanceData.participantSigUrl && agreementInstanceData.participantSigUrl !== "https://placehold.co/250x85?text=Signature" ? `<img src="${agreementInstanceData.participantSigUrl}" alt="Participant Signature">` : '<div style="width:150px; height:50px; border:1px dashed #ccc; margin: 0 auto 5mm; display:flex; align-items:center; justify-content:center; font-size:8pt; color:#999;">Signature Area</div>'}
+                    <p>Date: ${agreementInstanceData.participantSignDate && agreementInstanceData.participantSignDate !== '___' ? agreementInstanceData.participantSignDate : '_____________________'}</p>
+                </div>
+                <div class="pdf-signature-block">
+                    <p><strong>Support Worker</strong></p>
+                     ${agreementInstanceData.workerSigUrl && agreementInstanceData.workerSigUrl !== "https://placehold.co/250x85?text=Signature" ? `<img src="${agreementInstanceData.workerSigUrl}" alt="Support Worker Signature">` : '<div style="width:150px; height:50px; border:1px dashed #ccc; margin: 0 auto 5mm; display:flex; align-items:center; justify-content:center; font-size:8pt; color:#999;">Signature Area</div>'}
+                    <p>Date: ${agreementInstanceData.workerSignDate && agreementInstanceData.workerSignDate !== '___' ? agreementInstanceData.workerSignDate : '_____________________'}</p>
+                </div>
+            </div>
+        </div>`;
+    
     const opt = {
-        margin: [15, 15, 15, 15],
-        filename: `ServiceAgreement-${profile.name || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        margin: [15, 15, 15, 15], // mm
+        filename: `ServiceAgreement-${workerName || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().from(pdfClone).set(opt).save().then(() => {
+    html2pdf().from(pdfHtml).set(opt).save().then(() => {
         showMessage("PDF Generated", "Service Agreement PDF has been downloaded.");
     }).catch(err => {
         console.error("Error generating agreement PDF:", err);
@@ -2584,21 +2730,7 @@ window.deleteProfileDocument = async function(fileName, storagePath) {
 window._confirmDeleteProfileDocument = async function(fileName, storagePath) {
     closeModal("messageModal");
     showLoading("Deleting document...");
-
-    // Firebase Storage deletion needed here:
-    // if (storagePath && fbStorage) {
-    //     const fileRef = ref(fbStorage, storagePath);
-    //     try {
-    //         await deleteObject(fileRef);
-    //         console.log(`File deleted from Storage: ${storagePath}`);
-    //     } catch (storageError) {
-    //         console.error("Error deleting file from Storage:", storageError);
-    //     }
-    // } else {
-    //     console.warn("Storage path not provided or Storage not initialized. Skipping cloud deletion for:", fileName);
-    // }
     console.warn(`Placeholder: File at path "${storagePath}" would be deleted from Firebase Storage here.`);
-
 
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
@@ -2725,8 +2857,8 @@ function openCustomTimePicker(inputElement, callbackFn) {
     timePickerCallback = callbackFn; 
     const picker = $("#customTimePicker"); 
     if (picker) {
-        picker.classList.remove('hide'); // Ensure it's not hidden by the 'hide' class
-        picker.style.display = 'flex';  // Explicitly set display to flex
+        picker.classList.remove('hide'); 
+        picker.style.display = 'flex';  
         selectedAmPm = null; 
         selectedHour12 = null; 
         selectedMinute = null;
@@ -2795,7 +2927,7 @@ function updateTimePickerStepView() {
                 minutesContainer.innerHTML = '';
                 ['00', '15', '30', '45'].forEach(val => { 
                     const btn = document.createElement('button'); btn.textContent = val;
-                    btn.onclick = () => { selectedMinute = val; updateTimePickerStepView(); }; // No auto-advance
+                    btn.onclick = () => { selectedMinute = val; updateTimePickerStepView(); }; 
                     if (selectedMinute === val) btn.classList.add('selected');
                     minutesContainer.appendChild(btn);
                 });
@@ -2928,9 +3060,9 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     const rowIndex = invoiceItemCounter++;
     const tr = tbody.insertRow();
 
-    tr.insertCell().textContent = tbody.rows.length; // #
+    tr.insertCell().textContent = tbody.rows.length; 
 
-    const dateCell = tr.insertCell(); // Date
+    const dateCell = tr.insertCell(); 
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.id = `itemDate${rowIndex}`;
@@ -2939,7 +3071,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     dateInput.onchange = calculateInvoiceTotals;
     dateCell.appendChild(dateInput);
 
-    const codeCellPrint = tr.insertCell(); // NDIS Item Code (Print Only)
+    const codeCellPrint = tr.insertCell(); 
     codeCellPrint.className = 'column-code print-only pdf-show';
     const codePrintSpan = document.createElement('span');
     codePrintSpan.id = `itemCodePrint${rowIndex}`;
@@ -2947,7 +3079,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     codePrintSpan.textContent = itemData?.serviceCode || "";
     codeCellPrint.appendChild(codePrintSpan);
 
-    const descCell = tr.insertCell(); // Description
+    const descCell = tr.insertCell(); 
     const descSelect = document.createElement('select');
     descSelect.id = `itemDesc${rowIndex}`;
     descSelect.className = 'invoice-input-condensed description-select';
@@ -2963,14 +3095,14 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
         }
     });
     descCell.appendChild(descSelect);
-    const descPrintSpan = document.createElement('span'); // For PDF
+    const descPrintSpan = document.createElement('span'); 
     descPrintSpan.id = `itemDescPrint${rowIndex}`;
-    descPrintSpan.className = 'description-print-value'; // Hidden in UI by default
+    descPrintSpan.className = 'description-print-value'; 
     descPrintSpan.textContent = itemData?.description || (adminManagedServices.find(s=>s.code === itemData?.serviceCode)?.description || "");
     descCell.appendChild(descPrintSpan);
 
 
-    const startCell = tr.insertCell(); // Start Time
+    const startCell = tr.insertCell(); 
     const startTimeInput = document.createElement('input');
     startTimeInput.type = 'text';
     startTimeInput.id = `itemStart${rowIndex}`;
@@ -2985,7 +3117,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     });
     startCell.appendChild(startTimeInput);
 
-    const endCell = tr.insertCell(); // End Time
+    const endCell = tr.insertCell(); 
     const endTimeInput = document.createElement('input');
     endTimeInput.type = 'text';
     endTimeInput.id = `itemEnd${rowIndex}`;
@@ -2997,7 +3129,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, calculateInvoiceTotals);
     endCell.appendChild(endTimeInput);
 
-    const rateTypeCellPrint = tr.insertCell(); // Rate Type (Print Only)
+    const rateTypeCellPrint = tr.insertCell(); 
     rateTypeCellPrint.className = 'column-rate-type print-only pdf-show';
     const rateTypePrintSpan = document.createElement('span');
     rateTypePrintSpan.id = `itemRateTypePrint${rowIndex}`;
@@ -3005,12 +3137,12 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     rateTypePrintSpan.textContent = itemData?.rateType || determineRateType(dateInput.value, startTimeInput.dataset.value24);
     rateTypeCellPrint.appendChild(rateTypePrintSpan);
 
-    const rateUnitCellPrint = tr.insertCell(); // Rate/Unit ($) (Print Only)
+    const rateUnitCellPrint = tr.insertCell(); 
     rateUnitCellPrint.className = 'print-only-column pdf-show';
     rateUnitCellPrint.id = `itemRateUnitPrint${rowIndex}`;
     rateUnitCellPrint.textContent = "$0.00"; 
     
-    descSelect.onchange = (e) => { // Update all dependent print spans on service change
+    descSelect.onchange = (e) => { 
         const selectedService = adminManagedServices.find(s => s.code === e.target.value);
         if(codePrintSpan) codePrintSpan.textContent = selectedService ? selectedService.code : "";
         if(descPrintSpan) descPrintSpan.textContent = selectedService ? selectedService.description : "N/A";
@@ -3038,11 +3170,11 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     };
 
 
-    const hoursKmCell = tr.insertCell(); // Hours / Km
+    const hoursKmCell = tr.insertCell(); 
     hoursKmCell.id = `itemHoursKm${rowIndex}`;
     hoursKmCell.textContent = itemData?.hoursOrKm?.toFixed(2) || "0.00";
 
-    const travelInputCell = tr.insertCell(); // Travel Input (Km)
+    const travelInputCell = tr.insertCell(); 
     travelInputCell.className = 'no-print pdf-hide';
     const travelKmInput = document.createElement('input');
     travelKmInput.type = 'number';
@@ -3057,7 +3189,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     const initialServiceForTravel = adminManagedServices.find(s => s.code === descSelect.value);
     travelKmInput.style.display = (initialServiceForTravel && initialServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
     
-    const claimTravelCell = tr.insertCell(); // Claim Travel Checkbox
+    const claimTravelCell = tr.insertCell(); 
     claimTravelCell.className = 'no-print pdf-hide';
     const claimTravelLabel = document.createElement('label');
     claimTravelLabel.className = 'chk no-margin km-claim-toggle';
@@ -3071,11 +3203,11 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     claimTravelCell.appendChild(claimTravelLabel);
     claimTravelLabel.style.display = (initialServiceForTravel && initialServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
 
-    const totalCell = tr.insertCell(); // Total ($)
+    const totalCell = tr.insertCell(); 
     totalCell.id = `itemTotal${rowIndex}`;
     totalCell.textContent = itemData?.total ? `$${itemData.total.toFixed(2)}` : "$0.00";
 
-    const actionsCell = tr.insertCell(); // Actions
+    const actionsCell = tr.insertCell(); 
     actionsCell.className = 'no-print pdf-hide';
     const deleteBtn = document.createElement('button');
     deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -3092,14 +3224,12 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
         if (codePrintSpan) codePrintSpan.textContent = itemData.serviceCode || "";
         if (descPrintSpan) descPrintSpan.textContent = itemData.description || "";
         if (rateTypePrintSpan) rateTypePrintSpan.textContent = itemData.rateType || "";
-        // Rate/Unit for draft items will be set by calculateInvoiceTotals call below
     } else { 
          if (codePrintSpan && descSelect.value) codePrintSpan.textContent = descSelect.value;
          if (descPrintSpan && descSelect.options[descSelect.selectedIndex]) descPrintSpan.textContent = descSelect.options[descSelect.selectedIndex].text.split(' (')[0];
          if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24);
     }
     
-    // Trigger initial calculation for the row
     calculateInvoiceTotals(); 
 }
 
@@ -3145,7 +3275,7 @@ function calculateInvoiceTotals() {
                 const rate = service.rates?.perKmRate || 0;
                 itemTotal = km * rate;
                 rateForPrint = rate;
-                if(rateTypePrintSpan) rateTypePrintSpan.textContent = "Travel"; // Explicitly set for travel
+                if(rateTypePrintSpan) rateTypePrintSpan.textContent = "Travel"; 
             } else { 
                 hours = calculateHours(startTime, endTime);
                 hoursKmCell.textContent = hours.toFixed(2);
