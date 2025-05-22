@@ -31,12 +31,11 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--light) !important; /* Ensure light page background */
-  color: var(--dark) !important; /* Ensure dark text */
+  background: var(--light) !important; 
+  color: var(--dark) !important; 
   font-size: 16px;
   line-height: 1.6; 
-  /* DEBUG: Add a very obvious border to check if this CSS file is loading */
-  border: 10px solid red !important;  
+  /* Removed debug border */
 }
 
 /* ========== AUTHENTICATION SCREEN ========== */
@@ -54,8 +53,8 @@ body {
 }
 
 #authScreen .dlg { 
-  background: var(--bg) !important; /* Ensure white dialog */
-  color: var(--dark) !important; /* Ensure dark text in dialog */
+  background: var(--bg) !important; 
+  color: var(--dark) !important; 
   padding: 30px 35px;
   border-radius: var(--radius);
   width: 100%;
@@ -88,18 +87,19 @@ body {
 
 /* ========== PORTAL APPLICATION CONTAINER ========== */
 #portalApp {
+  /* display: none;  <-- Removed as JS handles this */
   display: flex; 
   width: 100%;
   min-height: 100vh;
-  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+  background-color: transparent; 
 }
 
 
 /* ========== NAVIGATION ========== */
 nav#side {
   width: 260px; 
-  background: var(--pri-dark); /* This should be dark blue */
-  color: var(--bg); /* Text color should be white (var(--bg)) */
+  background: var(--pri-dark); 
+  color: var(--bg); 
   display: flex;
   flex-direction: column;
   padding: 24px 15px; 
@@ -117,7 +117,7 @@ nav#side h1 {
   letter-spacing: -0.5px;
   padding: 10px 0;
   border-bottom: 1px solid rgba(255,255,255,0.1);
-  color: var(--bg) !important; /* Explicitly white text for title */
+  color: var(--bg) !important; 
 }
 nav#side h1 i { margin-right: 10px; color: var(--pri-light); }
 
@@ -142,13 +142,13 @@ main {
   padding: 30px 25px; 
   overflow-y: auto; 
   position: relative; 
-  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+  background-color: transparent; 
 }
 .card {
   max-width: 1100px; 
   margin: 0 auto 30px auto; 
-  background: var(--bg) !important; /* Ensure white card background */
-  color: var(--dark) !important; /* Ensure dark text in card */
+  background: var(--bg) !important; 
+  color: var(--dark) !important; 
   padding: 30px 35px; 
   border-radius: var(--radius); 
   box-shadow: var(--shadow); 
@@ -180,7 +180,7 @@ hr.compact-hr { margin: 18px 0; }
 
 .card-subsection {
   padding: 20px;
-  background-color: var(--sec-light) !important; /* Ensure light subsection background */
+  background-color: var(--sec-light) !important; 
   border-radius: calc(var(--radius) - 2px);
   margin-bottom: 25px;
   border: 1px solid #e0e5eb;
@@ -190,7 +190,7 @@ hr.compact-hr { margin: 18px 0; }
   border: 1px solid var(--bd);
   border-radius: var(--radius);
   margin-bottom: 20px;
-  background-color: #fdfdfd !important; /* Ensure light form section background */
+  background-color: #fdfdfd !important; 
 }
 
 
@@ -256,8 +256,11 @@ td .custom-time-picker-container { margin-bottom: 0; }
 td .chk { margin-bottom: 0; padding: 5px 0; }
 td .delete-row-btn { padding: 6px 10px; font-size: 0.8rem; }
 
-.column-code, .column-rate-type { display: none; } 
-.code-print-value, .rate-type-print-value, .description-print-value { display: none; } 
+/* UI Hiding for PDF-only columns/spans */
+.column-code, .column-rate-type, .print-only-column, 
+.code-print-value, .rate-type-print-value, .description-print-value { 
+    display: none; 
+} 
 
 /* ========== BUTTONS ========== */
 button, .button, .btn-primary, .btn-secondary, .btn-danger { 
@@ -315,7 +318,7 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
   display: none; 
   position: fixed; 
   inset: 0; 
-  background: rgba(30, 41, 59, 0.8); /* Dark overlay is fine */
+  background: rgba(30, 41, 59, 0.8); 
   align-items: center; 
   justify-content: center; 
   z-index: 2000; 
@@ -326,8 +329,8 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 @keyframes fadeInBackdrop { from { opacity: 0; } to { opacity: 1; } }
 
 .modal .dlg { 
-  background: var(--bg) !important; /* Ensure white dialog background */
-  color: var(--dark) !important; /* Ensure dark text in dialog */
+  background: var(--bg) !important; 
+  color: var(--dark) !important; 
   padding: 30px 35px; 
   border-radius: var(--radius); 
   width: 100%; 
@@ -431,8 +434,25 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 /* ========== CUSTOM TIME PICKER ========== */
 .custom-time-picker-container { position: relative; }
 .custom-time-input { cursor: pointer; background-color: white !important; }
-.custom-time-picker-dropdown { display: flex; flex-direction: column; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white !important; border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1001; width: 330px; max-width: 90vw; padding: 20px; color: var(--dark) !important;}
-.custom-time-picker-dropdown.hide { display: none !important; }
+.custom-time-picker-dropdown { 
+    display: none; /* Initially hidden, JS will show it */
+    flex-direction: column; 
+    position: fixed; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%); 
+    background-color: white !important; 
+    border: 1px solid var(--bd); 
+    border-radius: var(--radius); 
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15); 
+    z-index: 2001; /* Ensure it's above other modals if necessary */
+    width: 330px; 
+    max-width: 90vw; 
+    padding: 20px; 
+    color: var(--dark) !important;
+}
+.custom-time-picker-dropdown.hide { display: none !important; } /* Ensure .hide overrides */
+
 .time-picker-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; text-align: center; color: var(--pri) !important; }
 .time-picker-header #currentTimePickerStepLabel { font-size: 0.9rem; color: var(--sec-dark) !important; display: block; font-weight: 400; }
 .time-picker-step { margin-bottom: 18px; }
@@ -519,13 +539,26 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
   #invTbl { font-size: 9pt; margin-top: 10px; background: #fff !important; }
   #invTbl th, #invTbl td { padding: 4px 6px; border: 1px solid #999 !important; color: #000 !important;}
   #invTbl th { background-color: #f0f0f0 !important; }
+  
+  /* Ensure PDF-only columns and spans are visible for print */
   #invTbl .column-code, #invTbl .column-rate-type, #invTbl .print-only-column { display: table-cell !important; }
-  #invTbl .description-select, #invTbl .km-claim-toggle, #invTbl .custom-time-input, .travel-code-selection-container button { display: none !important; }
   #invTbl .code-print-value, #invTbl .description-print-value, #invTbl .rate-type-print-value { display: inline !important; }
-  #invTbl .start[data-value24]::after, #invTbl .end[data-value24]::after { content: attr(value); }
+  
+  /* Ensure UI input elements are hidden for print */
+  #invTbl .description-select, 
+  #invTbl .custom-time-input, 
+  #invTbl input[type="date"].invoice-input-condensed,
+  #invTbl input[type="number"].invoice-input-condensed,
+  #invTbl .km-claim-toggle, 
+  .travel-code-selection-container button { 
+      display: none !important; 
+  }
+  
+  #invTbl .start[data-value24]::after, #invTbl .end[data-value24]::after { content: attr(value); } /* This might not work as intended, value is 12hr. JS populates print spans. */
   .totals { text-align: right; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; color: #000 !important;}
   .totals div { margin-bottom: 3px; }
   #gstRow { display: block !important; } 
   .signWrap { margin-top: 15px; page-break-inside: avoid; }
   .signWrap img { width: 180px; height: 60px; }
 }
+
