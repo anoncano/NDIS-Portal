@@ -715,10 +715,14 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
-  const emailInput = $("#authEmail");
-  const passwordInput = $("#authPassword");
-  const email = emailInput ? emailInput.value.trim() : "";
-  const password = passwordInput ? passwordInput.value.trim() : "";
+  const initialProfileData = {
+  name: email.split('@')[0],
+  email: email,
+  uid: newUserId,
+  isAdmin: false,
+  …  
+};
+
 
   showAuthStatusMessage("", false);
 
