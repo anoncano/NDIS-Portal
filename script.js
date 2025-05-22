@@ -2311,12 +2311,7 @@ if (registerBtn) registerBtn.addEventListener("click", modalRegister);
     if (saveAuthBtn) saveAuthBtn.addEventListener('click', saveWorkerAuthorizationsToFirestore);
 
     window.addEventListener('hashchange', () => setActive(location.hash));
-// ─── Auth button listeners ────────────────────────────────────────────
-const loginBtn    = $("#loginBtn");
-const registerBtn = $("#registerBtn");
-if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
-if (registerBtn) registerBtn.addEventListener("click", modalRegister);
-// ─────────────────────────────────────────────────────────────────────
+
 
     console.log("[App] DOMContentLoaded processing complete.");
 });
