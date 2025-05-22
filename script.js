@@ -353,7 +353,7 @@ async function setupAuthListener() {
                     } else if (!userProfileData && currentUserEmail && currentUserEmail.toLowerCase() !== "admin@portal.com") {
                         const isOrgPortal = globalSettings.portalType === 'organization';
                         profile = {
-                            name: email.split('@')[0], // Use email from the outer scope (user.email)
+                            name: currentUsercurrentUserEmail.split('@')[0], // Use email from the outer scope (user.email)
                             email: currentUserEmail,
                             uid: currentUserId,
                             isAdmin: false,
@@ -736,7 +736,7 @@ window.modalRegister = async function () {
         const newUserId = userCredential.user.uid;
         const isOrgPortal = globalSettings.portalType === 'organization';
         const initialProfileData = {
-            name: email.split('@')[0],
+            name: currentUsercurrentUserEmail.split('@')[0],
             email: email,
             uid: newUserId,
             isAdmin: false,
@@ -2279,7 +2279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(canvas && ctx) ctx.clearRect(0,0,canvas.width,canvas.height);
     });
 
-    canvas = $("#pad");
+    canvas = $("#signatureCanvas");
     if (canvas) {
         ctx = canvas.getContext("2d");
         if(ctx){
@@ -2345,7 +2345,7 @@ function handleHomePageDisplay() {
         const homeUserDiv = $("#homeUser");
         if (homeUserDiv) homeUserDiv.classList.remove('hide');
         const userNameDisplaySpan = $("#userNameDisplay");
-        if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUserEmail.split('@')[0] : "User");
+        if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUsercurrentUsercurrentUserEmail.split('@')[0] : "User");
 
         loadShiftRequestsForUserDisplay();
 
@@ -3209,7 +3209,7 @@ function enterPortal(isAdmin) {
 
     const homeUserDiv = $("#homeUser"); if (homeUserDiv) homeUserDiv.classList.remove('hide');
     const userNameDisplaySpan = $("#userNameDisplay");
-    if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUserEmail.split('@')[0] : "User");
+    if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUsercurrentUsercurrentUserEmail.split('@')[0] : "User");
 }
 
 function formatInvoiceNumber(num) {
