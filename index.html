@@ -14,14 +14,13 @@
     // It's populated with values from your Firebase project.
     // If __firebase_config is provided by the Canvas environment, it will override this.
     window.firebaseConfigForApp = {
-        apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", // User's provided API key
+        apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", 
         authDomain: "ndis-portal-6ab1e.firebaseapp.com",
         databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
         projectId: "ndis-portal-6ab1e",
         storageBucket: "ndis-portal-6ab1e.appspot.com", 
         messagingSenderId: "663606000491",
-        appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
-
+        appId: "1:663606000491:web:350030eeae4212b899aa2e" 
     };
 
     // Prioritize __firebase_config if available
@@ -30,13 +29,13 @@
             const parsedConfig = JSON.parse(__firebase_config);
             // Ensure all necessary keys are present in parsedConfig
             if (parsedConfig && 
-                parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
+                parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") && // Check it's not a placeholder
                 parsedConfig.authDomain &&
                 // parsedConfig.databaseURL && // Optional for Firestore v9+ client
                 parsedConfig.projectId &&
                 parsedConfig.storageBucket &&
                 parsedConfig.messagingSenderId &&
-                parsedConfig.appId && !parsedConfig.appId.startsWith("YOUR_")) {
+                parsedConfig.appId && !parsedConfig.appId.startsWith("YOUR_")) { // Check it's not a placeholder
                  window.firebaseConfigForApp = parsedConfig;
                  console.log("Using Firebase config from __firebase_config environment variable.");
             } else {
@@ -45,6 +44,8 @@
         } catch (e) {
             console.error("Error parsing __firebase_config:", e, "Using manually set config in index.html.");
         }
+    } else {
+        console.log("Using Firebase config hardcoded in index.html (no __firebase_config found or it was invalid).");
     }
   </script>
 
