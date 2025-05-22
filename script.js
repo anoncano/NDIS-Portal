@@ -2146,6 +2146,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("[App] Firebase not initialized. Halting further DOM-dependent setup.");
         return;
     }
+const loginBtn    = $("#loginBtn");
+const registerBtn = $("#registerBtn");
+
+if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 
     const addClauseBtn = $("#adminAddAgreementClauseBtn");
     if (addClauseBtn) addClauseBtn.addEventListener('click', handleAddAgreementClause);
@@ -2302,6 +2307,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (saveAuthBtn) saveAuthBtn.addEventListener('click', saveWorkerAuthorizationsToFirestore);
 
     window.addEventListener('hashchange', () => setActive(location.hash));
+// ─── Auth button listeners ────────────────────────────────────────────
+const loginBtn    = $("#loginBtn");
+const registerBtn = $("#registerBtn");
+if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+if (registerBtn) registerBtn.addEventListener("click", modalRegister);
+// ─────────────────────────────────────────────────────────────────────
 
     console.log("[App] DOMContentLoaded processing complete.");
 });
