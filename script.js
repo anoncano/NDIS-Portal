@@ -24,10 +24,11 @@ import {
     writeBatch,
     runTransaction,
     arrayUnion,
-    arrayRemove
+    arrayRemove,
+    addDoc as fsAddDoc // Renamed to avoid conflict with local addDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// Firebase Storage imports (Add if/when implementing file uploads)
-// import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+// Firebase Storage imports
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 
 /* ========== DOM helpers ========== */
@@ -38,7 +39,7 @@ const $$ = q => [...document.querySelectorAll(q)];
 let fbApp;
 let fbAuth;
 let fsDb; 
-// let fbStorage; // Uncomment when Firebase Storage is implemented
+let fbStorage; // Firebase Storage instance
 let currentUserId = null; 
 
 const firebaseConfig = window.firebaseConfigForApp; 
@@ -52,6 +53,7 @@ const authStatusMessageElement = $("#authStatusMessage");
 
 /* ========== Local State Variables ========== */
 let accounts = {}; 
+let pendingApprovalAccounts = []; // For admin to see users awaiting approval
 let currentUserEmail = null; 
 let profile = {}; 
 let globalSettings = {}; 
@@ -76,6 +78,7 @@ try {
     };
 } catch (e) {
     console.error("CRITICAL ERROR initializing agreementCustomData object:", e);
+    logErrorToFirestore("agreementCustomDataInit", e.message, e);
     agreementCustomData = {
         overallTitle: "Default Agreement (Error)",
         clauses: [{ heading: "Error", body: "Could not load agreement clauses." }]
@@ -100,6 +103,31 @@ let selectedWorkerEmailForAuth = null;
 let currentTimePickerStep, selectedMinute, selectedHour12, selectedAmPm, activeTimeInput, timePickerCallback;
 let adminWizStep = 1; 
 let userWizStep = 1; 
+
+/* ========== Error Logging to Firestore ========== */
+async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
+    if (!fsDb || !appId) {
+        console.error("Firestore not initialized or appId missing, cannot log error to Firestore:", location, errorMsg);
+        return;
+    }
+    try {
+        const errorLogRef = collection(fsDb, `artifacts/${appId}/public/logs/errors`);
+        await fsAddDoc(errorLogRef, {
+            location: location,
+            errorMessage: errorMsg,
+            errorStack: errorDetails.stack || (errorDetails instanceof Error ? errorDetails.toString() : JSON.stringify(errorDetails)),
+            user: currentUserEmail || currentUserId || "unknown/anonymous",
+            timestamp: serverTimestamp(),
+            appVersion: "1.0.2", // Incremented version
+            userAgent: navigator.userAgent
+        });
+        console.log("Error logged to Firestore:", location);
+    } catch (logError) {
+        console.error("FATAL: Could not log error to Firestore:", logError);
+        console.error("Original error was at:", location, "Message:", errorMsg);
+    }
+}
+
 
 /* ========== Loading Overlay ========== */
 function showLoading(message = "Loading...") {
@@ -239,10 +267,10 @@ async function initializeFirebase() {
         fbApp = initializeApp(currentFirebaseConfig); 
         fbAuth = getAuth(fbApp);
         fsDb = getFirestore(fbApp); 
-        // fbStorage = getStorage(fbApp); 
+        fbStorage = getStorage(fbApp); // Initialize Firebase Storage
 
-        if (!fbAuth || !fsDb) { 
-            console.error("Failed to get Firebase Auth or Firestore instance.");
+        if (!fbAuth || !fsDb || !fbStorage) { 
+            console.error("Failed to get Firebase Auth, Firestore or Storage instance.");
             if (authScreenElement) authScreenElement.style.display = "flex";
             if (portalAppElement) portalAppElement.style.display = "none";
             showAuthStatusMessage("System Error: Core services failed to initialize.");
@@ -252,10 +280,11 @@ async function initializeFirebase() {
         }
 
         isFirebaseInitialized = true;
-        console.log("Firebase initialized with Cloud Firestore.");
+        console.log("Firebase initialized with Cloud Firestore and Storage.");
         await setupAuthListener(); 
     } catch (error) {
         console.error("Firebase initialization error:", error);
+        logErrorToFirestore("initializeFirebase", error.message, error);
         if (authScreenElement) authScreenElement.style.display = "flex";
         if (portalAppElement) portalAppElement.style.display = "none";
         showAuthStatusMessage("System Error: Could not connect to backend services. " + error.message);
@@ -287,6 +316,15 @@ async function setupAuthListener() {
                         if (profile.email) accounts[profile.email] = { name: profile.name, profile: profile };
                         else accounts[currentUserId] = { name: profile.name, profile: profile };
 
+                        // Worker Approval Check
+                        if (!profile.isAdmin && globalSettings.portalType === 'organization' && profile.approved !== true) {
+                            showMessage("Approval Required", "Your account is awaiting approval from an administrator. You will be logged out.");
+                            await fbSignOut(fbAuth); // This will re-trigger onAuthStateChanged with user = null
+                            hideLoading(); 
+                            return; 
+                        }
+
+
                         if (profile.isAdmin) {
                             await loadAllDataForAdmin(); 
                             if (!globalSettings.setupComplete) {
@@ -303,7 +341,7 @@ async function setupAuthListener() {
                             }
                         }
                     } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && !userProfileData) { 
-                        profile = { isAdmin: true, name: "Administrator", email: currentUserEmail, uid: currentUserId, createdAt: serverTimestamp() }; 
+                        profile = { isAdmin: true, name: "Administrator", email: currentUserEmail, uid: currentUserId, approved: true, createdAt: serverTimestamp(), createdBy: "system" }; 
                         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
                         await setDoc(userProfileDocRef, profile);
                         await loadAllDataForAdmin();
@@ -313,18 +351,44 @@ async function setupAuthListener() {
                             enterPortal(true);
                         }
                     } else if (!userProfileData && currentUserEmail && currentUserEmail.toLowerCase() !== "admin@portal.com") { 
-                        profile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, createdAt: serverTimestamp(), abn: "", gstRegistered: false, bsb: "", acc: "", files: [], authorizedServiceCodes: [], profileSetupComplete: false, nextInvoiceNumber: 1001 };
+                        const isOrgPortal = globalSettings.portalType === 'organization';
+                        profile = { 
+                            name: email.split('@')[0], // Use email from the outer scope (user.email)
+                            email: currentUserEmail, 
+                            uid: currentUserId, 
+                            isAdmin: false, 
+                            abn: "", 
+                            gstRegistered: false, 
+                            bsb: "", 
+                            acc: "", 
+                            files: [], 
+                            authorizedServiceCodes: [], 
+                            profileSetupComplete: false, 
+                            nextInvoiceNumber: 1001,
+                            approved: !isOrgPortal, 
+                            createdAt: serverTimestamp(),
+                            createdBy: currentUserId 
+                        };
                         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
                         await setDoc(userProfileDocRef, profile);
                         accounts[currentUserEmail] = { name: profile.name, profile: profile };
+                        
+                        if (isOrgPortal && !profile.approved) {
+                            showMessage("Approval Required", "Your account has been created and is awaiting administrator approval. You will be logged out.");
+                            await fbSignOut(fbAuth);
+                            hideLoading();
+                            return;
+                        }
+                        
                         await loadAllDataForUser();
-                        if (globalSettings.portalType === 'organization') {
+                        if (globalSettings.portalType === 'organization' && !profile.profileSetupComplete) { 
                              openUserSetupWizard();
                         } else {
                             enterPortal(false); 
                         }
                     } else { 
                         console.warn("User logged in, but profile data is missing or role is unclear.");
+                        logErrorToFirestore("setupAuthListener", "User logged in, but profile data is missing or role is unclear.", {uid: currentUserId, email: currentUserEmail});
                         await loadAllDataForUser(); 
                         enterPortal(false); 
                     }
@@ -343,6 +407,7 @@ async function setupAuthListener() {
                 }
             } catch (error) { 
                 console.error("Error in onAuthStateChanged logic:", error);
+                logErrorToFirestore("onAuthStateChanged", error.message, error);
                 showAuthStatusMessage("Authentication State Error: " + error.message);
                 currentUserId = null; currentUserEmail = null; profile = {}; accounts = {}; 
                 if (authScreenElement) authScreenElement.style.display = "flex"; 
@@ -359,6 +424,7 @@ async function setupAuthListener() {
             signInWithCustomToken(fbAuth, __initial_auth_token)
                 .catch((error) => {
                     console.error("Custom token sign-in error:", error);
+                    logErrorToFirestore("signInWithCustomToken", error.message, error);
                     showAuthStatusMessage("Token Sign-In Error: " + error.message);
                     if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } 
                     hideLoading(); 
@@ -383,6 +449,7 @@ async function loadUserProfileFromFirestore(userIdToLoad) {
         return docSnap.exists() ? docSnap.data() : null;
     } catch (error) {
         console.error("Error loading user profile from Firestore:", error);
+        logErrorToFirestore("loadUserProfileFromFirestore", error.message, {userIdToLoad, error});
         showMessage("Data Error", "Could not load user profile.");
         return null;
     }
@@ -406,7 +473,10 @@ async function getDefaultGlobalSettingsFirestore() {
         planEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0], 
         agreementStartDate: new Date().toISOString().split('T')[0], 
         rateMultipliers: { weekday: 1.00, evening: 1.10, night: 1.14, saturday: 1.41, sunday: 1.81, public: 2.22 },
-        lastUpdated: serverTimestamp() 
+        lastUpdated: serverTimestamp(),
+        updatedBy: "system",
+        createdAt: serverTimestamp(),
+        createdBy: "system"
     };
 }
 async function loadGlobalSettingsFromFirestore() { 
@@ -423,6 +493,7 @@ async function loadGlobalSettingsFromFirestore() {
         }
     } catch (e) {
         console.error("Error loading global settings from Firestore:", e);
+        logErrorToFirestore("loadGlobalSettingsFromFirestore", e.message, e);
         globalSettings = await getDefaultGlobalSettingsFirestore(); 
         showMessage("Data Error", "Could not load portal settings.");
     }
@@ -431,10 +502,19 @@ async function saveGlobalSettingsToFirestore() {
     if (!isFirebaseInitialized || !(profile && profile.isAdmin)) return; 
     try {
         const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/data/settings`, "global");
-        const settingsToSave = { ...globalSettings, lastUpdated: serverTimestamp() };
+        const settingsToSave = { 
+            ...globalSettings, 
+            lastUpdated: serverTimestamp(),
+            updatedBy: currentUserEmail || currentUserId || "admin_system"
+        };
+        if (!globalSettings.createdAt) { 
+            settingsToSave.createdAt = serverTimestamp();
+            settingsToSave.createdBy = currentUserEmail || currentUserId || "admin_system";
+        }
         await setDoc(settingsDocRef, settingsToSave, { merge: true }); 
     } catch (e) { 
         console.error("Could not save global settings to Firestore:", e); 
+        logErrorToFirestore("saveGlobalSettingsToFirestore", e.message, e);
         showMessage("Storage Error", "Could not save portal settings."); 
     } 
 }
@@ -451,6 +531,7 @@ async function loadAdminServicesFromFirestore() {
         adminManagedServices.forEach(s => { if (!s.rates || typeof s.rates !== 'object') s.rates = {}; });
     } catch (e) {
         console.error("Error loading admin services from Firestore:", e);
+        logErrorToFirestore("loadAdminServicesFromFirestore", e.message, e);
         adminManagedServices = []; 
         showMessage("Data Error", "Could not load NDIS services.");
     }
@@ -460,9 +541,16 @@ async function saveAdminServiceToFirestore(servicePayload, serviceIdToUpdate = n
     try {
         const servicesCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/services`);
         let serviceDocRef;
+        let payloadWithAudit;
 
         if (serviceIdToUpdate) { 
             serviceDocRef = doc(fsDb, `artifacts/${appId}/public/data/services`, serviceIdToUpdate);
+            payloadWithAudit = { 
+                ...servicePayload, 
+                id: serviceDocRef.id, 
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserEmail || currentUserId 
+            };
         } else { 
             const q = query(servicesCollectionRef, where("code", "==", servicePayload.code));
             const querySnapshot = await getDocs(q);
@@ -472,20 +560,28 @@ async function saveAdminServiceToFirestore(servicePayload, serviceIdToUpdate = n
                 return false;
             }
             serviceDocRef = doc(servicesCollectionRef); 
+            payloadWithAudit = { 
+                ...servicePayload, 
+                id: serviceDocRef.id, 
+                createdAt: serverTimestamp(),
+                createdBy: currentUserEmail || currentUserId,
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserEmail || currentUserId
+            };
         }
         
-        const payloadWithTimestamp = { ...servicePayload, id: serviceDocRef.id, lastUpdated: serverTimestamp() };
-        await setDoc(serviceDocRef, payloadWithTimestamp); 
+        await setDoc(serviceDocRef, payloadWithAudit, { merge: true }); 
         
         const existingIndex = adminManagedServices.findIndex(s => s.id === serviceDocRef.id);
         if (existingIndex > -1) {
-            adminManagedServices[existingIndex] = payloadWithTimestamp;
+            adminManagedServices[existingIndex] = payloadWithAudit;
         } else {
-            adminManagedServices.push(payloadWithTimestamp);
+            adminManagedServices.push(payloadWithAudit);
         }
         return true;
     } catch (e) {
         console.error("Error saving service to Firestore:", e);
+        logErrorToFirestore("saveAdminServiceToFirestore", e.message, e);
         showMessage("Storage Error", "Could not save service.");
         return false;
     }
@@ -499,6 +595,7 @@ async function deleteAdminServiceFromFirestore(serviceId) {
         return true;
     } catch (e) {
         console.error("Error deleting service from Firestore:", e);
+        logErrorToFirestore("deleteAdminServiceFromFirestore", e.message, e);
         showMessage("Storage Error", "Could not delete service.");
         return false;
     }
@@ -521,12 +618,15 @@ async function loadAgreementCustomizationsFromFirestore() {
         }  else if (!agreementCustomData) { 
              agreementCustomData = { 
                 overallTitle: "NDIS Service Agreement (Default)",
-                clauses: [{ heading: "Service Details", body: "To be agreed upon." }]
+                clauses: [{ heading: "Service Details", body: "To be agreed upon." }],
+                createdAt: serverTimestamp(),
+                createdBy: "system_init"
             };
             await setDoc(agreementDocRef, agreementCustomData);
         }
     } catch (e) {
         console.error("Error loading agreement customizations from Firestore:", e);
+        logErrorToFirestore("loadAgreementCustomizationsFromFirestore", e.message, e);
         showMessage("Data Error", "Could not load agreement template.");
         if (!agreementCustomData) {
             agreementCustomData = {
@@ -557,15 +657,32 @@ async function saveAdminAgreementCustomizationsToFirestore(){
         });
     }
     agreementCustomData.clauses = newClauses.length > 0 ? newClauses : (agreementCustomData.clauses || []); 
-    const dataToSave = { ...agreementCustomData, lastUpdated: serverTimestamp() };
+    const dataToSave = { 
+        ...agreementCustomData, 
+        lastUpdated: serverTimestamp(),
+        updatedBy: currentUserEmail || currentUserId
+    };
+     if (!agreementCustomData.createdAt) { 
+        dataToSave.createdAt = serverTimestamp();
+        dataToSave.createdBy = currentUserEmail || currentUserId;
+    }
 
     try {
-        const agreementDocRef = doc(fsDb, `artifacts/${appId}/public/data/agreementTemplates`, "main");
-        await setDoc(agreementDocRef, dataToSave);
-        showMessage("Success","Agreement structure saved.");
+        const mainAgreementDocRef = doc(fsDb, `artifacts/${appId}/public/data/agreementTemplates`, "main");
+        await setDoc(mainAgreementDocRef, dataToSave, {merge: true});
+
+        // Save a versioned copy
+        const versionsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/agreementTemplates/versions`);
+        await fsAddDoc(versionsCollectionRef, {
+            ...dataToSave, // Includes clauses, title, and audit fields
+            versionTimestamp: serverTimestamp() // Specific timestamp for this version
+        });
+
+        showMessage("Success","Agreement structure saved and versioned.");
         renderAdminAgreementPreview(); 
     } catch (e) {
         console.error("Error saving agreement customizations to Firestore:", e);
+        logErrorToFirestore("saveAdminAgreementCustomizationsToFirestore", e.message, e);
         showMessage("Storage Error", "Could not save agreement structure.");
     }
 }
@@ -590,6 +707,7 @@ window.modalLogin = async function () {
     await signInWithEmailAndPassword(fbAuth, email, password);
   } catch (err) { 
       console.error("Login Failed:", err); 
+      logErrorToFirestore("modalLogin", err.message, err);
       showAuthStatusMessage(err.message || "Invalid credentials or network issue."); 
   } finally { 
       hideLoading(); 
@@ -613,9 +731,40 @@ window.modalRegister = async function () {
   
   try {
     showLoading("Registering...");
-    await createUserWithEmailAndPassword(fbAuth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(fbAuth, email, password);
+    if (userCredential && userCredential.user) {
+        const newUserId = userCredential.user.uid;
+        const isOrgPortal = globalSettings.portalType === 'organization';
+        const initialProfileData = { 
+            name: email.split('@')[0], 
+            email: email, 
+            uid: newUserId, 
+            isAdmin: false, 
+            abn: "", 
+            gstRegistered: false, 
+            bsb: "", 
+            acc: "", 
+            files: [], 
+            authorizedServiceCodes: [], 
+            profileSetupComplete: false, 
+            nextInvoiceNumber: 1001,
+            approved: !isOrgPortal, 
+            createdAt: serverTimestamp(),
+            createdBy: newUserId 
+        };
+        const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${newUserId}/profile`, "details");
+        await setDoc(userProfileDocRef, initialProfileData);
+        
+        if (isOrgPortal && !initialProfileData.approved) {
+             showMessage("Registration Successful", "Your account has been created and is awaiting administrator approval. You will be logged out.");
+        } else {
+             showMessage("Registration Successful", "Your account has been created!");
+        }
+    }
+
   } catch (err) { 
       console.error("Registration Failed:", err); 
+      logErrorToFirestore("modalRegister", err.message, err);
       showAuthStatusMessage(err.message || "Could not create account. Email might be in use or network issue."); 
   } finally { 
       hideLoading(); 
@@ -631,8 +780,8 @@ window.editProfile = function() {
 };
 
 window.uploadProfileDocuments = async function() {
-    if (!currentUserId || !fsDb) {
-        showMessage("Error", "User not logged in or database not ready.");
+    if (!currentUserId || !fsDb || !fbStorage) { 
+        showMessage("Error", "System not ready for file uploads. Please try again later.");
         return;
     }
     const fileInput = $("#profileFileUpload");
@@ -642,37 +791,61 @@ window.uploadProfileDocuments = async function() {
     }
 
     showLoading("Uploading documents...");
-    // --- Placeholder for Firebase Storage upload ---
-    console.warn("Firebase Storage upload logic needs to be implemented here.");
     const filesToUpload = Array.from(fileInput.files);
     const newFileEntries = [];
+    const uploadPromises = [];
 
     for (const file of filesToUpload) {
-        const uniqueFileName = `${Date.now()}-${file.name}`; 
-        newFileEntries.push({
-            name: file.name,
-            storagePath: `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`, 
-            uploadedAt: serverTimestamp()
-            // url: downloadURL, // This would come from Firebase Storage after successful upload
-        });
+        const uniqueFileName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`; 
+        const storageRef = ref(fbStorage, `artifacts/${appId}/users/${currentUserId}/documents/${uniqueFileName}`);
+        
+        uploadPromises.push(
+            uploadBytes(storageRef, file).then(async (snapshot) => {
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                newFileEntries.push({
+                    name: file.name,
+                    url: downloadURL,
+                    storagePath: snapshot.ref.fullPath, 
+                    uploadedAt: serverTimestamp(),
+                    size: file.size,
+                    type: file.type
+                });
+                console.log(`Uploaded ${file.name}, URL: ${downloadURL}`);
+            }).catch(error => {
+                console.error(`Error uploading file ${file.name}:`, error);
+                logErrorToFirestore("uploadProfileDocuments_uploadBytes", error.message, {fileName: file.name, error});
+                showMessage("Upload Error", `Could not upload ${file.name}.`);
+            })
+        );
     }
 
-    if (newFileEntries.length > 0) {
-        try {
+    try {
+        await Promise.all(uploadPromises); 
+
+        if (newFileEntries.length > 0) {
             const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
             await updateDoc(userProfileDocRef, {
-                files: arrayUnion(...newFileEntries) 
+                files: arrayUnion(...newFileEntries),
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserId
             });
-            profile.files = [...(profile.files || []), ...newFileEntries.map(f => ({...f, uploadedAt: new Date()}))]; 
+            const updatedProfileSnap = await getDoc(userProfileDocRef);
+            if (updatedProfileSnap.exists()) {
+                profile = updatedProfileSnap.data();
+            }
             loadProfileData(); 
-            showMessage("Documents Updated", "File metadata added. Full upload requires Storage setup.");
-        } catch (error) {
-            console.error("Error updating profile with file metadata:", error);
-            showMessage("Error", "Could not update profile with file information: " + error.message);
+            showMessage("Documents Uploaded", `${newFileEntries.length} file(s) uploaded successfully.`);
+        } else if (filesToUpload.length > 0) {
+             showMessage("Upload Issue", "Some files may not have uploaded successfully. Please check and try again.");
         }
+    } catch (error) {
+        console.error("Error updating profile with file metadata after uploads:", error);
+        logErrorToFirestore("uploadProfileDocuments_updateProfile", error.message, error);
+        showMessage("Error", "Could not update profile with file information: " + error.message);
+    } finally {
+        fileInput.value = ""; 
+        hideLoading();
     }
-    fileInput.value = ""; 
-    hideLoading();
 };
 
 window.addInvRowUserAction = function() { 
@@ -725,13 +898,28 @@ window.saveDraft = async function() {
     currentInvoiceData.gst = parseFloat($("#gst")?.textContent.replace('$', '')) || 0;
     currentInvoiceData.grandTotal = parseFloat($("#grand")?.textContent.replace('$', '')) || 0;
     currentInvoiceData.lastUpdated = serverTimestamp();
+    currentInvoiceData.updatedBy = currentUserId;
+
 
     try {
         const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, `draft-${currentInvoiceData.invoiceNumber || 'current'}`);
-        await setDoc(draftDocRef, currentInvoiceData);
+        await setDoc(draftDocRef, currentInvoiceData, {merge: true}); 
+        
+        if (profile.nextInvoiceNumber && !isNaN(parseInt(profile.nextInvoiceNumber)) && formatInvoiceNumber(profile.nextInvoiceNumber) === currentInvoiceData.invoiceNumber) {
+            profile.nextInvoiceNumber = parseInt(profile.nextInvoiceNumber) + 1;
+            const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+            await updateDoc(userProfileDocRef, { 
+                nextInvoiceNumber: profile.nextInvoiceNumber,
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserId
+            });
+            if ($("#invNo")) $("#invNo").value = formatInvoiceNumber(profile.nextInvoiceNumber); 
+        }
+
         showMessage("Draft Saved", `Invoice draft "${currentInvoiceData.invoiceNumber || 'current'}" has been saved.`);
     } catch (error) {
         console.error("Error saving invoice draft:", error);
+        logErrorToFirestore("saveDraft", error.message, error);
         showMessage("Storage Error", "Could not save invoice draft: " + error.message);
     } finally {
         hideLoading();
@@ -748,44 +936,82 @@ window.generateInvoicePdf = function() {
         return;
     }
 
+    currentInvoiceData.invoiceNumber = $("#invNo")?.value || "N/A";
+    currentInvoiceData.invoiceDate = $("#invDate")?.value || new Date().toISOString().split('T')[0];
+    currentInvoiceData.providerName = profile.name || "N/A"; 
+    currentInvoiceData.providerAbn = profile.abn || "N/A";   
+    currentInvoiceData.gstRegistered = profile.gstRegistered || false; 
+    
+    currentInvoiceData.items = [];
+    const rows = $$("#invTbl tbody tr");
+    rows.forEach((row) => {
+        const itemDateEl = row.querySelector(`input[id^="itemDate"]`);
+        const itemDescEl = row.querySelector(`select[id^="itemDesc"]`); 
+        const itemStartTimeEl = row.querySelector(`input[id^="itemStart"]`);
+        const itemEndTimeEl = row.querySelector(`input[id^="itemEnd"]`);
+        const itemTravelKmEl = row.querySelector(`input[id^="itemTravel"]`);
+        const itemClaimTravelEl = row.querySelector(`input[id^="itemClaimTravel"]`);
+
+        const serviceCode = itemDescEl ? itemDescEl.value : "";
+        const service = adminManagedServices.find(s => s.code === serviceCode);
+
+        currentInvoiceData.items.push({
+            date: itemDateEl ? itemDateEl.value : "",
+            serviceCode: serviceCode,
+            description: service ? service.description : "N/A",
+            startTime: itemStartTimeEl ? itemStartTimeEl.dataset.value24 : "",
+            endTime: itemEndTimeEl ? itemEndTimeEl.dataset.value24 : "",
+            hoursOrKm: parseFloat(row.cells[8].textContent) || 0, 
+            total: parseFloat(row.cells[10].textContent.replace('$', '')) || 0, 
+            travelKmInput: itemTravelKmEl ? parseFloat(itemTravelKmEl.value) || 0 : 0,
+            claimTravel: itemClaimTravelEl ? itemClaimTravelEl.checked : false,
+            rateType: determineRateType(itemDateEl?.value, itemStartTimeEl?.dataset.value24) 
+        });
+    });
+    calculateInvoiceTotals(); 
+    currentInvoiceData.subtotal = parseFloat($("#sub")?.textContent.replace('$', '')) || 0;
+    currentInvoiceData.gst = parseFloat($("#gst")?.textContent.replace('$', '')) || 0;
+    currentInvoiceData.grandTotal = parseFloat($("#grand")?.textContent.replace('$', '')) || 0;
+
+
     let pdfHtml = `
         <style>
             body { font-family: 'Inter', sans-serif; font-size: 10pt; }
-            .pdf-invoice-container { padding: 20px; }
-            .pdf-header { text-align: center; margin-bottom: 20px; } /* Reduced margin */
-            .pdf-header h1 { margin: 0 0 5px 0; font-size: 22pt; color: #333; }
-            .pdf-header p { margin: 3px 0; font-size: 9pt; color: #555; }
-            .pdf-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; font-size: 9pt;}
-            .pdf-details-grid div { margin-bottom: 3px; }
+            .pdf-invoice-container { padding: 15mm; } 
+            .pdf-header { text-align: center; margin-bottom: 15mm; }
+            .pdf-header h1 { margin: 0 0 3mm 0; font-size: 20pt; color: #333; }
+            .pdf-header p { margin: 2mm 0; font-size: 9pt; color: #555; }
+            .pdf-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-bottom: 10mm; font-size: 9pt;}
+            .pdf-details-grid div { margin-bottom: 2mm; }
             .pdf-details-grid strong { font-weight: 600; }
-            .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 8pt; page-break-inside: auto; }
-            .pdf-table th, .pdf-table td { border: 1px solid #ccc; padding: 5px 7px; text-align: left; word-break: break-word; }
-            .pdf-table th { background-color: #f0f0f0; font-weight: 600; }
-            .pdf-table tr { page-break-inside: avoid; } /* Avoid breaking rows */
+            .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 10mm; font-size: 8pt; page-break-inside: auto; }
+            .pdf-table th, .pdf-table td { border: 1px solid #bbb; padding: 4mm 5mm; text-align: left; word-break: break-word; }
+            .pdf-table th { background-color: #e9ecef; font-weight: 600; }
+            .pdf-table tr { page-break-inside: avoid !important; } 
             .pdf-table td.number { text-align: right; }
-            .pdf-totals { float: right; width: 220px; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; }
-            .pdf-totals div { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            .pdf-totals { float: right; width: 60mm; margin-top: 10mm; font-size: 10pt; page-break-inside: avoid !important; }
+            .pdf-totals div { display: flex; justify-content: space-between; margin-bottom: 3mm; }
             .pdf-totals strong { font-weight: 600; }
         </style>
         <div class="pdf-invoice-container">
             <div class="pdf-header">
                 <h1>Tax Invoice</h1>
-                <p>${globalSettings.organizationName || profile.name}</p>
-                <p>ABN: ${globalSettings.organizationAbn || profile.abn}</p>
-                ${profile.gstRegistered ? '<p>GST Registered</p>' : ''}
+                <p>${currentInvoiceData.providerName ?? "Provider Name N/A"}</p>
+                <p>ABN: ${currentInvoiceData.providerAbn ?? "ABN N/A"}</p>
+                ${(currentInvoiceData.gstRegistered) ? '<p>GST Registered</p>' : ''}
             </div>
 
             <div class="pdf-details-grid">
                 <div>
-                    <strong>To:</strong> ${globalSettings.participantName || 'N/A'}<br>
-                    NDIS No: ${globalSettings.participantNdisNo || 'N/A'}<br>
+                    <strong>To:</strong> ${globalSettings.participantName ?? 'Participant N/A'}<br>
+                    NDIS No: ${globalSettings.participantNdisNo ?? 'N/A'}<br>
                     ${globalSettings.planManagerName ? `Plan Manager: ${globalSettings.planManagerName}<br>` : ''}
                     ${globalSettings.planManagerEmail ? `Email: ${globalSettings.planManagerEmail}<br>` : ''}
                 </div>
                 <div>
                     <strong>Invoice #:</strong> ${currentInvoiceData.invoiceNumber || 'N/A'}<br>
                     <strong>Date Issued:</strong> ${formatDateForInvoiceDisplay(currentInvoiceData.invoiceDate) || 'N/A'}<br>
-                    <strong>Support Worker:</strong> ${profile.name || 'N/A'}                 
+                    <strong>Support Worker:</strong> ${profile.name ?? 'N/A'}                 
                 </div>
             </div>
 
@@ -810,28 +1036,28 @@ window.generateInvoicePdf = function() {
         let rateForPdf = 0;
         let rateTypeForPdf = item.rateType || determineRateType(item.date, item.startTime);
 
-        if (service) {
+        if (service && service.rates) {
             if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
-                rateForPdf = service.rates?.perKmRate || 0;
+                rateForPdf = service.rates.perKmRate || 0;
                 rateTypeForPdf = "Travel";
             } else if (service.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || service.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
-                rateForPdf = service.rates?.[rateTypeForPdf] || service.rates?.weekday || 0;
+                rateForPdf = service.rates[rateTypeForPdf] || service.rates.weekday || 0;
             } else { 
-                rateForPdf = service.rates?.standardRate || 0;
+                rateForPdf = service.rates.standardRate || 0;
             }
         }
 
         pdfHtml += `
                     <tr>
-                        <td>${formatDateForInvoiceDisplay(item.date)}</td>
-                        <td>${item.serviceCode || 'N/A'}</td>
-                        <td>${item.description || 'N/A'}</td>
-                        <td>${formatTime12Hour(item.startTime) || 'N/A'}</td>
-                        <td>${formatTime12Hour(item.endTime) || 'N/A'}</td>
-                        <td>${rateTypeForPdf}</td>
+                        <td>${formatDateForInvoiceDisplay(item.date) ?? 'N/A'}</td>
+                        <td>${item.serviceCode ?? 'N/A'}</td>
+                        <td>${item.description ?? 'N/A'}</td>
+                        <td>${formatTime12Hour(item.startTime) ?? 'N/A'}</td>
+                        <td>${formatTime12Hour(item.endTime) ?? 'N/A'}</td>
+                        <td>${rateTypeForPdf ?? 'N/A'}</td>
                         <td class="number">${rateForPdf.toFixed(2)}</td>
-                        <td class="number">${item.hoursOrKm.toFixed(2)}</td>
-                        <td class="number">${item.total.toFixed(2)}</td>
+                        <td class="number">${(item.hoursOrKm ?? 0).toFixed(2)}</td>
+                        <td class="number">${(item.total ?? 0).toFixed(2)}</td>
                     </tr>`;
     });
 
@@ -840,34 +1066,40 @@ window.generateInvoicePdf = function() {
             </table>
 
             <div class="pdf-totals">
-                <div><span>Subtotal:</span> <strong>$${currentInvoiceData.subtotal.toFixed(2)}</strong></div>`;
-    if (currentInvoiceData.gstRegistered || profile.gstRegistered) { 
-        pdfHtml += `<div><span>GST (10%):</span> <strong>$${currentInvoiceData.gst.toFixed(2)}</strong></div>`;
+                <div><span>Subtotal:</span> <strong>$${(currentInvoiceData.subtotal ?? 0).toFixed(2)}</strong></div>`;
+    if (currentInvoiceData.gstRegistered) { 
+        pdfHtml += `<div><span>GST (10%):</span> <strong>$${(currentInvoiceData.gst ?? 0).toFixed(2)}</strong></div>`;
     }
-    pdfHtml += `   <div><span>Total:</span> <strong>$${currentInvoiceData.grandTotal.toFixed(2)}</strong></div>
+    pdfHtml += `   <div><span>Total:</span> <strong>$${(currentInvoiceData.grandTotal ?? 0).toFixed(2)}</strong></div>
             </div>
         </div>`;
     
     const tempDiv = document.createElement("div");
-    // Optionally hide the temporary div if it briefly flashes on screen
-    // tempDiv.style.position = "absolute";
-    // tempDiv.style.left = "-9999px"; 
+    tempDiv.style.position = "absolute"; 
+    tempDiv.style.left = "-9999px";
+    tempDiv.style.width = "210mm"; 
     tempDiv.innerHTML = pdfHtml;
     document.body.appendChild(tempDiv);
     
     const opt = {
         margin:       [10, 10, 10, 10], 
-        filename:     `Invoice-${currentInvoiceData.invoiceNumber || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        filename:     `[generate]_type_pdf_context_ndis_portal_view_user_features_auto_increment,gst,print_ready_status_final_title_Invoice-${currentInvoiceData.invoiceNumber ?? 'unknown'}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY }, 
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().from(tempDiv).set(opt).save().then(() => {
+    html2pdf().from(tempDiv).set(opt).save().then(async () => { 
         showMessage("PDF Generated", "Invoice PDF has been downloaded.");
         tempDiv.remove(); 
+        // Auto-increment invoice number after successful PDF generation if it was the current draft
+        // This logic is now primarily handled in saveDraft()
+        // if (profile.nextInvoiceNumber && formatInvoiceNumber(profile.nextInvoiceNumber -1) === currentInvoiceData.invoiceNumber) { 
+        //     console.log("PDF generated for an invoice that might have already incremented its number via Save Draft.");
+        // }
     }).catch(err => {
         console.error("PDF Export Error", err);
+        logErrorToFirestore("generateInvoicePdf", err.message, err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
         tempDiv.remove();
     });
@@ -933,6 +1165,8 @@ window.saveSig = async function() {
         return;
     }
     updateData.lastUpdated = serverTimestamp();
+    updateData.updatedBy = currentUserId;
+
 
     try {
         const agreementInstanceRef = doc(fsDb, agreementDocPath);
@@ -954,6 +1188,7 @@ window.saveSig = async function() {
         showMessage("Signature Saved", "Your signature has been saved to the agreement.");
     } catch (error) {
         console.error("Error saving signature:", error);
+        logErrorToFirestore("saveSig", error.message, error);
         showMessage("Storage Error", "Could not save signature: " + error.message);
     } finally {
         hideLoading();
@@ -1007,7 +1242,10 @@ function updateUserWizardView() {
 window.wizNext = function() {
     if (userWizStep === 1) {
         const name = $("#wName")?.value.trim();
-        const abn = $("#wAbn")?.value.trim();
+        let abn = $("#wAbn")?.value.trim();
+        if (abn) abn = abn.replace(/\D/g, ''); 
+        $("#wAbn").value = abn; 
+
         if (!name) { return showMessage("Validation Error", "Full name is required."); }
         if (globalSettings.portalType === 'organization' && abn && !isValidABN(abn)) { 
             return showMessage("Validation Error", "Please enter a valid 11-digit ABN."); 
@@ -1015,8 +1253,13 @@ window.wizNext = function() {
         if (globalSettings.portalType === 'organization' && !abn) { return showMessage("Validation Error", "ABN is required for organization workers."); }
 
     } else if (userWizStep === 2) {
-        const bsb = $("#wBsb")?.value.trim();
-        const acc = $("#wAcc")?.value.trim();
+        let bsb = $("#wBsb")?.value.trim();
+        let acc = $("#wAcc")?.value.trim();
+        if (bsb) bsb = bsb.replace(/\D/g, '');
+        if (acc) acc = acc.replace(/\D/g, '');
+        $("#wBsb").value = bsb; 
+        $("#wAcc").value = acc;
+
          if (globalSettings.portalType === 'organization') {
             if (bsb && !isValidBSB(bsb)) { return showMessage("Validation Error", "Please enter a valid 6-digit BSB.");}
             if (acc && !isValidAccountNumber(acc)) { return showMessage("Validation Error", "Please enter a valid account number (6-10 digits).");}
@@ -1042,9 +1285,13 @@ window.wizFinish = async function() {
     }
     
     const nameValue = $("#wName")?.value.trim();
-    const abnValue = $("#wAbn")?.value.trim();
-    const bsbValue = $("#wBsb")?.value.trim();
-    const accValue = $("#wAcc")?.value.trim();
+    let abnValue = $("#wAbn")?.value.trim().replace(/\D/g, ''); 
+    let bsbValue = $("#wBsb")?.value.trim().replace(/\D/g, ''); 
+    let accValue = $("#wAcc")?.value.trim().replace(/\D/g, ''); 
+
+    if ($("#wAbn")) $("#wAbn").value = abnValue;
+    if ($("#wBsb")) $("#wBsb").value = bsbValue;
+    if ($("#wAcc")) $("#wAcc").value = accValue;
 
     if (!nameValue) { return showMessage("Validation Error", "Full name is required to finish setup."); }
     
@@ -1067,8 +1314,14 @@ window.wizFinish = async function() {
         bsb: bsbValue || profile.bsb || "",
         acc: accValue || profile.acc || "",
         profileSetupComplete: true, 
-        lastUpdated: serverTimestamp()
+        lastUpdated: serverTimestamp(),
+        updatedBy: currentUserId
     };
+     if (!profile.createdAt) { 
+        profileUpdates.createdAt = serverTimestamp();
+        profileUpdates.createdBy = currentUserId;
+    }
+
 
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
@@ -1090,6 +1343,7 @@ window.wizFinish = async function() {
     } catch (error) {
         hideLoading();
         console.error("Error saving profile from wizard:", error);
+        logErrorToFirestore("wizFinish", error.message, error);
         showMessage("Storage Error", "Could not save your profile details: " + error.message);
     }
 };
@@ -1121,12 +1375,13 @@ window.saveRequest = async function() {
         endTime: requestEndTime,
         reason: requestReason || "",
         status: "pending", 
-        requestedAt: serverTimestamp()
+        requestedAt: serverTimestamp(),
+        requestedBy: currentUserId
     };
 
     try {
         const requestsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`);
-        const newRequestRef = await addDoc(requestsCollectionRef, requestData);
+        const newRequestRef = await fsAddDoc(requestsCollectionRef, requestData);
         
         hideLoading();
         closeModal('rqModal');
@@ -1137,6 +1392,7 @@ window.saveRequest = async function() {
     } catch (error) {
         hideLoading();
         console.error("Error submitting shift request:", error);
+        logErrorToFirestore("saveRequest", error.message, error);
         showMessage("Storage Error", "Could not submit your shift request: " + error.message);
     }
 };
@@ -1158,7 +1414,8 @@ window.saveInitialInvoiceNumber = async function() {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
         await updateDoc(userProfileDocRef, {
             nextInvoiceNumber: initialNumber,
-            lastUpdated: serverTimestamp()
+            lastUpdated: serverTimestamp(),
+            updatedBy: currentUserId
         });
         profile.nextInvoiceNumber = initialNumber; 
         
@@ -1172,6 +1429,7 @@ window.saveInitialInvoiceNumber = async function() {
     } catch (error) {
         hideLoading();
         console.error("Error saving initial invoice number:", error);
+        logErrorToFirestore("saveInitialInvoiceNumber", error.message, error);
         showMessage("Storage Error", "Could not save starting invoice number: " + error.message);
     }
 };
@@ -1304,7 +1562,10 @@ window.adminWizNext = function() {
         const portalType = document.querySelector('input[name="adminWizPortalType"]:checked')?.value;
         if (portalType === 'organization') {
             const orgName = $("#adminWizOrgName")?.value.trim();
-            const orgAbn = $("#adminWizOrgAbn")?.value.trim();
+            let orgAbn = $("#adminWizOrgAbn")?.value.trim();
+            if(orgAbn) orgAbn = orgAbn.replace(/\D/g, '');
+            $("#adminWizOrgAbn").value = orgAbn;
+
             if (!orgName) { return showMessage("Validation Error", "Organization Name is required for 'Organization' type.");}
             if (orgAbn && !isValidABN(orgAbn)) { return showMessage("Validation Error", "Invalid ABN. Please enter an 11-digit ABN.");}
         } else { 
@@ -1321,14 +1582,12 @@ window.adminWizNext = function() {
         console.log("Already on the last step of admin wizard.");
     }
 };
-
 window.adminWizPrev = function() {
     if (adminWizStep > 1) {
         adminWizStep--;
         updateAdminWizardView();
     }
 };
-
 window.adminWizFinish = async function() {
     if (!isFirebaseInitialized || !(profile && profile.isAdmin)) {
         showMessage("Error", "Permission denied or system not ready.");
@@ -1359,7 +1618,7 @@ window.adminWizFinish = async function() {
 
     if (portalTypeSelected === 'organization') {
         tempGlobalSettings.organizationName = $("#adminWizOrgName")?.value.trim();
-        tempGlobalSettings.organizationAbn = $("#adminWizOrgAbn")?.value.trim() || "";
+        tempGlobalSettings.organizationAbn = $("#adminWizOrgAbn")?.value.trim().replace(/\D/g, '') || ""; // Sanitize
         tempGlobalSettings.organizationContactEmail = $("#adminWizOrgContactEmail")?.value.trim() || "";
         tempGlobalSettings.organizationContactPhone = $("#adminWizOrgContactPhone")?.value.trim() || "";
         tempGlobalSettings.adminUserName = profile.name; 
@@ -1424,6 +1683,7 @@ window.adminWizFinish = async function() {
     } catch (error) {
         hideLoading();
         console.error("Error finalizing admin setup:", error);
+        logErrorToFirestore("adminWizFinish", error.message, error);
         showMessage("Storage Error", "Could not save portal configuration: " + error.message);
     }
 };
@@ -1442,53 +1702,122 @@ async function loadAllUserAccountsForAdminFromFirestore() {
         const usersCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
         const usersSnapshot = await getDocs(usersCollectionRef);
         
-        accounts = {}; // Reset accounts
+        const tempAccounts = {}; 
+        pendingApprovalAccounts = []; // Clear previous pending list
         const profilePromises = [];
 
-        usersSnapshot.forEach((userDocSnapshot) => { // Renamed to avoid conflict
+        usersSnapshot.forEach((userDocSnapshot) => { 
             const userId = userDocSnapshot.id;
-            // Skip the admin user itself from being listed as a 'worker' to manage
-            if (userId === currentUserId && profile.isAdmin) { 
-                // Store admin's own profile if needed, but don't add to list of workers for auth
-                if (profile.email) accounts[profile.email] = { name: profile.name, profile: profile };
-                else accounts[userId] = { name: profile.name, profile: profile };
-                return;
-            }
-
             const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${userId}/profile`, "details");
             profilePromises.push(
                 getDoc(userProfileDocRef).then(profileSnap => {
                     if (profileSnap.exists()) {
                         const userData = profileSnap.data();
-                        // Ensure only non-admin users are added to the 'accounts' for worker management
-                        if (!userData.isAdmin) { 
-                            if (userData.email) {
-                                accounts[userData.email] = { name: userData.name || 'Unnamed Worker', profile: { uid: userId, ...userData } };
-                            } else {
-                                // Fallback if email is somehow missing, though unlikely for registered users
-                                accounts[userId] = { name: userData.name || 'Unnamed Worker', profile: { uid: userId, ...userData } };
-                            }
-                        } else if (userId === currentUserId) { // Store admin's own profile
-                             if (userData.email) accounts[userData.email] = { name: userData.name, profile: { uid: userId, ...userData } };
-                             else accounts[userId] = { name: userData.name, profile: { uid: userId, ...userData } };
+                        const userAccount = { name: userData.name || 'Unnamed User', profile: { uid: userId, ...userData } };
+                        
+                        if (userData.email) {
+                            tempAccounts[userData.email] = userAccount;
+                        } else {
+                            tempAccounts[userId] = userAccount; // Fallback if email is missing
                         }
+
+                        // Populate pending approval list
+                        if (!userData.isAdmin && userData.approved === false) {
+                            pendingApprovalAccounts.push(userAccount.profile);
+                        }
+
                     } else {
                         console.warn(`Profile details not found for user ID: ${userId}`);
                     }
                 }).catch(err => {
                     console.error(`Error fetching profile for user ID ${userId}:`, err);
+                    logErrorToFirestore("loadAllUserAccounts_getDoc", err.message, {userId, err});
                 })
             );
         });
         await Promise.all(profilePromises); 
-        console.log("Loaded accounts for admin:", accounts);
+        
+        accounts = tempAccounts; 
+        console.log("Loaded accounts for admin (includes admin):", accounts);
+        console.log("Pending approval accounts:", pendingApprovalAccounts);
+
 
         if(location.hash === "#agreement" && $("#adminAgreementWorkerSelector")) populateAdminWorkerSelectorForAgreement();
-        if(location.hash === "#admin" && $(".admin-tab-btn.active")?.dataset.target === "adminWorkerManagement") displayWorkersForAuth(); 
+        if(location.hash === "#admin"){
+            if($(".admin-tab-btn.active")?.dataset.target === "adminWorkerManagement") {
+                displayWorkersForAuth(); 
+                displayPendingWorkersForAdmin(); // Also display pending workers
+            }
+        }
     
     } catch (error) { 
         console.error("Error loading user accounts for admin from Firestore:", error); 
+        logErrorToFirestore("loadAllUserAccountsForAdminFromFirestore", error.message, error);
         showMessage("Data Error", "Could not load worker accounts for admin: " + error.message); 
+    } finally {
+        hideLoading();
+    }
+}
+
+function displayPendingWorkersForAdmin() {
+    const ul = $("#pendingWorkersList"); // Assumes an element with this ID exists in adminWorkerManagement panel
+    if (!ul) {
+        console.warn("Element #pendingWorkersList not found for displaying pending workers.");
+        return;
+    }
+    ul.innerHTML = "";
+    if (pendingApprovalAccounts.length === 0) {
+        ul.innerHTML = "<li>No workers currently awaiting approval.</li>";
+        return;
+    }
+    pendingApprovalAccounts.forEach(worker => {
+        const li = document.createElement("li");
+        li.innerHTML = `<i class="fas fa-user-clock"></i> ${worker.name || 'Unnamed Worker'} <small>(${worker.email || worker.uid})</small>
+                        <button class="btn-ok btn-small" onclick="approveWorkerInFirestore('${worker.uid}')" title="Approve Worker">Approve</button>
+                        `;
+        li.dataset.uid = worker.uid;
+        ul.appendChild(li);
+    });
+}
+
+async function approveWorkerInFirestore(workerId) {
+    if (!isFirebaseInitialized || !fsDb || !(profile && profile.isAdmin)) {
+        showMessage("Error", "Cannot approve worker. System not ready or insufficient permissions.");
+        return;
+    }
+    if (!workerId) {
+        showMessage("Error", "Worker ID not provided for approval.");
+        return;
+    }
+
+    showLoading(`Approving worker ${workerId}...`);
+    try {
+        const workerProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${workerId}/profile`, "details");
+        await updateDoc(workerProfileDocRef, {
+            approved: true,
+            lastUpdated: serverTimestamp(),
+            updatedBy: currentUserId // Admin's ID
+        });
+
+        // Update local 'accounts' and 'pendingApprovalAccounts'
+        const workerEmail = Object.keys(accounts).find(key => accounts[key].profile.uid === workerId);
+        if (workerEmail && accounts[workerEmail]) {
+            accounts[workerEmail].profile.approved = true;
+        } else if (accounts[workerId]) { // Fallback if email was not the key
+            accounts[workerId].profile.approved = true;
+        }
+        pendingApprovalAccounts = pendingApprovalAccounts.filter(p => p.uid !== workerId);
+        
+        // Refresh display
+        displayPendingWorkersForAdmin();
+        displayWorkersForAuth(); // Refresh the main list too, as they are now approved
+
+        showMessage("Worker Approved", `Worker ${workerId} has been approved.`);
+
+    } catch (error) {
+        console.error("Error approving worker:", error);
+        logErrorToFirestore("approveWorkerInFirestore", error.message, {workerId, error});
+        showMessage("Error", `Could not approve worker: ${error.message}`);
     } finally {
         hideLoading();
     }
@@ -1503,15 +1832,14 @@ function displayWorkersForAuth() {
     }
     ul.innerHTML = ""; 
     
-    // Filter out the admin user from the list of workers to be managed
     const workerAccounts = Object.entries(accounts).filter(([key, acc]) => {
-        return acc && acc.profile && !acc.profile.isAdmin;
+        return acc && acc.profile && !acc.profile.isAdmin && acc.profile.uid !== currentUserId && acc.profile.approved === true; // Only show approved workers
     });
     
-    console.log("Displaying workers for auth:", workerAccounts);
+    console.log("Displaying workers for auth (filtered and approved):", workerAccounts);
 
     if (workerAccounts.length === 0) { 
-        ul.innerHTML = "<li>No workers found to authorize.</li>"; 
+        ul.innerHTML = "<li>No approved workers found. Check pending approvals.</li>"; 
         const selectedWorkerNameEl = $("#selectedWorkerNameForAuth");
         if (selectedWorkerNameEl) selectedWorkerNameEl.innerHTML = `<i class="fas fa-user-check"></i> Select a Worker`;
         const servicesContainerEl = $("#servicesForWorkerContainer");
@@ -1523,7 +1851,7 @@ function displayWorkersForAuth() {
         const displayIdentifier = worker.profile.email || key; 
         const li = document.createElement("li"); 
         li.innerHTML = `<i class="fas fa-user-tie"></i> ${worker.profile.name || 'Unnamed Worker'} <small>(${displayIdentifier})</small>`; 
-        li.dataset.key = key; // Use the key from accounts (email or UID)
+        li.dataset.key = key; 
         li.onclick = () => selectWorkerForAuth(key); 
         ul.appendChild(li); 
     });
@@ -1531,7 +1859,7 @@ function displayWorkersForAuth() {
 
 
 function selectWorkerForAuth(key) { 
-    selectedWorkerEmailForAuth = key; // This key is the email or UID used in the 'accounts' object
+    selectedWorkerEmailForAuth = key; 
     const worker = accounts[selectedWorkerEmailForAuth]; 
     const nameEl = $("#selectedWorkerNameForAuth");
     const containerEl = $("#servicesForWorkerContainer");
@@ -1602,7 +1930,8 @@ async function saveWorkerAuthorizationsToFirestore() {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${workerUid}/profile`, "details");
         await updateDoc(userProfileDocRef, {
             authorizedServiceCodes: selectedServiceCodes,
-            lastUpdated: serverTimestamp()
+            lastUpdated: serverTimestamp(),
+            updatedBy: currentUserId // Admin's ID
         }); 
         
         accounts[selectedWorkerEmailForAuth].profile.authorizedServiceCodes = selectedServiceCodes;
@@ -1614,6 +1943,7 @@ async function saveWorkerAuthorizationsToFirestore() {
     } catch (e) { 
         hideLoading(); 
         console.error("Error saving worker authorizations to Firestore:", e); 
+        logErrorToFirestore("saveWorkerAuthorizationsToFirestore", e.message, {workerUid, e});
         showMessage("Storage Error", "Could not save worker authorizations: " + e.message); 
     }
 }
@@ -1652,6 +1982,13 @@ function setActive(hash) {
       } else if (a.hash === "#admin") {
           if (profile && profile.isAdmin) a.classList.remove('hide');
           else a.classList.add('hide');
+      } else if (a.id === 'signMyAgreementLink') { 
+          const agreementIsSignedByWorker = profile?.agreement?.workerSigned; 
+          if (currentUserId && !profile.isAdmin && !agreementIsSignedByWorker) {
+              a.classList.remove('hide');
+          } else {
+              a.classList.add('hide');
+          }
       } else { 
           if (currentUserId && !(profile && profile.isAdmin)) a.classList.remove('hide'); 
           else if (profile && profile.isAdmin) a.classList.add('hide'); 
@@ -1666,7 +2003,7 @@ function setActive(hash) {
 
   if (currentHash === "#invoice" && !(profile && profile.isAdmin)) handleInvoicePageLoad();
   else if (currentHash === "#profile" && !(profile && profile.isAdmin)) loadProfileData();
-  else if (currentHash === "#agreement") { 
+  else if (currentHash === "#agreement" || currentHash === "#signMyAgreement") { 
       const adminSelector = $("#adminAgreementWorkerSelector");
       const agreementContainer = $("#agreementContentContainer");
       const agrChipEl = $("#agrChip");
@@ -1693,6 +2030,7 @@ function setActive(hash) {
     loadAdminPortalSettings(); 
     loadAdminAgreementCustomizations(); 
     renderAdminServicesTable(); 
+    loadAdminInvoiceCustomizations(); 
     
     $$('.admin-tab-btn').forEach(btn => { 
         btn.removeEventListener('click', handleAdminTabClick); 
@@ -1713,7 +2051,11 @@ function setActive(hash) {
             const categoryTypeSelect = $("#adminServiceCategoryType");
             if (categoryTypeSelect) updateRateFieldsVisibility(categoryTypeSelect.value);
         }
-        if (targetAdminPanelId === "adminWorkerManagement") displayWorkersForAuth(); 
+        if (targetAdminPanelId === "adminWorkerManagement") {
+            displayWorkersForAuth(); 
+            displayPendingWorkersForAdmin(); // Display pending workers
+        }
+        if (targetAdminPanelId === "adminInvoiceCustomization") { /* Future logic for invoice template */ }
     }
   } else if (currentHash === "#home") {
       handleHomePageDisplay();
@@ -1735,8 +2077,31 @@ function handleAdminTabClick(event) {
         if (categoryTypeSelect) updateRateFieldsVisibility(categoryTypeSelect.value);
     } else if (targetPanelId === "adminWorkerManagement") {
         displayWorkersForAuth(); 
+        displayPendingWorkersForAdmin(); // Display pending workers when tab is clicked
+    } else if (targetPanelId === "adminInvoiceCustomization") {
+        console.log("Admin Invoice Customization tab clicked.");
     }
 }
+
+// Placeholder for admin invoice template customization
+function loadAdminInvoiceCustomizations() {
+    console.log("loadAdminInvoiceCustomizations called - placeholder");
+    const container = $("#adminInvoiceCustomization");
+    if (container && !container.innerHTML.trim()) { 
+        container.innerHTML = `<p>Invoice template customization options will be available here in a future update.</p>
+                               <p><em>For example, you could allow admins to:</em></p>
+                               <ul>
+                                 <li>Upload a logo for invoices.</li>
+                                 <li>Define default payment terms or bank details.</li>
+                                 <li>Customize footer text.</li>
+                               </ul>`;
+    }
+}
+// Placeholder
+async function saveAdminInvoiceCustomizations() {
+    showMessage("Info", "Saving invoice customizations is not yet implemented.")
+}
+
 
 function clearAdminServiceForm() { 
     const serviceIdInput = $("#adminServiceId"); if(serviceIdInput) serviceIdInput.value = "";
@@ -2010,6 +2375,7 @@ async function loadShiftRequestsForUserDisplay() {
         shiftRequestsContainer.classList.remove('hide');
     } catch (error) {
         console.error("Error loading shift requests:", error);
+        logErrorToFirestore("loadShiftRequestsForUserDisplay", error.message, error);
         rqTblBody.innerHTML = "<tr><td colspan='5'>Error loading requests.</td></tr>";
         showMessage("Data Error", "Could not load shift requests: " + error.message);
     } finally {
@@ -2053,24 +2419,22 @@ function openLogShiftModal() {
         const supportTypeSelect = $("#logShiftSupportType");
         if (supportTypeSelect) { 
             supportTypeSelect.innerHTML = "<option value=''>Loading services...</option>";
-            if (profile && profile.authorizedServiceCodes && adminManagedServices.length > 0) {
+            const availableServices = adminManagedServices.filter(s => 
+                profile.authorizedServiceCodes?.includes(s.code) && s.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM
+            );
+
+            if (profile && profile.authorizedServiceCodes && availableServices.length > 0) {
                 supportTypeSelect.innerHTML = "<option value=''>-- Select Support Type --</option>";
-                profile.authorizedServiceCodes.forEach(code => {
-                    const service = adminManagedServices.find(s => s.code === code && s.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM);
-                    if (service) {
-                        const opt = document.createElement('option');
-                        opt.value = service.code;
-                        opt.textContent = `${service.description} (${service.code})`;
-                        supportTypeSelect.appendChild(opt);
-                    }
+                availableServices.forEach(service => {
+                    const opt = document.createElement('option');
+                    opt.value = service.code;
+                    opt.textContent = `${service.description} (${service.code})`;
+                    supportTypeSelect.appendChild(opt);
                 });
-                 if (supportTypeSelect.options.length <= 1) { 
-                    supportTypeSelect.innerHTML = "<option value=''>No suitable services authorized.</option>";
-                }
             } else if (adminManagedServices.length === 0) {
                  supportTypeSelect.innerHTML = "<option value=''>No services defined by admin</option>";
             } else {
-                 supportTypeSelect.innerHTML = "<option value=''>No services authorized or available</option>";
+                 supportTypeSelect.innerHTML = "<option value=''>No suitable services authorized.</option>";
             }
         }
         
@@ -2456,7 +2820,6 @@ async function loadServiceAgreement() {
         return;
     }
     if (typeof agreementCustomData !== 'object' || agreementCustomData === null) {
-         // Attempt to load it if it's missing, then proceed or show error
         await loadAgreementCustomizationsFromFirestore();
         if (typeof agreementCustomData !== 'object' || agreementCustomData === null) {
             $("#agreementContentContainer").innerHTML = "<p><em>Error: Agreement template data is missing and could not be loaded.</em></p>";
@@ -2500,10 +2863,17 @@ async function loadServiceAgreement() {
         if (agreementInstanceSnap.exists()) {
             agreementInstanceData = { ...agreementInstanceData, ...agreementInstanceSnap.data() };
         } else {
-            await setDoc(agreementInstanceRef, { agreementStartDate: globalSettings.agreementStartDate || new Date().toISOString().split('T')[0], lastUpdated: serverTimestamp() });
+            await setDoc(agreementInstanceRef, { 
+                agreementStartDate: globalSettings.agreementStartDate || new Date().toISOString().split('T')[0], 
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserId, 
+                createdAt: serverTimestamp(),
+                createdBy: currentUserId
+            });
         }
     } catch (e) {
         console.warn("Could not load existing agreement instance data:", e);
+        logErrorToFirestore("loadServiceAgreement_getInstance", e.message, e);
     }
 
     let content = `<h2>${agreementCustomData.overallTitle || "Service Agreement"}</h2>`;
@@ -2587,23 +2957,29 @@ async function generateAgreementPdf() {
         return;
     }
 
-    let workerProfileToUse = profile; // Default to current user
-    let workerName = profile.name;
-    let workerAbn = profile.abn;
+    let workerProfileToUse = profile; 
+    let workerName = profile.name ?? "Worker Name N/A";
+    let workerAbn = profile.abn ?? "Worker ABN N/A";
 
     if (profile.isAdmin && currentAgreementWorkerEmail) {
         const selectedWorker = accounts[currentAgreementWorkerEmail]?.profile;
         if (selectedWorker) {
             workerProfileToUse = selectedWorker;
-            workerName = selectedWorker.name;
-            workerAbn = selectedWorker.abn;
+            workerName = selectedWorker.name ?? "Worker Name N/A";
+            workerAbn = selectedWorker.abn ?? "Worker ABN N/A";
         } else {
             showMessage("Error", "Selected worker profile for PDF not found.");
             return;
         }
     }
     
-    let agreementInstanceData = { workerSigUrl: $("#sigW")?.src, participantSigUrl: $("#sigP")?.src, workerSignDate: $("#dW")?.textContent, participantSignDate: $("#dP")?.textContent, agreementStartDate: globalSettings.agreementStartDate };
+    let agreementInstanceData = { 
+        workerSigUrl: $("#sigW")?.src, 
+        participantSigUrl: $("#sigP")?.src, 
+        workerSignDate: $("#dW")?.textContent, 
+        participantSignDate: $("#dP")?.textContent, 
+        agreementStartDate: globalSettings.agreementStartDate 
+    };
     try {
         const agreementDocPath = `artifacts/${appId}/users/${workerProfileToUse.uid}/agreements/main`;
         const agreementInstanceRef = doc(fsDb, agreementDocPath);
@@ -2616,7 +2992,10 @@ async function generateAgreementPdf() {
             agreementInstanceData.participantSignDate = firestoreData.participantSignDate ? formatDateForInvoiceDisplay(firestoreData.participantSignDate.toDate()) : agreementInstanceData.participantSignDate;
             agreementInstanceData.agreementStartDate = firestoreData.agreementStartDate || agreementInstanceData.agreementStartDate;
         }
-    } catch(e) { console.warn("Could not fetch latest agreement instance for PDF:", e); }
+    } catch(e) { 
+        console.warn("Could not fetch latest agreement instance for PDF:", e); 
+        logErrorToFirestore("generateAgreementPdf_fetchInstance", e.message, e);
+    }
 
 
     let pdfHtml = `
@@ -2636,16 +3015,16 @@ async function generateAgreementPdf() {
         </style>
         <div class="pdf-agreement-container">
             <div class="pdf-agreement-header">
-                 <h1>${globalSettings.organizationName || 'Service Provider'}</h1>
-                 <h2>${agreementCustomData.overallTitle || "Service Agreement"}</h2>
+                 <h1>${globalSettings.organizationName ?? 'Service Provider'}</h1>
+                 <h2>${agreementCustomData.overallTitle ?? "Service Agreement"}</h2>
             </div>`;
 
     (agreementCustomData.clauses || []).forEach(clause => {
         let clauseBody = clause.body || "";
-        clauseBody = clauseBody.replace(/{{participantName}}/g, globalSettings.participantName || "[Participant Name]")
-                               .replace(/{{participantNdisNo}}/g, globalSettings.participantNdisNo || "[NDIS No]")
-                               .replace(/{{workerName}}/g, workerName || "[Worker Name]")
-                               .replace(/{{workerAbn}}/g, workerAbn || "[Worker ABN]")
+        clauseBody = clauseBody.replace(/{{participantName}}/g, globalSettings.participantName ?? "[Participant Name]")
+                               .replace(/{{participantNdisNo}}/g, globalSettings.participantNdisNo ?? "[NDIS No]")
+                               .replace(/{{workerName}}/g, workerName ?? "[Worker Name]")
+                               .replace(/{{workerAbn}}/g, workerAbn ?? "[Worker ABN]")
                                .replace(/{{agreementStartDate}}/g, formatDateForInvoiceDisplay(agreementInstanceData.agreementStartDate || globalSettings.agreementStartDate || new Date()))
                                .replace(/{{agreementEndDate}}/g, formatDateForInvoiceDisplay(globalSettings.planEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1))));
         
@@ -2681,12 +3060,15 @@ async function generateAgreementPdf() {
         </div>`;
     
     const tempDivAgreement = document.createElement("div");
+    tempDivAgreement.style.position = "absolute"; 
+    tempDivAgreement.style.left = "-9999px";
+    tempDivAgreement.style.width = "210mm"; 
     tempDivAgreement.innerHTML = pdfHtml;
     document.body.appendChild(tempDivAgreement);
 
     const opt = {
         margin: [15, 15, 15, 15], // mm
-        filename: `ServiceAgreement-${workerName || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        filename: `[generate]_type_pdf_context_ndis_portal_view_user_features_agreement,signatures_status_final_title_ServiceAgreement-${workerName || 'User'}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -2697,6 +3079,7 @@ async function generateAgreementPdf() {
         tempDivAgreement.remove();
     }).catch(err => {
         console.error("Error generating agreement PDF:", err);
+        logErrorToFirestore("generateAgreementPdf", err.message, err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
         tempDivAgreement.remove();
     });
@@ -2747,19 +3130,41 @@ window.deleteProfileDocument = async function(fileName, storagePath) {
 window._confirmDeleteProfileDocument = async function(fileName, storagePath) {
     closeModal("messageModal");
     showLoading("Deleting document...");
-    console.warn(`Placeholder: File at path "${storagePath}" would be deleted from Firebase Storage here.`);
+
+    if (storagePath && fbStorage) {
+        const fileRef = ref(fbStorage, storagePath);
+        try {
+            await deleteObject(fileRef);
+            console.log(`File deleted from Storage: ${storagePath}`);
+        } catch (storageError) {
+            console.error("Error deleting file from Storage:", storageError);
+            logErrorToFirestore("_confirmDeleteProfileDocument_storageDelete", storageError.message, {fileName, storagePath, storageError});
+            showMessage("Storage Warning", "Could not delete file from cloud storage, but will attempt to remove metadata.");
+        }
+    } else {
+        console.warn("Storage path not provided or Storage not initialized. Skipping cloud deletion for:", fileName);
+    }
 
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        await updateDoc(userProfileDocRef, {
-            files: arrayRemove(profile.files.find(f => f.name === fileName && f.storagePath === storagePath))
-        });
+        const fileToRemove = profile.files.find(f => (f.storagePath && f.storagePath === storagePath) || (!f.storagePath && f.name === fileName) );
 
-        profile.files = profile.files.filter(f => !(f.name === fileName && f.storagePath === storagePath));
+        if (fileToRemove) {
+            await updateDoc(userProfileDocRef, {
+                files: arrayRemove(fileToRemove),
+                lastUpdated: serverTimestamp(),
+                updatedBy: currentUserId
+            });
+            profile.files = profile.files.filter(f => !((f.storagePath && f.storagePath === storagePath) || (!f.storagePath && f.name === fileName)));
+        } else {
+            console.warn("File metadata not found in profile for deletion:", fileName, storagePath);
+        }
+       
         loadProfileData(); 
-        showMessage("Document Deleted", `Document "${fileName}" metadata removed from your profile.`);
+        showMessage("Document Update", `Document "${fileName}" metadata processed.`);
     } catch (error) {
         console.error("Error deleting document metadata from Firestore:", error);
+        logErrorToFirestore("_confirmDeleteProfileDocument_firestoreDelete", error.message, {fileName, error});
         showMessage("Error", "Could not delete document metadata: " + error.message);
     } finally {
         hideLoading();
@@ -2850,6 +3255,7 @@ async function loadDraftInvoice() {
         }
     } catch (error) {
         console.error("Error loading invoice draft:", error);
+        logErrorToFirestore("loadDraftInvoice", error.message, error);
         invTblBody.innerHTML = "<tr><td colspan='12' style='text-align:center;'>Could not load invoice draft.</td></tr>";
         currentInvoiceData = { items: [], invoiceNumber: profile.nextInvoiceNumber ? formatInvoiceNumber(profile.nextInvoiceNumber) : 'current', invoiceDate: new Date().toISOString().split('T')[0], subtotal: 0, gst: 0, grandTotal: 0 };
         addInvoiceRow();
@@ -2967,6 +3373,7 @@ async function logout() {
     await fbSignOut(fbAuth); 
   } catch (e) {
     console.error("Logout failed:", e);
+    logErrorToFirestore("logout", e.message, e);
     showAuthStatusMessage("Logout Error: " + e.message); 
   } finally {
       hideLoading(); 
@@ -2981,10 +3388,12 @@ window.saveAdminPortalSettings = async function() {
     
     const portalTypeRadio = document.querySelector('input[name="adminWizPortalType"]:checked'); 
     const currentPortalType = portalTypeRadio ? portalTypeRadio.value : globalSettings.portalType;
-    const orgNameVal = $("#adminEditOrgName")?.value.trim();
-    const orgAbnVal = $("#adminEditOrgAbn")?.value.trim();
-    const orgEmailVal = $("#adminEditOrgContactEmail")?.value.trim();
-    const planManagerEmailVal = $("#adminEditPlanManagerEmail")?.value.trim();
+    let orgNameVal = $("#adminEditOrgName")?.value.trim();
+    let orgAbnVal = $("#adminEditOrgAbn")?.value.trim().replace(/\D/g, ''); 
+    let orgEmailVal = $("#adminEditOrgContactEmail")?.value.trim();
+    let planManagerEmailVal = $("#adminEditPlanManagerEmail")?.value.trim();
+
+    if ($("#adminEditOrgAbn")) $("#adminEditOrgAbn").value = orgAbnVal; 
 
     if (currentPortalType === "organization") {
         if (!orgNameVal) { return showMessage("Validation Error", "Organization Name is required.");}
@@ -3101,16 +3510,26 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     descSelect.id = `itemDesc${rowIndex}`;
     descSelect.className = 'invoice-input-condensed description-select';
     descSelect.innerHTML = `<option value="">-- Select Service --</option>`;
-    (profile.authorizedServiceCodes || []).forEach(code => {
-        const service = adminManagedServices.find(s => s.code === code);
-        if (service) {
-            const opt = document.createElement('option');
-            opt.value = service.code;
-            opt.textContent = `${service.description} (${service.code})`;
-            if (itemData?.serviceCode === service.code) opt.selected = true;
-            descSelect.appendChild(opt);
-        }
+    
+    // Filter services based on worker's authorizedServiceCodes
+    const availableServices = adminManagedServices.filter(s =>
+        profile.authorizedServiceCodes?.includes(s.code)
+    );
+
+    availableServices.forEach(service => {
+        const opt = document.createElement('option');
+        opt.value = service.code;
+        opt.textContent = `${service.description} (${service.code})`;
+        if (itemData?.serviceCode === service.code) opt.selected = true;
+        descSelect.appendChild(opt);
     });
+    if (availableServices.length === 0 && !(profile.authorizedServiceCodes && profile.authorizedServiceCodes.length > 0)) {
+        descSelect.innerHTML = `<option value="">No services authorized</option>`;
+    } else if (availableServices.length === 0) {
+         descSelect.innerHTML = `<option value="">No matching authorized services found</option>`;
+    }
+
+
     descCell.appendChild(descSelect);
     const descPrintSpan = document.createElement('span'); 
     descPrintSpan.id = `itemDescPrint${rowIndex}`;
@@ -3335,3 +3754,21 @@ function calculateInvoiceTotals() {
     $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
 }
 
+// Placeholder for admin invoice template customization
+function loadAdminInvoiceCustomizations() {
+    console.log("loadAdminInvoiceCustomizations called - placeholder");
+    const container = $("#adminInvoiceCustomization");
+    if (container && !container.innerHTML.trim()) { 
+        container.innerHTML = `<p>Invoice template customization options will be available here in a future update.</p>
+                               <p><em>For example, you could allow admins to:</em></p>
+                               <ul>
+                                 <li>Upload a logo for invoices.</li>
+                                 <li>Define default payment terms or bank details.</li>
+                                 <li>Customize footer text.</li>
+                               </ul>`;
+    }
+}
+// Placeholder
+async function saveAdminInvoiceCustomizations() {
+    showMessage("Info", "Saving invoice customizations is not yet implemented.")
+}
