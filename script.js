@@ -185,6 +185,36 @@ function determineRateType(dateStr, startTime24) {
 }
 function formatTime12Hour(t24){if(!t24)return"";const [h,m]=t24.split(':'),hr=parseInt(h,10);if(isNaN(hr)||isNaN(parseInt(m,10)))return"";const ap=hr>=12?'PM':'AM';let hr12=hr%12;hr12=hr12?hr12:12;return`${String(hr12).padStart(2,'0')}:${m} ${ap}`;}
 
+/* ========== Input Validation Helpers ========== */
+function isValidABN(abn) {
+    if (!abn || typeof abn !== 'string') return false;
+    const cleanedAbn = abn.replace(/\s/g, ''); // Remove spaces
+    if (!/^\d{11}$/.test(cleanedAbn)) return false; // Check if 11 digits
+
+    // ABN checksum validation (Australian Taxation Office algorithm)
+    const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+    let sum = 0;
+    for (let i = 0; i < 11; i++) {
+        let digit = parseInt(cleanedAbn[i], 10);
+        if (i === 0) digit -= 1; // Subtract 1 from the first digit
+        sum += digit * weights[i];
+    }
+    return (sum % 89) === 0;
+}
+
+function isValidBSB(bsb) {
+    if (!bsb || typeof bsb !== 'string') return false;
+    const cleanedBsb = bsb.replace(/[\s-]/g, ''); // Remove spaces and hyphens
+    return /^\d{6}$/.test(cleanedBsb); // Check if 6 digits
+}
+
+function isValidAccountNumber(acc) {
+    if (!acc || typeof acc !== 'string') return false;
+    const cleanedAcc = acc.replace(/\s/g, ''); // Remove spaces
+    return /^\d{6,10}$/.test(cleanedAcc); // Check if 6-10 digits
+}
+
+
 /* ========== Firebase Initialization and Auth State ========== */
 async function initializeFirebase() {
     if (!firebaseConfig || 
@@ -929,11 +959,17 @@ window.wizNext = function() {
         const name = $("#wName")?.value.trim();
         const abn = $("#wAbn")?.value.trim();
         if (!name) { return showMessage("Validation Error", "Full name is required."); }
+        if (globalSettings.portalType === 'organization' && abn && !isValidABN(abn)) { 
+            return showMessage("Validation Error", "Please enter a valid 11-digit ABN."); 
+        }
         if (globalSettings.portalType === 'organization' && !abn) { return showMessage("Validation Error", "ABN is required for organization workers."); }
+
     } else if (userWizStep === 2) {
         const bsb = $("#wBsb")?.value.trim();
         const acc = $("#wAcc")?.value.trim();
          if (globalSettings.portalType === 'organization') {
+            if (bsb && !isValidBSB(bsb)) { return showMessage("Validation Error", "Please enter a valid 6-digit BSB.");}
+            if (acc && !isValidAccountNumber(acc)) { return showMessage("Validation Error", "Please enter a valid account number (6-10 digits).");}
             if (!bsb) { return showMessage("Validation Error", "BSB is required for organization workers."); }
             if (!acc) { return showMessage("Validation Error", "Account number is required for organization workers."); }
         }
@@ -954,25 +990,37 @@ window.wizFinish = async function() {
         showMessage("Error", "Cannot save profile. User not logged in or database not ready.");
         return;
     }
-    showLoading("Saving profile...");
+    
+    const nameValue = $("#wName")?.value.trim();
+    const abnValue = $("#wAbn")?.value.trim();
+    const bsbValue = $("#wBsb")?.value.trim();
+    const accValue = $("#wAcc")?.value.trim();
 
+    // Validation checks
+    if (!nameValue) { return showMessage("Validation Error", "Full name is required to finish setup."); }
+    
+    if (globalSettings.portalType === 'organization') {
+        if (!abnValue) { return showMessage("Validation Error", "ABN is required to finish setup."); }
+        if (abnValue && !isValidABN(abnValue)) { return showMessage("Validation Error", "Invalid ABN format. Please enter an 11-digit ABN.");}
+        
+        if (!bsbValue) { return showMessage("Validation Error", "BSB is required to finish setup."); }
+        if (bsbValue && !isValidBSB(bsbValue)) { return showMessage("Validation Error", "Invalid BSB format. Please enter a 6-digit BSB.");}
+        
+        if (!accValue) { return showMessage("Validation Error", "Account number is required to finish setup."); }
+        if (accValue && !isValidAccountNumber(accValue)) { return showMessage("Validation Error", "Invalid Account Number format. Please enter 6-10 digits.");}
+    }
+
+
+    showLoading("Saving profile...");
     const profileUpdates = {
-        name: $("#wName")?.value.trim() || profile.name || "",
-        abn: $("#wAbn")?.value.trim() || profile.abn || "",
+        name: nameValue,
+        abn: abnValue || profile.abn || "", // Keep existing if not provided and not org type
         gstRegistered: $("#wGst")?.checked || false,
-        bsb: $("#wBsb")?.value.trim() || profile.bsb || "",
-        acc: $("#wAcc")?.value.trim() || profile.acc || "",
+        bsb: bsbValue || profile.bsb || "",
+        acc: accValue || profile.acc || "",
         profileSetupComplete: true, 
         lastUpdated: serverTimestamp()
     };
-
-    if (!profileUpdates.name) { hideLoading(); return showMessage("Validation Error", "Full name is required to finish setup."); }
-    if (globalSettings.portalType === 'organization') {
-        if (!profileUpdates.abn) { hideLoading(); return showMessage("Validation Error", "ABN is required to finish setup."); }
-        if (!profileUpdates.bsb) { hideLoading(); return showMessage("Validation Error", "BSB is required to finish setup."); }
-        if (!profileUpdates.acc) { hideLoading(); return showMessage("Validation Error", "Account number is required to finish setup."); }
-    }
-
 
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
@@ -1039,8 +1087,7 @@ window.saveRequest = async function() {
         showMessage("Request Submitted", "Your shift request has been submitted successfully.");
         // Optionally, refresh the shift requests display on the home page
         if (location.hash === "#home") {
-            // Call a function to reload and display shift requests
-            // loadShiftRequestsForUser(); // Example function name
+            loadShiftRequestsForUserDisplay();
         }
     } catch (error) {
         hideLoading();
@@ -1215,14 +1262,13 @@ window.adminWizNext = function() {
     } else if (adminWizStep === 2) {
         const portalType = document.querySelector('input[name="adminWizPortalType"]:checked')?.value;
         if (portalType === 'organization') {
-            if (!$("#adminWizOrgName")?.value.trim()) {
-                showMessage("Validation Error", "Organization Name is required for 'Organization' type.");
-                return;
-            }
+            const orgName = $("#adminWizOrgName")?.value.trim();
+            const orgAbn = $("#adminWizOrgAbn")?.value.trim();
+            if (!orgName) { return showMessage("Validation Error", "Organization Name is required for 'Organization' type.");}
+            if (orgAbn && !isValidABN(orgAbn)) { return showMessage("Validation Error", "Invalid ABN. Please enter an 11-digit ABN.");}
         } else { 
             if (!$("#adminWizUserName")?.value.trim()) {
-                showMessage("Validation Error", "Your Name is required for 'Self-Managed Participant' type.");
-                return;
+                return showMessage("Validation Error", "Your Name is required for 'Self-Managed Participant' type.");
             }
         }
     }
@@ -1247,11 +1293,9 @@ window.adminWizFinish = async function() {
         showMessage("Error", "Permission denied or system not ready.");
         return;
     }
-    showLoading("Finalizing portal setup...");
-
+    
     const portalTypeSelected = document.querySelector('input[name="adminWizPortalType"]:checked')?.value;
     if (!portalTypeSelected) {
-        hideLoading();
         showMessage("Validation Error", "Please select a Portal Type in Step 1.");
         adminWizStep = 1; 
         updateAdminWizardView();
@@ -1280,16 +1324,23 @@ window.adminWizFinish = async function() {
         tempGlobalSettings.adminUserName = profile.name; 
 
         if (!tempGlobalSettings.organizationName) {
-            hideLoading();
             showMessage("Validation Error", "Organization Name is required for 'Organization' type (Step 2).");
             adminWizStep = 2; updateAdminWizardView(); return;
         }
+        if (tempGlobalSettings.organizationAbn && !isValidABN(tempGlobalSettings.organizationAbn)) {
+            showMessage("Validation Error", "Invalid ABN. Please enter an 11-digit ABN for the organization (Step 2).");
+            adminWizStep = 2; updateAdminWizardView(); return;
+        }
+        if (tempGlobalSettings.organizationContactEmail && !validateEmail(tempGlobalSettings.organizationContactEmail)) {
+            showMessage("Validation Error", "Invalid Organization Contact Email format (Step 2).");
+            adminWizStep = 2; updateAdminWizardView(); return;
+        }
+
     } else { 
         tempGlobalSettings.adminUserName = $("#adminWizUserName")?.value.trim();
         tempGlobalSettings.organizationName = tempGlobalSettings.adminUserName || profile.name || "Participant Portal"; 
         
         if (!tempGlobalSettings.adminUserName) {
-            hideLoading();
             showMessage("Validation Error", "Your Name is required for 'Self-Managed Participant' type (Step 2).");
             adminWizStep = 2; updateAdminWizardView(); return;
         }
@@ -1304,14 +1355,18 @@ window.adminWizFinish = async function() {
     }
     
     if (!tempGlobalSettings.participantName && portalTypeSelected === 'organization') { 
-        hideLoading(); 
         showMessage("Validation Error", "Default Participant Name is required (Step 3).");
         adminWizStep = 3; updateAdminWizardView(); return;
     }
      if (!tempGlobalSettings.participantName && portalTypeSelected === 'participant') { 
         tempGlobalSettings.participantName = tempGlobalSettings.adminUserName;
     }
+    if (tempGlobalSettings.planManagerEmail && !validateEmail(tempGlobalSettings.planManagerEmail)) {
+        showMessage("Validation Error", "Invalid Plan Manager Email format (Step 3).");
+        adminWizStep = 3; updateAdminWizardView(); return;
+    }
 
+    showLoading("Finalizing portal setup...");
     globalSettings = { ...globalSettings, ...tempGlobalSettings }; 
 
     try {
@@ -2785,17 +2840,29 @@ window.saveAdminPortalSettings = async function() {
         showMessage("Permission Denied", "You do not have permission to save portal settings.");
         return;
     }
-    showLoading("Saving portal settings...");
     
     const portalTypeRadio = document.querySelector('input[name="adminWizPortalType"]:checked'); 
     const currentPortalType = portalTypeRadio ? portalTypeRadio.value : globalSettings.portalType;
+    const orgNameVal = $("#adminEditOrgName")?.value.trim();
+    const orgAbnVal = $("#adminEditOrgAbn")?.value.trim();
+    const orgEmailVal = $("#adminEditOrgContactEmail")?.value.trim();
+    const planManagerEmailVal = $("#adminEditPlanManagerEmail")?.value.trim();
 
+    if (currentPortalType === "organization") {
+        if (!orgNameVal) { return showMessage("Validation Error", "Organization Name is required.");}
+        if (orgAbnVal && !isValidABN(orgAbnVal)) { return showMessage("Validation Error", "Invalid Organization ABN. Please enter an 11-digit ABN.");}
+        if (orgEmailVal && !validateEmail(orgEmailVal)) { return showMessage("Validation Error", "Invalid Organization Contact Email format.");}
+    }
+    if (planManagerEmailVal && !validateEmail(planManagerEmailVal)) { return showMessage("Validation Error", "Invalid Plan Manager Email format.");}
+
+
+    showLoading("Saving portal settings...");
     globalSettings.portalType = currentPortalType;
 
     if (currentPortalType === "organization") { 
-        globalSettings.organizationName = $("#adminEditOrgName")?.value.trim() || globalSettings.organizationName; 
-        globalSettings.organizationAbn = $("#adminEditOrgAbn")?.value.trim() || globalSettings.organizationAbn; 
-        globalSettings.organizationContactEmail = $("#adminEditOrgContactEmail")?.value.trim() || globalSettings.organizationContactEmail; 
+        globalSettings.organizationName = orgNameVal || globalSettings.organizationName; 
+        globalSettings.organizationAbn = orgAbnVal || globalSettings.organizationAbn; 
+        globalSettings.organizationContactEmail = orgEmailVal || globalSettings.organizationContactEmail; 
         globalSettings.organizationContactPhone = $("#adminEditOrgContactPhone")?.value.trim() || globalSettings.organizationContactPhone; 
     } else { 
         globalSettings.organizationName = $("#adminEditParticipantName")?.value.trim() || globalSettings.participantName || "Participant Portal"; 
@@ -2806,7 +2873,7 @@ window.saveAdminPortalSettings = async function() {
     globalSettings.participantName = $("#adminEditParticipantName")?.value.trim() || globalSettings.participantName; 
     globalSettings.participantNdisNo = $("#adminEditParticipantNdisNo")?.value.trim() || globalSettings.participantNdisNo; 
     globalSettings.planManagerName = $("#adminEditPlanManagerName")?.value.trim() || globalSettings.planManagerName; 
-    globalSettings.planManagerEmail = $("#adminEditPlanManagerEmail")?.value.trim() || globalSettings.planManagerEmail; 
+    globalSettings.planManagerEmail = planManagerEmailVal || globalSettings.planManagerEmail; 
     globalSettings.planManagerPhone = $("#adminEditPlanManagerPhone")?.value.trim() || globalSettings.planManagerPhone; 
     globalSettings.planEndDate = $("#adminEditPlanEndDate")?.value || globalSettings.planEndDate; 
     globalSettings.agreementStartDate = globalSettings.agreementStartDate || new Date().toISOString().split('T')[0]; 
@@ -3160,3 +3227,4 @@ function calculateInvoiceTotals() {
     }
     $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
 }
+
