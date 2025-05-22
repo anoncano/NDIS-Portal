@@ -218,7 +218,7 @@ function isValidAccountNumber(acc) {
 async function initializeFirebase() {
     console.log("Attempting to initialize Firebase with config:", JSON.stringify(window.firebaseConfigForApp, null, 2));
     
-    const currentFirebaseConfig = window.firebaseConfigForApp; // Use a local const for checks
+    const currentFirebaseConfig = window.firebaseConfigForApp; 
     if (!currentFirebaseConfig || 
         !currentFirebaseConfig.apiKey || currentFirebaseConfig.apiKey.startsWith("YOUR_") ||
         !currentFirebaseConfig.authDomain || 
@@ -236,7 +236,7 @@ async function initializeFirebase() {
     }
 
     try {
-        fbApp = initializeApp(currentFirebaseConfig); // Use the validated config
+        fbApp = initializeApp(currentFirebaseConfig); 
         fbAuth = getAuth(fbApp);
         fsDb = getFirestore(fbApp); 
         // fbStorage = getStorage(fbApp); 
@@ -743,24 +743,28 @@ window.generateInvoicePdf = function() {
         showMessage("Error", "Cannot generate PDF. User data not loaded.");
         return;
     }
+    if (!currentInvoiceData || !currentInvoiceData.items || currentInvoiceData.items.length === 0) {
+        showMessage("Empty Invoice", "Cannot generate PDF for an empty invoice. Please add services.");
+        return;
+    }
 
-    // 1. Construct HTML string for PDF content based on currentInvoiceData
     let pdfHtml = `
         <style>
             body { font-family: 'Inter', sans-serif; font-size: 10pt; }
             .pdf-invoice-container { padding: 20px; }
-            .pdf-header { text-align: center; margin-bottom: 30px; }
-            .pdf-header h1 { margin: 0; font-size: 24pt; color: #333; }
-            .pdf-header p { margin: 5px 0; font-size: 9pt; color: #555; }
-            .pdf-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; font-size: 9pt;}
-            .pdf-details-grid div { margin-bottom: 5px; }
+            .pdf-header { text-align: center; margin-bottom: 20px; } /* Reduced margin */
+            .pdf-header h1 { margin: 0 0 5px 0; font-size: 22pt; color: #333; }
+            .pdf-header p { margin: 3px 0; font-size: 9pt; color: #555; }
+            .pdf-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; font-size: 9pt;}
+            .pdf-details-grid div { margin-bottom: 3px; }
             .pdf-details-grid strong { font-weight: 600; }
-            .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 8pt; }
-            .pdf-table th, .pdf-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+            .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 8pt; page-break-inside: auto; }
+            .pdf-table th, .pdf-table td { border: 1px solid #ccc; padding: 5px 7px; text-align: left; word-break: break-word; }
             .pdf-table th { background-color: #f0f0f0; font-weight: 600; }
+            .pdf-table tr { page-break-inside: avoid; } /* Avoid breaking rows */
             .pdf-table td.number { text-align: right; }
-            .pdf-totals { float: right; width: 250px; margin-top: 20px; font-size: 10pt; }
-            .pdf-totals div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .pdf-totals { float: right; width: 220px; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; }
+            .pdf-totals div { display: flex; justify-content: space-between; margin-bottom: 4px; }
             .pdf-totals strong { font-weight: 600; }
         </style>
         <div class="pdf-invoice-container">
@@ -812,7 +816,7 @@ window.generateInvoicePdf = function() {
                 rateTypeForPdf = "Travel";
             } else if (service.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || service.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
                 rateForPdf = service.rates?.[rateTypeForPdf] || service.rates?.weekday || 0;
-            } else { // Capacity building, other flat rate
+            } else { 
                 rateForPdf = service.rates?.standardRate || 0;
             }
         }
@@ -837,14 +841,20 @@ window.generateInvoicePdf = function() {
 
             <div class="pdf-totals">
                 <div><span>Subtotal:</span> <strong>$${currentInvoiceData.subtotal.toFixed(2)}</strong></div>`;
-    if (currentInvoiceData.gstRegistered || profile.gstRegistered) { // Check both just in case
+    if (currentInvoiceData.gstRegistered || profile.gstRegistered) { 
         pdfHtml += `<div><span>GST (10%):</span> <strong>$${currentInvoiceData.gst.toFixed(2)}</strong></div>`;
     }
     pdfHtml += `   <div><span>Total:</span> <strong>$${currentInvoiceData.grandTotal.toFixed(2)}</strong></div>
             </div>
         </div>`;
     
-    // 2. Use html2pdf on the constructed HTML
+    const tempDiv = document.createElement("div");
+    // Optionally hide the temporary div if it briefly flashes on screen
+    // tempDiv.style.position = "absolute";
+    // tempDiv.style.left = "-9999px"; 
+    tempDiv.innerHTML = pdfHtml;
+    document.body.appendChild(tempDiv);
+    
     const opt = {
         margin:       [10, 10, 10, 10], 
         filename:     `Invoice-${currentInvoiceData.invoiceNumber || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
@@ -853,11 +863,13 @@ window.generateInvoicePdf = function() {
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().from(pdfHtml).set(opt).save().then(() => {
+    html2pdf().from(tempDiv).set(opt).save().then(() => {
         showMessage("PDF Generated", "Invoice PDF has been downloaded.");
+        tempDiv.remove(); 
     }).catch(err => {
-        console.error("Error generating PDF:", err);
+        console.error("PDF Export Error", err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
+        tempDiv.remove();
     });
 };
 
@@ -2592,7 +2604,6 @@ async function generateAgreementPdf() {
     }
     
     let agreementInstanceData = { workerSigUrl: $("#sigW")?.src, participantSigUrl: $("#sigP")?.src, workerSignDate: $("#dW")?.textContent, participantSignDate: $("#dP")?.textContent, agreementStartDate: globalSettings.agreementStartDate };
-    // Attempt to load more accurate instance data if available from Firestore (might be redundant if loadServiceAgreement was just called)
     try {
         const agreementDocPath = `artifacts/${appId}/users/${workerProfileToUse.uid}/agreements/main`;
         const agreementInstanceRef = doc(fsDb, agreementDocPath);
@@ -2669,6 +2680,10 @@ async function generateAgreementPdf() {
             </div>
         </div>`;
     
+    const tempDivAgreement = document.createElement("div");
+    tempDivAgreement.innerHTML = pdfHtml;
+    document.body.appendChild(tempDivAgreement);
+
     const opt = {
         margin: [15, 15, 15, 15], // mm
         filename: `ServiceAgreement-${workerName || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
@@ -2677,11 +2692,13 @@ async function generateAgreementPdf() {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().from(pdfHtml).set(opt).save().then(() => {
+    html2pdf().from(tempDivAgreement).set(opt).save().then(() => {
         showMessage("PDF Generated", "Service Agreement PDF has been downloaded.");
+        tempDivAgreement.remove();
     }).catch(err => {
         console.error("Error generating agreement PDF:", err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
+        tempDivAgreement.remove();
     });
 }
 
