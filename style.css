@@ -88,7 +88,7 @@ body {
 
 /* ========== PORTAL APPLICATION CONTAINER ========== */
 #portalApp {
-  display: none; 
+  display: flex; 
   width: 100%;
   min-height: 100vh;
   background-color: transparent; /* Ensure it doesn't set its own conflicting background */
