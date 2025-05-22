@@ -2150,8 +2150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("[App] Firebase not initialized. Halting further DOM-dependent setup.");
         return;
     }
-const loginBtn    = $("#loginBtn");
-const registerBtn = $("#registerBtn");
+
 
 if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
 if (registerBtn) registerBtn.addEventListener("click", modalRegister);
