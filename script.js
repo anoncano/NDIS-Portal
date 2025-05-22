@@ -118,7 +118,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             errorStack: errorDetails.stack || (errorDetails instanceof Error ? errorDetails.toString() : JSON.stringify(errorDetails)),
             user: currentUserEmail || currentUserId || "unknown/anonymous",
             timestamp: serverTimestamp(),
-            appVersion: "1.0.2", // Incremented version
+            appVersion: "1.0.3", // Incremented version
             userAgent: navigator.userAgent
         });
         console.log("Error logged to Firestore:", location);
@@ -674,8 +674,8 @@ async function saveAdminAgreementCustomizationsToFirestore(){
         // Save a versioned copy
         const versionsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/agreementTemplates/versions`);
         await fsAddDoc(versionsCollectionRef, {
-            ...dataToSave, // Includes clauses, title, and audit fields
-            versionTimestamp: serverTimestamp() // Specific timestamp for this version
+            ...dataToSave, 
+            versionTimestamp: serverTimestamp() 
         });
 
         showMessage("Success","Agreement structure saved and versioned.");
@@ -926,6 +926,12 @@ window.saveDraft = async function() {
     }
 };
 
+// Helper to sanitize strings for filenames
+function sanitizeFilename(name) {
+    if (!name || typeof name !== 'string') return 'unknown';
+    return name.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase(); // Replace invalid chars with underscore
+}
+
 window.generateInvoicePdf = function() {
     if (!currentUserId || !profile) {
         showMessage("Error", "Cannot generate PDF. User data not loaded.");
@@ -1081,9 +1087,17 @@ window.generateInvoicePdf = function() {
     tempDiv.innerHTML = pdfHtml;
     document.body.appendChild(tempDiv);
     
+    const sanitizedProviderName = sanitizeFilename(currentInvoiceData.providerName);
+    const sanitizedParticipantName = sanitizeFilename(globalSettings.participantName);
+    const sanitizedInvoiceNumber = sanitizeFilename(currentInvoiceData.invoiceNumber);
+    const sanitizedInvoiceDate = sanitizeFilename(currentInvoiceData.invoiceDate);
+
+    const pdfFilename = `[invoice]_provider_${sanitizedProviderName}_number_${sanitizedInvoiceNumber}_date_${sanitizedInvoiceDate}_ndis_participant_${sanitizedParticipantName}.pdf`;
+
+
     const opt = {
         margin:       [10, 10, 10, 10], 
-        filename:     `[generate]_type_pdf_context_ndis_portal_view_user_features_auto_increment,gst,print_ready_status_final_title_Invoice-${currentInvoiceData.invoiceNumber ?? 'unknown'}.pdf`,
+        filename:     pdfFilename,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY }, 
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -1092,11 +1106,6 @@ window.generateInvoicePdf = function() {
     html2pdf().from(tempDiv).set(opt).save().then(async () => { 
         showMessage("PDF Generated", "Invoice PDF has been downloaded.");
         tempDiv.remove(); 
-        // Auto-increment invoice number after successful PDF generation if it was the current draft
-        // This logic is now primarily handled in saveDraft()
-        // if (profile.nextInvoiceNumber && formatInvoiceNumber(profile.nextInvoiceNumber -1) === currentInvoiceData.invoiceNumber) { 
-        //     console.log("PDF generated for an invoice that might have already incremented its number via Save Draft.");
-        // }
     }).catch(err => {
         console.error("PDF Export Error", err);
         logErrorToFirestore("generateInvoicePdf", err.message, err);
@@ -1454,6 +1463,11 @@ window.saveShiftFromModalToInvoice = function() {
     if (!service) {
         return showMessage("Error", "Selected support type not found.");
     }
+    // Check if service is authorized for the user
+    if (!profile.isAdmin && !(profile.authorizedServiceCodes?.includes(serviceCode))) {
+        return showMessage("Unauthorized Service", "You are not authorized to use this service code.");
+    }
+
 
     addInvoiceRow({
         date: shiftDate,
@@ -1760,7 +1774,7 @@ async function loadAllUserAccountsForAdminFromFirestore() {
 }
 
 function displayPendingWorkersForAdmin() {
-    const ul = $("#pendingWorkersList"); // Assumes an element with this ID exists in adminWorkerManagement panel
+    const ul = $("#pendingWorkersList"); 
     if (!ul) {
         console.warn("Element #pendingWorkersList not found for displaying pending workers.");
         return;
@@ -3066,9 +3080,16 @@ async function generateAgreementPdf() {
     tempDivAgreement.innerHTML = pdfHtml;
     document.body.appendChild(tempDivAgreement);
 
+    const sanitizedWorkerName = sanitizeFilename(workerName);
+    const sanitizedParticipantNameAgreement = sanitizeFilename(globalSettings.participantName);
+    const sanitizedAgreementStartDate = sanitizeFilename(formatDateForInvoiceDisplay(agreementInstanceData.agreementStartDate || globalSettings.agreementStartDate || new Date()));
+    const sanitizedPlanEndDate = sanitizeFilename(formatDateForInvoiceDisplay(globalSettings.planEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1))));
+    const agreementPdfFilename = `[agreement]_worker_${sanitizedWorkerName}_participant_${sanitizedParticipantNameAgreement}_start_${sanitizedAgreementStartDate}_end_${sanitizedPlanEndDate}.pdf`;
+
+
     const opt = {
         margin: [15, 15, 15, 15], // mm
-        filename: `[generate]_type_pdf_context_ndis_portal_view_user_features_agreement,signatures_status_final_title_ServiceAgreement-${workerName || 'User'}.pdf`,
+        filename: agreementPdfFilename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -3687,6 +3708,17 @@ function calculateInvoiceTotals() {
         const rateUnitPrintCell = row.cells[7]; 
 
         const serviceCode = descSelect?.value;
+        if (!profile.isAdmin && profile.authorizedServiceCodes && !profile.authorizedServiceCodes.includes(serviceCode) && serviceCode !== "") {
+            // This check is mostly for safety; the dropdown should already be filtered.
+            // However, if a service was somehow selected that's no longer authorized, clear its impact.
+            console.warn(`Service code ${serviceCode} is not authorized for this user.`);
+            totalCell.textContent = "$0.00";
+            if(rateUnitPrintCell) rateUnitPrintCell.textContent = "$0.00";
+            hoursKmCell.textContent = "0.00";
+            // Optionally, disable the row or show a visual warning in the UI
+            return; // Skip calculation for this unauthorized row
+        }
+        
         const service = adminManagedServices.find(s => s.code === serviceCode);
         let itemTotal = 0;
         let hours = 0;
