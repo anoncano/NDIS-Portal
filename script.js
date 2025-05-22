@@ -118,7 +118,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             errorStack: errorDetails.stack || (errorDetails instanceof Error ? errorDetails.toString() : JSON.stringify(errorDetails)),
             user: currentUserEmail || currentUserId || "unknown/anonymous",
             timestamp: serverTimestamp(),
-            appVersion: "1.0.3", // Incremented version
+            appVersion: "1.0.3", 
             userAgent: navigator.userAgent
         });
         console.log("Error logged to Firestore:", location);
@@ -1464,7 +1464,7 @@ window.saveShiftFromModalToInvoice = function() {
         return showMessage("Error", "Selected support type not found.");
     }
     // Check if service is authorized for the user
-    if (!profile.isAdmin && !(profile.authorizedServiceCodes?.includes(serviceCode))) {
+    if (!profile.isAdmin && !(profile.authorizedServiceCodes?.includes(supportTypeCode))) { // Use supportTypeCode here
         return showMessage("Unauthorized Service", "You are not authorized to use this service code.");
     }
 
@@ -3709,14 +3709,11 @@ function calculateInvoiceTotals() {
 
         const serviceCode = descSelect?.value;
         if (!profile.isAdmin && profile.authorizedServiceCodes && !profile.authorizedServiceCodes.includes(serviceCode) && serviceCode !== "") {
-            // This check is mostly for safety; the dropdown should already be filtered.
-            // However, if a service was somehow selected that's no longer authorized, clear its impact.
             console.warn(`Service code ${serviceCode} is not authorized for this user.`);
             totalCell.textContent = "$0.00";
             if(rateUnitPrintCell) rateUnitPrintCell.textContent = "$0.00";
             hoursKmCell.textContent = "0.00";
-            // Optionally, disable the row or show a visual warning in the UI
-            return; // Skip calculation for this unauthorized row
+            return; 
         }
         
         const service = adminManagedServices.find(s => s.code === serviceCode);
@@ -3804,3 +3801,4 @@ function loadAdminInvoiceCustomizations() {
 async function saveAdminInvoiceCustomizations() {
     showMessage("Info", "Saving invoice customizations is not yet implemented.")
 }
+
