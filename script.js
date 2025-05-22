@@ -142,6 +142,11 @@ window.closeModal = function(modalId) {
     if (modalId === 'messageModal' && authStatusMessageElement) { 
         showAuthStatusMessage(""); 
     }
+     // Ensure custom time picker is also hidden if its modal is closed by other means
+    if (modalId === 'customTimePicker') {
+        const picker = $("#customTimePicker");
+        if (picker) picker.classList.add('hide');
+    }
 };
 
 function validateEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase()); }
@@ -719,12 +724,12 @@ window.saveDraft = async function() {
     rows.forEach((row, index) => {
         if (row.classList.contains('deleted-row')) return; // Skip rows marked for deletion if any
 
-        const itemDateEl = row.querySelector(`input[id^="itemDate${index}"]`);
-        const itemDescEl = row.querySelector(`select[id^="itemDesc${index}"]`); // This is a select
-        const itemStartTimeEl = row.querySelector(`input[id^="itemStart${index}"]`);
-        const itemEndTimeEl = row.querySelector(`input[id^="itemEnd${index}"]`);
-        const itemTravelKmEl = row.querySelector(`input[id^="itemTravel${index}"]`);
-        const itemClaimTravelEl = row.querySelector(`input[id^="itemClaimTravel${index}"]`);
+        const itemDateEl = row.querySelector(`input[id^="itemDate"]`); // More robust selector
+        const itemDescEl = row.querySelector(`select[id^="itemDesc"]`); 
+        const itemStartTimeEl = row.querySelector(`input[id^="itemStart"]`);
+        const itemEndTimeEl = row.querySelector(`input[id^="itemEnd"]`);
+        const itemTravelKmEl = row.querySelector(`input[id^="itemTravel"]`);
+        const itemClaimTravelEl = row.querySelector(`input[id^="itemClaimTravel"]`);
 
         const serviceCode = itemDescEl ? itemDescEl.value : "";
         const service = adminManagedServices.find(s => s.code === serviceCode);
@@ -752,9 +757,6 @@ window.saveDraft = async function() {
 
     // 3. Save to Firestore
     try {
-        // Using invoice number as document ID for drafts. Or use a dedicated "draft" ID.
-        // For simplicity, let's assume one draft per user for now, or use invoice number if unique.
-        // A better approach might be a dedicated 'drafts' collection or a specific 'draftInvoice' document.
         const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, `draft-${currentInvoiceData.invoiceNumber || 'current'}`);
         await setDoc(draftDocRef, currentInvoiceData);
         showMessage("Draft Saved", `Invoice draft "${currentInvoiceData.invoiceNumber || 'current'}" has been saved.`);
@@ -767,45 +769,72 @@ window.saveDraft = async function() {
 };
 
 window.generateInvoicePdf = function() {
-    const invoiceContentElement = $("#invoicePdfContent"); // The div containing all invoice details for PDF
+    const invoiceContentElement = $("#invoicePdfContent"); 
     if (!invoiceContentElement) {
         showMessage("Error", "Invoice content area not found for PDF generation.");
         return;
     }
 
     // Temporarily show print-only columns for PDF generation
-    $$('.print-only, .pdf-show').forEach(el => el.style.display = 'table-cell'); // or 'block' if not in table
+    $$('.print-only, .pdf-show').forEach(el => el.style.display = 'table-cell'); 
     $$('.no-print, .pdf-hide').forEach(el => el.style.display = 'none');
+
+    // Ensure values from inputs/selects are populated into their print spans if not already
+    $$("#invTbl tbody tr").forEach(row => {
+        const descSelect = row.querySelector('select[id^="itemDesc"]');
+        const descPrintSpan = row.querySelector('span[id^="itemDescPrint"]');
+        const codePrintSpan = row.querySelector('span[id^="itemCodePrint"]');
+        const rateTypePrintSpan = row.querySelector('span[id^="itemRateTypePrint"]');
+        const rateUnitPrintSpan = row.querySelector('td[id^="itemRateUnitPrint"]'); // This is a TD
+
+        const dateInput = row.querySelector(`input[id^="itemDate"]`);
+        const startTimeInput = row.querySelector(`input[id^="itemStart"]`);
+
+        if (descSelect && descPrintSpan) {
+            const selectedService = adminManagedServices.find(s => s.code === descSelect.value);
+            if (selectedService) {
+                descPrintSpan.textContent = selectedService.description;
+                if(codePrintSpan) codePrintSpan.textContent = selectedService.code;
+                
+                const rateType = determineRateType(dateInput?.value, startTimeInput?.dataset.value24);
+                if(rateTypePrintSpan) rateTypePrintSpan.textContent = rateType;
+
+                let rateForPrint = 0;
+                 if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
+                    rateForPrint = selectedService.rates?.perKmRate || 0;
+                } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
+                    rateForPrint = selectedService.rates?.[rateType] || selectedService.rates?.weekday || 0;
+                } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || selectedService.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+                    rateForPrint = selectedService.rates?.standardRate || 0;
+                }
+                if(rateUnitPrintSpan) rateUnitPrintSpan.textContent = `$${parseFloat(rateForPrint).toFixed(2)}`;
+            } else {
+                descPrintSpan.textContent = "N/A";
+                if(codePrintSpan) codePrintSpan.textContent = "N/A";
+                if(rateTypePrintSpan) rateTypePrintSpan.textContent = "N/A";
+                if(rateUnitPrintSpan) rateUnitPrintSpan.textContent = "$0.00";
+            }
+        }
+    });
 
 
     const opt = {
-        margin:       [10, 10, 10, 10], // top, left, bottom, right in mm
+        margin:       [10, 10, 10, 10], 
         filename:     `Invoice-${$("#invNo")?.value || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false }, // Increased scale for better quality
+        html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY }, 
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // html2pdf().set(opt).from(invoiceContentElement).save(); // Simpler version
      html2pdf().from(invoiceContentElement).set(opt).toPdf().get('pdf').then(function (pdf) {
-        // Optional: Add page numbers or headers/footers if needed using pdf.internal.getNumberOfPages() etc.
-        // Example:
-        // var totalPages = pdf.internal.getNumberOfPages();
-        // for (var i = 1; i <= totalPages; i++) {
-        //   pdf.setPage(i);
-        //   pdf.setFontSize(10);
-        //   pdf.setTextColor(150);
-        //   pdf.text('Page ' + i + ' of ' + totalPages, pdf.internal.pageSize.getWidth() - 20, pdf.internal.pageSize.getHeight() - 10);
-        // }
+        // Optional: Add page numbers or headers/footers
     }).save().then(() => {
-        // Revert visibility of print/no-print columns
-        $$('.print-only, .pdf-show').forEach(el => el.style.display = ''); // Revert to CSS default
-        $$('.no-print, .pdf-hide').forEach(el => el.style.display = ''); // Revert to CSS default
+        $$('.print-only, .pdf-show').forEach(el => el.style.display = ''); 
+        $$('.no-print, .pdf-hide').forEach(el => el.style.display = ''); 
         showMessage("PDF Generated", "Invoice PDF has been downloaded.");
     }).catch(err => {
         console.error("Error generating PDF:", err);
         showMessage("PDF Error", "Could not generate PDF: " + err.message);
-        // Revert visibility even on error
         $$('.print-only, .pdf-show').forEach(el => el.style.display = '');
         $$('.no-print, .pdf-hide').forEach(el => el.style.display = '');
     });
@@ -875,8 +904,6 @@ window.saveSig = async function() {
         const agreementInstanceRef = doc(fsDb, agreementDocPath);
         await setDoc(agreementInstanceRef, updateData, { merge: true });
         
-        // Update local agreement instance data if it exists for the current view
-        // This part might need refinement based on how agreementInstanceData is managed globally or per load
         const currentAgreementInstance = await getDoc(agreementInstanceRef);
         if(currentAgreementInstance.exists()){
             const updatedInstance = currentAgreementInstance.data();
@@ -889,7 +916,7 @@ window.saveSig = async function() {
             }
         }
         
-        loadServiceAgreement(); // Reload to reflect changes and update chip/buttons
+        loadServiceAgreement(); 
         showMessage("Signature Saved", "Your signature has been saved to the agreement.");
     } catch (error) {
         console.error("Error saving signature:", error);
@@ -916,15 +943,12 @@ function openUserSetupWizard(isEditing = false) {
         const wHead = $("#wHead");
         if (wHead) wHead.textContent = isEditing ? "Edit Your Profile" : "Step 1: Basic Info";
         
-        // Pre-fill fields from profile object
         if ($("#wName") && profile && profile.name) $("#wName").value = profile.name;
         if ($("#wAbn") && profile && profile.abn) $("#wAbn").value = profile.abn;
         if ($("#wGst") && profile && profile.gstRegistered !== undefined) $("#wGst").checked = profile.gstRegistered;
         if ($("#wBsb") && profile && profile.bsb) $("#wBsb").value = profile.bsb;
         if ($("#wAcc") && profile && profile.acc) $("#wAcc").value = profile.acc;
         
-        // If editing, might want to hide/skip certain steps like file uploads if they are separate
-        // For now, we show all steps.
         updateUserWizardView(); 
 
         wizModal.classList.remove('hide');
@@ -944,14 +968,6 @@ function updateUserWizardView() {
 
     if (currentStepContent) currentStepContent.classList.remove('hide');
     if (currentStepIndicator) currentStepIndicator.classList.add('active');
-    
-    const wHead = $("#wHead"); // Title is now set in openUserSetupWizard
-    // if (wHead) {
-    //     if (userWizStep === 1) wHead.textContent = "Step 1: Basic Info";
-    //     else if (userWizStep === 2) wHead.textContent = "Step 2: Bank Details";
-    //     else if (userWizStep === 3) wHead.textContent = "Step 3: Docs (Optional)";
-    //     else if (userWizStep === 4) wHead.textContent = "Step 4: All Done!";
-    // }
 }
 
 window.wizNext = function() {
@@ -996,7 +1012,6 @@ window.wizFinish = async function() {
     const bsbValue = $("#wBsb")?.value.trim();
     const accValue = $("#wAcc")?.value.trim();
 
-    // Validation checks
     if (!nameValue) { return showMessage("Validation Error", "Full name is required to finish setup."); }
     
     if (globalSettings.portalType === 'organization') {
@@ -1010,11 +1025,10 @@ window.wizFinish = async function() {
         if (accValue && !isValidAccountNumber(accValue)) { return showMessage("Validation Error", "Invalid Account Number format. Please enter 6-10 digits.");}
     }
 
-
     showLoading("Saving profile...");
     const profileUpdates = {
         name: nameValue,
-        abn: abnValue || profile.abn || "", // Keep existing if not provided and not org type
+        abn: abnValue || profile.abn || "", 
         gstRegistered: $("#wGst")?.checked || false,
         bsb: bsbValue || profile.bsb || "",
         acc: accValue || profile.acc || "",
@@ -1036,7 +1050,7 @@ window.wizFinish = async function() {
         hideLoading();
         closeModal('wiz');
         showMessage("Profile Updated", "Your profile details have been saved successfully.");
-        enterPortal(profile.isAdmin); // Re-evaluate entry based on current profile
+        enterPortal(profile.isAdmin); 
         if(location.hash === "#profile") loadProfileData(); 
 
     } catch (error) {
@@ -1053,7 +1067,7 @@ window.saveRequest = async function() {
     }
 
     const requestDate = $("#rqDate")?.value;
-    const requestStartTime = $("#rqStart")?.dataset.value24; // Use 24hr format from custom picker
+    const requestStartTime = $("#rqStart")?.dataset.value24; 
     const requestEndTime = $("#rqEnd")?.dataset.value24;
     const requestReason = $("#rqReason")?.value.trim();
 
@@ -1072,20 +1086,17 @@ window.saveRequest = async function() {
         startTime: requestStartTime,
         endTime: requestEndTime,
         reason: requestReason || "",
-        status: "pending", // Initial status
+        status: "pending", 
         requestedAt: serverTimestamp()
     };
 
     try {
-        // Store shift requests in a public collection for admin review, or user-specific if only for user tracking
-        // For admin review, a public path is better. Ensure Firestore rules allow user to write, admin to read/update.
         const requestsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`);
         const newRequestRef = await addDoc(requestsCollectionRef, requestData);
         
         hideLoading();
         closeModal('rqModal');
         showMessage("Request Submitted", "Your shift request has been submitted successfully.");
-        // Optionally, refresh the shift requests display on the home page
         if (location.hash === "#home") {
             loadShiftRequestsForUserDisplay();
         }
@@ -1115,9 +1126,8 @@ window.saveInitialInvoiceNumber = async function() {
             nextInvoiceNumber: initialNumber,
             lastUpdated: serverTimestamp()
         });
-        profile.nextInvoiceNumber = initialNumber; // Update local profile
+        profile.nextInvoiceNumber = initialNumber; 
         
-        // Update invoice page if currently viewed
         if (location.hash === "#invoice") {
             $("#invNo").value = formatInvoiceNumber(initialNumber); 
         }
@@ -1153,29 +1163,26 @@ window.saveShiftFromModalToInvoice = function() {
         return showMessage("Error", "Selected support type not found.");
     }
 
-    // Add service row
     addInvoiceRow({
         date: shiftDate,
         serviceCode: supportTypeCode,
         startTime: startTime,
         endTime: endTime,
-        // Travel details will be handled by the row's logic if claimTravel is true
     });
 
-    // If claiming travel, add a travel row
     if (claimTravel) {
         const calculatedKm = parseFloat($("#logShiftCalculatedKm")?.textContent) || 0;
         if (calculatedKm <= 0) {
             showMessage("Travel Warning", "Calculated travel is 0 Km. Travel row not added. Please check odometer readings.");
         } else {
-            const travelServiceCode = service.travelCode; // Get associated travel code from the main service
+            const travelServiceCode = service.travelCode; 
             const travelService = adminManagedServices.find(s => s.code === travelServiceCode && s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
             if (travelService) {
                 addInvoiceRow({
                     date: shiftDate,
                     serviceCode: travelService.code,
-                    travelKmInput: calculatedKm, // Pass the calculated Km
-                    claimTravel: true // Ensure this is marked as a travel item
+                    travelKmInput: calculatedKm, 
+                    claimTravel: true 
                 });
             } else {
                 showMessage("Travel Error", `Associated travel service code (${travelServiceCode || 'N/A'}) not found or not configured as 'Travel - Per Kilometre'. Travel not added.`);
@@ -1183,7 +1190,7 @@ window.saveShiftFromModalToInvoice = function() {
         }
     }
     
-    calculateInvoiceTotals(); // Recalculate after adding rows
+    calculateInvoiceTotals(); 
     closeModal('logShiftModal');
     showMessage("Shift Added", "Shift details have been added to the current invoice.");
 };
@@ -1779,7 +1786,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const agreementPdfBtn = $("#pdfBtn"); 
     if (agreementPdfBtn) agreementPdfBtn.addEventListener('click', () => { 
-        generateAgreementPdf(); // Call the actual PDF generation function
+        generateAgreementPdf(); 
     });
 
     const inviteLinkElement = $("#invite");
@@ -1791,7 +1798,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const requestShiftBtn = $("#rqBtn");
     if (requestShiftBtn) requestShiftBtn.addEventListener('click', () => { 
         const rqModalEl = $("#rqModal"); if (rqModalEl) rqModalEl.style.display = "flex";
-        // Pre-fill request modal if needed
         $("#rqDate").value = new Date().toISOString().split('T')[0];
         $("#rqStart").value = ""; $("#rqStart").dataset.value24 = "";
         $("#rqEnd").value = ""; $("#rqEnd").dataset.value24 = "";
@@ -1883,7 +1889,6 @@ function handleHomePageDisplay() {
         const userNameDisplaySpan = $("#userNameDisplay");
         if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUserEmail.split('@')[0] : "User");
         
-        // Load and display shift requests if any
         loadShiftRequestsForUserDisplay();
 
     } else {
@@ -1901,13 +1906,10 @@ async function loadShiftRequestsForUserDisplay() {
     rqTblBody.innerHTML = "<tr><td colspan='5'>Loading requests...</td></tr>";
 
     try {
-        // Query requests made by the current user OR all requests if admin
         let q;
         if (profile.isAdmin) {
-            // Admin sees all requests, might want to sort by newest
-            q = query(collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`)); // Consider adding orderBy and limit
+            q = query(collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`)); 
         } else {
-            // User sees their own requests
             q = query(collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`), where("userId", "==", currentUserId));
         }
         
@@ -1915,7 +1917,7 @@ async function loadShiftRequestsForUserDisplay() {
         if (querySnapshot.empty) {
             rqTblBody.innerHTML = "<tr><td colspan='5'>No shift requests found.</td></tr>";
         } else {
-            rqTblBody.innerHTML = ""; // Clear loading message
+            rqTblBody.innerHTML = ""; 
             querySnapshot.forEach(docSnap => {
                 const req = docSnap.data();
                 const tr = rqTblBody.insertRow();
@@ -1926,13 +1928,7 @@ async function loadShiftRequestsForUserDisplay() {
                 
                 const statusCell = tr.insertCell();
                 statusCell.textContent = req.status.charAt(0).toUpperCase() + req.status.slice(1);
-                statusCell.className = `status-${req.status}`; // For styling if needed
-
-                // Add actions for admin (approve/deny) - Placeholder
-                // if (profile.isAdmin) {
-                //     const actionsCell = tr.insertCell();
-                //     actionsCell.innerHTML = `<button class="btn-ok btn-small">Approve</button> <button class="btn-danger btn-small">Deny</button>`;
-                // }
+                statusCell.className = `status-${req.status}`; 
             });
         }
         shiftRequestsContainer.classList.remove('hide');
@@ -1992,7 +1988,7 @@ function openLogShiftModal() {
                         supportTypeSelect.appendChild(opt);
                     }
                 });
-                 if (supportTypeSelect.options.length <= 1) { // Only has the "-- Select --" option
+                 if (supportTypeSelect.options.length <= 1) { 
                     supportTypeSelect.innerHTML = "<option value=''>No suitable services authorized.</option>";
                 }
             } else if (adminManagedServices.length === 0) {
@@ -2002,14 +1998,24 @@ function openLogShiftModal() {
             }
         }
         
-        const startTimeInput = $("#logShiftStartTime"); if (startTimeInput) { startTimeInput.value = ""; startTimeInput.dataset.value24 = "";}
-        const endTimeInput = $("#logShiftEndTime"); if (endTimeInput) { endTimeInput.value = ""; endTimeInput.dataset.value24 = "";}
+        const startTimeInput = $("#logShiftStartTime"); 
+        if (startTimeInput) { 
+            startTimeInput.value = ""; 
+            startTimeInput.dataset.value24 = "";
+            startTimeInput.onclick = () => openCustomTimePicker(startTimeInput, null); // Ensure picker is attached
+        }
+        const endTimeInput = $("#logShiftEndTime"); 
+        if (endTimeInput) { 
+            endTimeInput.value = ""; 
+            endTimeInput.dataset.value24 = "";
+            endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, null); // Ensure picker is attached
+        }
         
         const claimTravelToggle = $("#logShiftClaimTravelToggle"); 
         if (claimTravelToggle) {
             claimTravelToggle.checked = false;
-            claimTravelToggle.removeEventListener('change', handleLogShiftTravelToggle); // Remove old listener
-            claimTravelToggle.addEventListener('change', handleLogShiftTravelToggle); // Add new one
+            claimTravelToggle.removeEventListener('change', handleLogShiftTravelToggle); 
+            claimTravelToggle.addEventListener('change', handleLogShiftTravelToggle); 
         }
         const kmFieldsContainer = $("#logShiftKmFieldsContainer"); if (kmFieldsContainer) kmFieldsContainer.classList.add('hide');
         const startKmInput = $("#logShiftStartKm"); if (startKmInput) { startKmInput.value = ""; startKmInput.oninput = calculateLogShiftTravelKm; }
@@ -2481,15 +2487,14 @@ async function loadServiceAgreement() {
     
     if (pdfBtnEl) pdfBtnEl.classList.remove("hide"); 
 
-    // Adjust button visibility based on who is viewing
-    if (profile.isAdmin) { // Admin is viewing
-        if (signBtnEl) signBtnEl.classList.add("hide"); // Admin doesn't sign directly for worker here
-        if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); // Admin doesn't sign for participant here
-    } else { // Worker is viewing their own agreement
-        if (currentUserId === workerProfileToUse.uid) { // It's the worker's own agreement
+    if (profile.isAdmin) { 
+        if (signBtnEl) signBtnEl.classList.add("hide");
+        if (participantSignBtnEl) participantSignBtnEl.classList.add("hide");
+    } else { 
+        if (currentUserId === workerProfileToUse.uid) { 
             if (agreementInstanceData.workerSigned && signBtnEl) signBtnEl.classList.add("hide"); else if (signBtnEl) signBtnEl.classList.remove("hide");
-            if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); // Worker doesn't sign for participant
-        } else { // Should not happen if not admin, but as a fallback
+            if (participantSignBtnEl) participantSignBtnEl.classList.add("hide"); 
+        } else { 
              if (signBtnEl) signBtnEl.classList.add("hide");
              if (participantSignBtnEl) participantSignBtnEl.classList.add("hide");
         }
@@ -2503,30 +2508,26 @@ async function generateAgreementPdf() {
         return;
     }
     
-    // Prepare a clone for PDF generation to avoid altering live display too much
     const pdfClone = agreementContentWrapper.cloneNode(true);
     
-    // Ensure signatures are visible if present
     const sigPImgSrc = $("#sigP")?.src;
     const sigWImgSrc = $("#sigW")?.src;
     if(sigPImgSrc) pdfClone.querySelector("#sigP").src = sigPImgSrc;
     if(sigWImgSrc) pdfClone.querySelector("#sigW").src = sigWImgSrc;
 
-    // Add header for PDF if needed (e.g. Org Name, Agreement Title)
     const agreementHeaderForPdf = $("#agreementHeaderForPdf");
     if (agreementHeaderForPdf) {
         const clonedHeader = agreementHeaderForPdf.cloneNode(true);
-        clonedHeader.style.display = 'block'; // Make it visible for PDF
+        clonedHeader.style.display = 'block'; 
         clonedHeader.innerHTML = `<h1>${globalSettings.organizationName || 'Service Provider'}</h1><h2>${$("#agreementDynamicTitle")?.textContent || 'Service Agreement'}</h2>`;
         pdfClone.insertBefore(clonedHeader, pdfClone.firstChild);
     }
-
 
     const opt = {
         margin: [15, 15, 15, 15],
         filename: `ServiceAgreement-${profile.name || 'User'}-${new Date().toISOString().split('T')[0]}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -2553,8 +2554,6 @@ function loadProfileData() {
             filesListUl.innerHTML = "";
             profile.files.forEach(file => {
                 const li = document.createElement('li');
-                // The file.url would come from Firebase Storage. For now, it's a placeholder.
-                // If file.url is not available, link will be '#'
                 li.innerHTML = `<a href="${file.url || '#'}" target="_blank" title="${file.url ? 'Open file' : 'File URL not available'}">${file.name || 'Unnamed File'}</a> 
                                 <button class="btn-danger btn-small" onclick="deleteProfileDocument('${file.name}', '${file.storagePath || ''}')" title="Delete ${file.name}"><i class="fas fa-trash-alt"></i></button>`;
                 filesListUl.appendChild(li);
@@ -2574,7 +2573,6 @@ window.deleteProfileDocument = async function(fileName, storagePath) {
         return;
     }
 
-    // Confirm deletion
     showMessage("Confirm Delete", 
         `Are you sure you want to delete the document "${fileName}"? This action cannot be undone.<br><br>
          <div class='modal-actions' style='justify-content: center; margin-top: 15px;'>
@@ -2595,8 +2593,6 @@ window._confirmDeleteProfileDocument = async function(fileName, storagePath) {
     //         console.log(`File deleted from Storage: ${storagePath}`);
     //     } catch (storageError) {
     //         console.error("Error deleting file from Storage:", storageError);
-    //         // Decide if you want to stop or just log if Storage deletion fails
-    //         // showMessage("Storage Error", "Could not delete file from cloud storage. Metadata might still be removed.");
     //     }
     // } else {
     //     console.warn("Storage path not provided or Storage not initialized. Skipping cloud deletion for:", fileName);
@@ -2604,17 +2600,14 @@ window._confirmDeleteProfileDocument = async function(fileName, storagePath) {
     console.warn(`Placeholder: File at path "${storagePath}" would be deleted from Firebase Storage here.`);
 
 
-    // Remove metadata from Firestore
     try {
         const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        // Atomically remove the file object from the 'files' array
         await updateDoc(userProfileDocRef, {
             files: arrayRemove(profile.files.find(f => f.name === fileName && f.storagePath === storagePath))
         });
 
-        // Update local profile state
         profile.files = profile.files.filter(f => !(f.name === fileName && f.storagePath === storagePath));
-        loadProfileData(); // Refresh the list
+        loadProfileData(); 
         showMessage("Document Deleted", `Document "${fileName}" metadata removed from your profile.`);
     } catch (error) {
         console.error("Error deleting document metadata from Firestore:", error);
@@ -2642,7 +2635,6 @@ function enterPortal(isAdmin) {
 }
 
 function formatInvoiceNumber(num) {
-    // Example: Pad with leading zeros to a certain length, e.g., INV-001001
     return `INV-${String(num).padStart(6, '0')}`;
 }
 
@@ -2664,19 +2656,17 @@ async function handleInvoicePageLoad() {
     const gstRowDiv = $("#gstRow"); 
     if (gstRowDiv) gstRowDiv.style.display = isGstRegistered ? "flex" : "none";
 
-    // Check if user has set their initial invoice number
     if (!profile.nextInvoiceNumber && invNoInput) {
         const setInitialModal = $("#setInitialInvoiceModal");
         if (setInitialModal) {
             setInitialModal.style.display = "flex";
-            $("#initialInvoiceNumberInput").value = 1001; // Default suggestion
+            $("#initialInvoiceNumberInput").value = 1001; 
         }
-        invNoInput.value = ""; // Clear until set
+        invNoInput.value = ""; 
     } else if (invNoInput) {
         invNoInput.value = formatInvoiceNumber(profile.nextInvoiceNumber);
     }
     
-    // Load draft invoice if exists, or clear table
     await loadDraftInvoice(); 
 }
 
@@ -2697,19 +2687,17 @@ async function loadDraftInvoice() {
             currentInvoiceData = docSnap.data();
             $("#invNo").value = currentInvoiceData.invoiceNumber || draftInvoiceNumber;
             $("#invDate").value = currentInvoiceData.invoiceDate || new Date().toISOString().split('T')[0];
-            // Provider details are usually from profile, but if saved in draft, could load here.
             
-            invTblBody.innerHTML = ""; // Clear placeholder
+            invTblBody.innerHTML = ""; 
             if (currentInvoiceData.items && currentInvoiceData.items.length > 0) {
-                currentInvoiceData.items.forEach(item => addInvoiceRow(item, true)); // Pass true to indicate loading from draft
+                currentInvoiceData.items.forEach(item => addInvoiceRow(item, true)); 
             } else {
-                addInvoiceRow(); // Add one blank row if no items
+                addInvoiceRow(); 
             }
         } else {
-            // No draft found, start fresh
             currentInvoiceData = { items: [], invoiceNumber: draftInvoiceNumber, invoiceDate: new Date().toISOString().split('T')[0], subtotal: 0, gst: 0, grandTotal: 0 };
             invTblBody.innerHTML = "";
-            addInvoiceRow(); // Add one blank row
+            addInvoiceRow(); 
         }
     } catch (error) {
         console.error("Error loading invoice draft:", error);
@@ -2737,8 +2725,8 @@ function openCustomTimePicker(inputElement, callbackFn) {
     timePickerCallback = callbackFn; 
     const picker = $("#customTimePicker"); 
     if (picker) {
-        picker.classList.remove('hide');
-        picker.style.display = 'flex'; 
+        picker.classList.remove('hide'); // Ensure it's not hidden by the 'hide' class
+        picker.style.display = 'flex';  // Explicitly set display to flex
         selectedAmPm = null; 
         selectedHour12 = null; 
         selectedMinute = null;
@@ -2746,7 +2734,8 @@ function openCustomTimePicker(inputElement, callbackFn) {
         currentTimePickerStep = 'ampm'; 
         updateTimePickerStepView();
     } else {
-        console.error("Custom time picker element not found.");
+        console.error("Custom time picker element (#customTimePicker) not found in HTML.");
+        showMessage("UI Error", "Time picker component is missing. Please contact support.");
     }
 }
 
@@ -2806,7 +2795,7 @@ function updateTimePickerStepView() {
                 minutesContainer.innerHTML = '';
                 ['00', '15', '30', '45'].forEach(val => { 
                     const btn = document.createElement('button'); btn.textContent = val;
-                    btn.onclick = () => { selectedMinute = val; updateTimePickerStepView(); };
+                    btn.onclick = () => { selectedMinute = val; updateTimePickerStepView(); }; // No auto-advance
                     if (selectedMinute === val) btn.classList.add('selected');
                     minutesContainer.appendChild(btn);
                 });
@@ -2932,7 +2921,6 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     const tbody = $("#invTbl tbody");
     if (!tbody) return;
 
-    // If the only row is a placeholder, remove it
     if (tbody.rows.length === 1 && tbody.rows[0].cells.length === 1 && tbody.rows[0].cells[0].colSpan === 12) {
         tbody.innerHTML = "";
     }
@@ -2940,11 +2928,9 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     const rowIndex = invoiceItemCounter++;
     const tr = tbody.insertRow();
 
-    // Column 0: # (Row number)
-    tr.insertCell().textContent = tbody.rows.length;
+    tr.insertCell().textContent = tbody.rows.length; // #
 
-    // Column 1: Date
-    const dateCell = tr.insertCell();
+    const dateCell = tr.insertCell(); // Date
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.id = `itemDate${rowIndex}`;
@@ -2953,8 +2939,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     dateInput.onchange = calculateInvoiceTotals;
     dateCell.appendChild(dateInput);
 
-    // Column 2: NDIS Item Code (Print Only)
-    const codeCellPrint = tr.insertCell();
+    const codeCellPrint = tr.insertCell(); // NDIS Item Code (Print Only)
     codeCellPrint.className = 'column-code print-only pdf-show';
     const codePrintSpan = document.createElement('span');
     codePrintSpan.id = `itemCodePrint${rowIndex}`;
@@ -2962,9 +2947,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     codePrintSpan.textContent = itemData?.serviceCode || "";
     codeCellPrint.appendChild(codePrintSpan);
 
-
-    // Column 3: Description (Support Item)
-    const descCell = tr.insertCell();
+    const descCell = tr.insertCell(); // Description
     const descSelect = document.createElement('select');
     descSelect.id = `itemDesc${rowIndex}`;
     descSelect.className = 'invoice-input-condensed description-select';
@@ -2979,23 +2962,15 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
             descSelect.appendChild(opt);
         }
     });
-    descSelect.onchange = (e) => {
-        const selectedService = adminManagedServices.find(s => s.code === e.target.value);
-        if (codePrintSpan) codePrintSpan.textContent = selectedService ? selectedService.code : "";
-        if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24); // Update rate type on service change too
-        calculateInvoiceTotals();
-    };
     descCell.appendChild(descSelect);
-    // For print:
-    const descPrintSpan = document.createElement('span');
+    const descPrintSpan = document.createElement('span'); // For PDF
     descPrintSpan.id = `itemDescPrint${rowIndex}`;
-    descPrintSpan.className = 'description-print-value';
+    descPrintSpan.className = 'description-print-value'; // Hidden in UI by default
     descPrintSpan.textContent = itemData?.description || (adminManagedServices.find(s=>s.code === itemData?.serviceCode)?.description || "");
     descCell.appendChild(descPrintSpan);
 
 
-    // Column 4: Start Time
-    const startCell = tr.insertCell();
+    const startCell = tr.insertCell(); // Start Time
     const startTimeInput = document.createElement('input');
     startTimeInput.type = 'text';
     startTimeInput.id = `itemStart${rowIndex}`;
@@ -3010,8 +2985,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     });
     startCell.appendChild(startTimeInput);
 
-    // Column 5: End Time
-    const endCell = tr.insertCell();
+    const endCell = tr.insertCell(); // End Time
     const endTimeInput = document.createElement('input');
     endTimeInput.type = 'text';
     endTimeInput.id = `itemEnd${rowIndex}`;
@@ -3023,8 +2997,7 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     endTimeInput.onclick = () => openCustomTimePicker(endTimeInput, calculateInvoiceTotals);
     endCell.appendChild(endTimeInput);
 
-    // Column 6: Rate Type (Print Only)
-    const rateTypeCellPrint = tr.insertCell();
+    const rateTypeCellPrint = tr.insertCell(); // Rate Type (Print Only)
     rateTypeCellPrint.className = 'column-rate-type print-only pdf-show';
     const rateTypePrintSpan = document.createElement('span');
     rateTypePrintSpan.id = `itemRateTypePrint${rowIndex}`;
@@ -3032,20 +3005,44 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     rateTypePrintSpan.textContent = itemData?.rateType || determineRateType(dateInput.value, startTimeInput.dataset.value24);
     rateTypeCellPrint.appendChild(rateTypePrintSpan);
 
-
-    // Column 7: Rate/Unit ($) (Print Only)
-    const rateUnitCellPrint = tr.insertCell();
+    const rateUnitCellPrint = tr.insertCell(); // Rate/Unit ($) (Print Only)
     rateUnitCellPrint.className = 'print-only-column pdf-show';
     rateUnitCellPrint.id = `itemRateUnitPrint${rowIndex}`;
-    rateUnitCellPrint.textContent = "$0.00"; // Will be updated by calculateInvoiceTotals
+    rateUnitCellPrint.textContent = "$0.00"; 
+    
+    descSelect.onchange = (e) => { // Update all dependent print spans on service change
+        const selectedService = adminManagedServices.find(s => s.code === e.target.value);
+        if(codePrintSpan) codePrintSpan.textContent = selectedService ? selectedService.code : "";
+        if(descPrintSpan) descPrintSpan.textContent = selectedService ? selectedService.description : "N/A";
+        const rt = determineRateType(dateInput.value, startTimeInput.dataset.value24);
+        if(rateTypePrintSpan) rateTypePrintSpan.textContent = rt;
+        
+        let rateForPrintOnChange = 0;
+        if(selectedService) {
+            if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
+                rateForPrintOnChange = selectedService.rates?.perKmRate || 0;
+            } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
+                rateForPrintOnChange = selectedService.rates?.[rt] || selectedService.rates?.weekday || 0;
+            } else if (selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || selectedService.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || selectedService.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+                rateForPrintOnChange = selectedService.rates?.standardRate || 0;
+            }
+        }
+        if(rateUnitCellPrint) rateUnitCellPrint.textContent = `$${parseFloat(rateForPrintOnChange).toFixed(2)}`;
+        
+        travelKmInput.style.display = (selectedService && selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+        if (selectedService && selectedService.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) travelKmInput.value = "";
+        claimTravelLabel.style.display = (selectedService && selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
+        if (selectedService && selectedService.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) claimTravelCheckbox.checked = false;
 
-    // Column 8: Hours / Km (Calculated)
-    const hoursKmCell = tr.insertCell();
+        calculateInvoiceTotals();
+    };
+
+
+    const hoursKmCell = tr.insertCell(); // Hours / Km
     hoursKmCell.id = `itemHoursKm${rowIndex}`;
     hoursKmCell.textContent = itemData?.hoursOrKm?.toFixed(2) || "0.00";
 
-    // Column 9: Travel Input (Km) (No Print)
-    const travelInputCell = tr.insertCell();
+    const travelInputCell = tr.insertCell(); // Travel Input (Km)
     travelInputCell.className = 'no-print pdf-hide';
     const travelKmInput = document.createElement('input');
     travelKmInput.type = 'number';
@@ -3057,23 +3054,10 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     travelKmInput.value = itemData?.travelKmInput || "";
     travelKmInput.oninput = calculateInvoiceTotals;
     travelInputCell.appendChild(travelKmInput);
-    // Hide if not a travel item initially
-    const selectedServiceForTravel = adminManagedServices.find(s => s.code === descSelect.value);
-    travelKmInput.style.display = (selectedServiceForTravel && selectedServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
-    descSelect.addEventListener('change', (e) => { // Show/hide Km input based on service type
-        const service = adminManagedServices.find(s => s.code === e.target.value);
-        travelKmInput.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
-        if (service && service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM) travelKmInput.value = ""; // Clear if not travel
-        calculateInvoiceTotals();
-    });
-     if (itemData && itemData.serviceCode) { // Ensure correct display on load from draft
-        const service = adminManagedServices.find(s => s.code === itemData.serviceCode);
-        travelKmInput.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
-    }
-
-
-    // Column 10: Claim Travel Checkbox (No Print)
-    const claimTravelCell = tr.insertCell();
+    const initialServiceForTravel = adminManagedServices.find(s => s.code === descSelect.value);
+    travelKmInput.style.display = (initialServiceForTravel && initialServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+    
+    const claimTravelCell = tr.insertCell(); // Claim Travel Checkbox
     claimTravelCell.className = 'no-print pdf-hide';
     const claimTravelLabel = document.createElement('label');
     claimTravelLabel.className = 'chk no-margin km-claim-toggle';
@@ -3085,27 +3069,13 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     claimTravelLabel.appendChild(claimTravelCheckbox);
     claimTravelLabel.appendChild(document.createTextNode(" Claim"));
     claimTravelCell.appendChild(claimTravelLabel);
-    // Hide if it's a travel item itself
-    claimTravelLabel.style.display = (selectedServiceForTravel && selectedServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
-     descSelect.addEventListener('change', (e) => {
-        const service = adminManagedServices.find(s => s.code === e.target.value);
-        claimTravelLabel.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
-        if (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) claimTravelCheckbox.checked = false; // Uncheck if it becomes a travel item
-        calculateInvoiceTotals();
-    });
-    if (itemData && itemData.serviceCode) { // Ensure correct display on load from draft
-        const service = adminManagedServices.find(s => s.code === itemData.serviceCode);
-        claimTravelLabel.style.display = (service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
-    }
+    claimTravelLabel.style.display = (initialServiceForTravel && initialServiceForTravel.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'none' : 'flex';
 
-
-    // Column 11: Total ($)
-    const totalCell = tr.insertCell();
+    const totalCell = tr.insertCell(); // Total ($)
     totalCell.id = `itemTotal${rowIndex}`;
     totalCell.textContent = itemData?.total ? `$${itemData.total.toFixed(2)}` : "$0.00";
 
-    // Column 12: Actions (No Print)
-    const actionsCell = tr.insertCell();
+    const actionsCell = tr.insertCell(); // Actions
     actionsCell.className = 'no-print pdf-hide';
     const deleteBtn = document.createElement('button');
     deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -3113,36 +3083,32 @@ function addInvoiceRow(itemData = null, isLoadingFromDraft = false) {
     deleteBtn.title = "Delete Row";
     deleteBtn.onclick = () => {
         tr.remove();
-        // Re-number rows
-        $$("#invTbl tbody tr").forEach((row, idx) => {
-            row.cells[0].textContent = idx + 1;
-        });
+        $$("#invTbl tbody tr").forEach((r, idx) => { r.cells[0].textContent = idx + 1; });
         calculateInvoiceTotals();
     };
     actionsCell.appendChild(deleteBtn);
 
-    if (isLoadingFromDraft && itemData) { // Pre-fill print spans if loading
+    if (isLoadingFromDraft && itemData) { 
         if (codePrintSpan) codePrintSpan.textContent = itemData.serviceCode || "";
         if (descPrintSpan) descPrintSpan.textContent = itemData.description || "";
         if (rateTypePrintSpan) rateTypePrintSpan.textContent = itemData.rateType || "";
-    } else { // Set initial print values for new rows
+        // Rate/Unit for draft items will be set by calculateInvoiceTotals call below
+    } else { 
          if (codePrintSpan && descSelect.value) codePrintSpan.textContent = descSelect.value;
          if (descPrintSpan && descSelect.options[descSelect.selectedIndex]) descPrintSpan.textContent = descSelect.options[descSelect.selectedIndex].text.split(' (')[0];
          if (rateTypePrintSpan) rateTypePrintSpan.textContent = determineRateType(dateInput.value, startTimeInput.dataset.value24);
     }
-
-
-    // Trigger initial calculation for the row if data provided
-    if (itemData) calculateInvoiceTotals();
+    
+    // Trigger initial calculation for the row
+    calculateInvoiceTotals(); 
 }
+
 
 function calculateInvoiceTotals() {
     let subtotal = 0;
     const rows = $$("#invTbl tbody tr");
 
-    rows.forEach((row, rowIndexInTable) => { // Use actual rowIndex from the table for ID construction
-        const actualRowIndex = parseInt(row.cells[0].textContent) - 1; // Get the #
-        // Find elements using a more robust way if IDs are not perfectly sequential due to deletions
+    rows.forEach((row) => { 
         const dateInput = row.querySelector(`input[id^="itemDate"]`);
         const descSelect = row.querySelector(`select[id^="itemDesc"]`);
         const startTimeInput = row.querySelector(`input[id^="itemStart"]`);
@@ -3150,9 +3116,9 @@ function calculateInvoiceTotals() {
         const travelKmInput = row.querySelector(`input[id^="itemTravel"]`);
         const claimTravelCheckbox = row.querySelector(`input[id^="itemClaimTravel"]`);
         
-        const hoursKmCell = row.cells[8]; // Assuming this is the structure
-        const totalCell = row.cells[10];  // Assuming this is the structure
-        const rateUnitPrintCell = row.cells[7]; // Assuming this is the structure for print rate/unit
+        const hoursKmCell = row.cells[8]; 
+        const totalCell = row.cells[10];  
+        const rateUnitPrintCell = row.cells[7]; 
 
         const serviceCode = descSelect?.value;
         const service = adminManagedServices.find(s => s.code === serviceCode);
@@ -3166,11 +3132,11 @@ function calculateInvoiceTotals() {
             const startTime = startTimeInput?.dataset.value24;
             const endTime = endTimeInput?.dataset.value24;
             
-            // Update print-only description
             const descPrintSpan = row.querySelector(`span[id^="itemDescPrint"]`);
             if(descPrintSpan) descPrintSpan.textContent = service.description;
             const codePrintSpan = row.querySelector(`span[id^="itemCodePrint"]`);
             if(codePrintSpan) codePrintSpan.textContent = service.code;
+            const rateTypePrintSpan = row.querySelector(`span[id^="itemRateTypePrint"]`);
 
 
             if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
@@ -3179,33 +3145,27 @@ function calculateInvoiceTotals() {
                 const rate = service.rates?.perKmRate || 0;
                 itemTotal = km * rate;
                 rateForPrint = rate;
-            } else { // Time-based services
+                if(rateTypePrintSpan) rateTypePrintSpan.textContent = "Travel"; // Explicitly set for travel
+            } else { 
                 hours = calculateHours(startTime, endTime);
                 hoursKmCell.textContent = hours.toFixed(2);
                 
                 const rateType = determineRateType(itemDate, startTime);
-                const rateTypePrintSpan = row.querySelector(`span[id^="itemRateTypePrint"]`);
                 if(rateTypePrintSpan) rateTypePrintSpan.textContent = rateType;
 
-                let rate = 0;
                 if (service.categoryType === SERVICE_CATEGORY_TYPES.CORE_STANDARD || service.categoryType === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
-                    rate = service.rates?.[rateType] || service.rates?.weekday || 0;
+                    rateForPrint = service.rates?.[rateType] || service.rates?.weekday || 0;
                 } else if (service.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || service.categoryType === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || service.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-                    rate = service.rates?.standardRate || 0;
+                    rateForPrint = service.rates?.standardRate || 0;
                 }
-                itemTotal = hours * rate;
-                rateForPrint = rate;
+                itemTotal = hours * rateForPrint;
 
-                // Add travel cost if claimed for this service
                 if (claimTravelCheckbox?.checked && service.travelCode) {
                     const travelService = adminManagedServices.find(ts => ts.code === service.travelCode && ts.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
-                    const travelKmForThisService = parseFloat(travelKmInput?.value) || 0; // User might input travel KM here too
+                    const travelKmForThisService = parseFloat(travelKmInput?.value) || 0; 
                     if (travelService && travelKmForThisService > 0) {
                         const travelRate = travelService.rates?.perKmRate || 0;
                         itemTotal += travelKmForThisService * travelRate;
-                        // Note: This adds travel to the main item's total.
-                        // Alternatively, add a separate travel row (done by saveShiftFromModalToInvoice).
-                        // For manual row addition, user should add a separate travel line item.
                     }
                 }
             }
