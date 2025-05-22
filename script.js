@@ -2313,6 +2313,9 @@ if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 
 
     console.log("[App] DOMContentLoaded processing complete.");
+    const loginBtn    = $("#loginBtn");
+    const registerBtn = $("#registerBtn");
+
 });
 
 function handleAddAgreementClause() {
