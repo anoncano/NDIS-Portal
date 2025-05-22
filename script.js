@@ -2095,7 +2095,7 @@ function handleAdminTabClick(event) {
     } else if (targetPanelId === "adminInvoiceCustomization") {
         console.log("Admin Invoice Customization tab clicked.");
         // Call loadAdminInvoiceCustomizations here if it's meant to load content for this specific tab when clicked
-        loadAdminInvoiceCustomizations();
+       // loadAdminInvoiceCustomizations();
     }
 }
 
