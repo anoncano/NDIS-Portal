@@ -1711,7 +1711,7 @@ async function loadAllUserAccountsForAdminFromFirestore() {
         console.warn("Admin data load skipped: Firebase not ready or user not admin.");
         return;
     }
-    showLoading("Loading worker accounts...");
+    showLoading("Loading user accounts...");
     try {
         const usersCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
         const usersSnapshot = await getDocs(usersCollectionRef);
@@ -1776,7 +1776,7 @@ async function loadAllUserAccountsForAdminFromFirestore() {
 function displayPendingWorkersForAdmin() {
     const ul = $("#pendingWorkersList"); 
     if (!ul) {
-        console.warn("Element #pendingWorkersList not found for displaying pending workers.");
+        console.warn("Element #pendingWorkersList not found for displaying pending workers. Ensure it exists in index.html within the adminWorkerManagement panel.");
         return;
     }
     ul.innerHTML = "";
@@ -2097,7 +2097,7 @@ function handleAdminTabClick(event) {
     }
 }
 
-// Placeholder for admin invoice template customization
+
 function loadAdminInvoiceCustomizations() {
     console.log("loadAdminInvoiceCustomizations called - placeholder");
     const container = $("#adminInvoiceCustomization");
@@ -3783,8 +3783,7 @@ function calculateInvoiceTotals() {
     $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
 }
 
-// Placeholder for admin invoice template customization
-function loadAdminInvoiceCustomizations() {
+function loadAdminInvoiceCustomizations() { // Removed duplicate declaration
     console.log("loadAdminInvoiceCustomizations called - placeholder");
     const container = $("#adminInvoiceCustomization");
     if (container && !container.innerHTML.trim()) { 
