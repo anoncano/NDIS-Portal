@@ -3160,4 +3160,3 @@ function calculateInvoiceTotals() {
     }
     $("#grand").textContent = `$${(subtotal + gstAmount).toFixed(2)}`;
 }
-
