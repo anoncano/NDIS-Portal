@@ -222,25 +222,22 @@ async function setupAuthListener() {
                     await loadGlobalSettingsFromFirestore(); 
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
                     
-                    let flowInterrupted = false; 
-                    if (profileData) { 
-                        flowInterrupted = await handleExistingUserProfile(profileData); 
-                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
-                        flowInterrupted = await handleNewAdminProfile();
-                    } else if (currentUserId) { 
-                        flowInterrupted = await handleNewRegularUserProfile();
-                    } else { 
-                        await fbSignOut(fbAuth); 
-                        flowInterrupted = true;
-                    }
+                    let flowInterrupted = false;
+if (profileData) {
+    flowInterrupted = await handleExistingUserProfile(profileData);
+} else {
+    // Check if this is the first user (no other users in Firestore)
+    const usersRef = collection(fsDb, `artifacts/${appId}/users`);
+    const snap = await getDocs(usersRef);
+    const isFirstUser = snap.empty;
 
-                    if (!flowInterrupted) { 
-                        if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
-                        if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
-                        if(portalAppElement) portalAppElement.style.display = "flex"; 
-                    } else {
-                        console.log("[AuthListener] User flow interrupted (e.g. approval modal or sign out).");
-                    }
+    if (isFirstUser) {
+        console.log("[AuthListener] First user detected. Assigning admin role.");
+        flowInterrupted = await handleNewAdminProfile();
+    } else {
+        flowInterrupted = await handleNewRegularUserProfile();
+    }
+}
 
                 } else { // User is signed out
                     console.log("[AuthListener] User signed out.");
