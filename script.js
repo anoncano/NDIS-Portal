@@ -715,18 +715,61 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
-    // \…remove or replace the “…” line here…
-    abn: "", gstRegistered: false, bsb: "", acc: "",
-    files: [], authorizedServiceCodes: [],
-    profileSetupComplete: false,
-    nextInvoiceNumber: 1001,
-    approved: !isOrgPortal,
-    createdAt: serverTimestamp(),
-    createdBy: newUserId
+  const emailInput = $("#authEmail");
+  const passwordInput = $("#authPassword");
+  const email = emailInput ? emailInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value.trim() : "";
 
+  showAuthStatusMessage("", false);
 
-  };
+  if (!email || !validateEmail(email) || !password || password.length < 6) {
+      return showAuthStatusMessage("Valid email and a password of at least 6 characters are required for registration.");
+  }
+  if (!isFirebaseInitialized || !fbAuth || !fsDb) {
+      return showAuthStatusMessage("System Error: Registration service not ready. Please refresh.");
+  }
 
+  try {
+    showLoading("Registering...");
+    const userCredential = await createUserWithEmailAndPassword(fbAuth, email, password);
+    if (userCredential && userCredential.user) {
+        const newUserId = userCredential.user.uid;
+        const isOrgPortal = globalSettings.portalType === 'organization';
+        const initialProfileData = {
+            name: email.split('@')[0],
+            email: email,
+            uid: newUserId,
+            isAdmin: false,
+            abn: "",
+            gstRegistered: false,
+            bsb: "",
+            acc: "",
+            files: [],
+            authorizedServiceCodes: [],
+            profileSetupComplete: false,
+            nextInvoiceNumber: 1001,
+            approved: !isOrgPortal,
+            createdAt: serverTimestamp(),
+            createdBy: newUserId
+        };
+        const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${newUserId}/profile`, "details");
+        await setDoc(userProfileDocRef, initialProfileData);
+
+        if (isOrgPortal && !initialProfileData.approved) {
+             showMessage("Registration Successful", "Your account has been created and is awaiting administrator approval. You will be logged out.");
+        } else {
+             showMessage("Registration Successful", "Your account has been created!");
+        }
+    }
+
+  } catch (err) {
+      console.error("Registration Failed:", err);
+      logErrorToFirestore("modalRegister", err.message, err);
+      showAuthStatusMessage(err.message || "Could not create account. Email might be in use or network issue.");
+  } finally {
+      hideLoading();
+  }
+};
   // …then setDoc(...) and the rest…
 };
 
