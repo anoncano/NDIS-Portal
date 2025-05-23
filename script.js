@@ -265,10 +265,12 @@ if (profileData) {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
+if (!userProfile.isAdmin) console.warn("[Auth Debug] Profile NOT marked as admin (yet)");
     // If user is not admin but is the first in the system, auto-promote
 const usersRef = collection(fsDb, `artifacts/${appId}/users`);
-const snap = await getDocs(usersRef);
-const isFirstUser = snap.size === 1 && snap.docs[0].id === currentUserId;
+const freshSnap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
+if (freshSnap.exists()) userProfile = freshSnap.data();
+
 
 if (isFirstUser && userProfile.isAdmin !== true) {
     console.log("[Auth Debug] Auto-promoting first user to admin...");
