@@ -134,7 +134,7 @@ let allUsersCache = {};
 async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
     if (!fsDb || !appId || appId === 'ndis-portal-app-local') { console.error("Firestore not init/local dev, no log:", location, errorMsg, errorDetails); return; }
     try {
-        await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "error_logs"), { // Corrected path for error logs
+        await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "error_logs"), { 
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
@@ -156,9 +156,9 @@ function showMessage(title, text, type = 'info', okButtonConfig = null) {
 
     const currentOkButton = $("#closeMessageModalBtn"); 
     if (currentOkButton) {
-        const newOkButton = currentOkButton.cloneNode(true);
+        const newOkButton = currentOkButton.cloneNode(true); // Clone to remove old listeners
         currentOkButton.parentNode.replaceChild(newOkButton, currentOkButton);
-        const freshOkButton = $("#closeMessageModalBtn"); 
+        const freshOkButton = $("#closeMessageModalBtn"); // Re-select the new button
 
         if (okButtonConfig && typeof okButtonConfig.action === 'function') {
             freshOkButton.textContent = okButtonConfig.text || 'OK';
@@ -216,19 +216,37 @@ async function setupAuthListener() {
                 if (user) {
                     currentUserId = user.uid; currentUserEmail = user.email;
                     console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
-                    if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
-                    if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
-                    if(authScreenElement) authScreenElement.style.display = "none";
-                    if(portalAppElement) portalAppElement.style.display = "flex";
-                    await loadGlobalSettingsFromFirestore();
+                    await loadGlobalSettingsFromFirestore(); // Load settings early
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
-                    let signedOut = false;
-                    if (profileData) { signedOut = await handleExistingUserProfile(profileData); }
-                    else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { signedOut = await handleNewAdminProfile(); }
-                    else if (currentUserId) { signedOut = await handleNewRegularUserProfile(); }
-                    else { await fbSignOut(fbAuth); signedOut = true; } 
-                    if (signedOut) console.log("[AuthListener] User flow led to sign out.");
-                } else {
+                    
+                    let canProceedToPortal = false;
+                    if (profileData) { 
+                        canProceedToPortal = !(await handleExistingUserProfile(profileData)); // Negate because handler returns true if flow is interrupted
+                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
+                        canProceedToPortal = !(await handleNewAdminProfile());
+                    } else if (currentUserId) { 
+                        canProceedToPortal = !(await handleNewRegularUserProfile());
+                    } else { 
+                        await fbSignOut(fbAuth); // Should not happen if user object exists
+                    }
+
+                    if (canProceedToPortal) {
+                        if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
+                        if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
+                        if(authScreenElement) authScreenElement.style.display = "none";
+                        if(portalAppElement) portalAppElement.style.display = "flex";
+                        // enterPortal will be called by the handler functions if successful
+                    } else {
+                        // If canProceedToPortal is false, it means a modal (like approval) is shown,
+                        // or user was signed out. Ensure main app is hidden.
+                        if(portalAppElement) portalAppElement.style.display = "none";
+                        if(authScreenElement && !messageModalElement.style.display.includes('flex')) { // Only show auth if no other modal is up
+                             authScreenElement.style.display = "flex";
+                        }
+                        console.log("[AuthListener] User flow interrupted or led to sign out.");
+                    }
+
+                } else { // User is signed out
                     console.log("[AuthListener] User signed out.");
                     currentUserId = null; currentUserEmail = null; userProfile = {};
                     if(userIdDisplayElement) userIdDisplayElement.textContent = "Not Logged In";
@@ -237,7 +255,13 @@ async function setupAuthListener() {
                     if(portalAppElement) portalAppElement.style.display = "none";
                     updateNavigation(false); navigateToSection("home");
                 }
-            } catch (error) { console.error("[AuthListener] Error:", error); logErrorToFirestore("onAuthStateChanged", error.message, error); await fbSignOut(fbAuth); }
+            } catch (error) { 
+                console.error("[AuthListener] Error:", error); 
+                logErrorToFirestore("onAuthStateChanged", error.message, error); 
+                await fbSignOut(fbAuth); 
+                if(authScreenElement) authScreenElement.style.display = "flex"; // Ensure login is shown on error
+                if(portalAppElement) portalAppElement.style.display = "none";
+            }
             finally { hideLoading(); if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } }
         });
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -250,14 +274,17 @@ async function handleExistingUserProfile(data) {
     userProfile = data;
     console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}`);
     if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true) {
+        if(authScreenElement) authScreenElement.style.display = "none"; // Hide auth screen
+        if(portalAppElement) portalAppElement.style.display = "none"; // Ensure portal app is hidden
         showMessage(
             "Approval Required", 
             "Your account is awaiting approval from an administrator. Please log out and try again later once approved.", 
             "warning",
-            { text: 'Logout', action: portalSignOut }
+            { text: 'OK', action: portalSignOut } // Changed button text to OK
         );
-        return true; 
+        return true; // Flow is interrupted
     }
+    // If admin or approved user
     if (userProfile.isAdmin) { 
         await loadAllDataForAdmin(); 
         enterPortal(true); 
@@ -273,7 +300,7 @@ async function handleExistingUserProfile(data) {
             openUserSetupWizard();
         }
     }
-    return false; 
+    return false; // Flow can proceed
 }
 
 async function handleNewAdminProfile() {
@@ -286,7 +313,7 @@ async function handleNewAdminProfile() {
         console.log("[AuthListener] New admin needs portal setup wizard.");
         openAdminSetupWizard();
     }
-    return false;
+    return false; // Flow can proceed
 }
 
 async function handleNewRegularUserProfile() {
@@ -295,13 +322,15 @@ async function handleNewRegularUserProfile() {
     userProfile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, approved: !isOrg, profileSetupComplete: false, nextInvoiceNumber: 1001, createdAt: serverTimestamp() };
     await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), userProfile);
     if (isOrg && userProfile.approved !== true) { 
+        if(authScreenElement) authScreenElement.style.display = "none"; 
+        if(portalAppElement) portalAppElement.style.display = "none"; 
         showMessage(
             "Registration Complete - Approval Required", 
             "Your account has been created and is awaiting administrator approval. Please log out and try again later.", 
             "info",
-            { text: 'Logout', action: portalSignOut }
+            { text: 'OK', action: portalSignOut } // Changed button text to OK
         );
-        return true; 
+        return true; // Flow is interrupted
     }
     await loadAllDataForUser();
     enterPortal(false);
@@ -309,7 +338,7 @@ async function handleNewRegularUserProfile() {
         console.log("[AuthListener] New regular user needs profile setup wizard.");
         openUserSetupWizard();
     }
-    return false;
+    return false; // Flow can proceed
 }
 
 /* ========== Data Loading & Saving ========== */
@@ -358,7 +387,7 @@ async function saveGlobalSettingsToFirestore() {
 async function loadAdminServicesFromFirestore() {
     adminManagedServices = [];
     if (!fsDb) return;
-    const servicesCollectionRef = collection(fsDb, "artifacts", appId, "public", "data", "ndis_services"); // Corrected path
+    const servicesCollectionRef = collection(fsDb, "artifacts", appId, "public", "data", "ndis_services"); 
     try { 
         const querySnapshot = await getDocs(servicesCollectionRef);
         querySnapshot.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
@@ -400,10 +429,20 @@ async function loadAllDataForAdmin() { showLoading("Loading admin data..."); awa
 /* ========== Portal Entry & Navigation ========== */
 function enterPortal(isAdmin) {
     console.log(`Entering portal. Admin: ${isAdmin}`);
-    portalAppElement.style.display = "flex"; authScreenElement.style.display = "none";
-    updateNavigation(isAdmin); updateProfileDisplay();
-    if (isAdmin) { navigateToSection("admin"); renderAdminDashboard(); }
-    else { navigateToSection("home"); renderUserHomePage(); if (userProfile.nextInvoiceNumber === undefined) openModal('setInitialInvoiceModal'); }
+    // This function is now called by the profile handlers *after* checks.
+    // UI visibility for authScreen and portalApp is handled in onAuthStateChanged and profile handlers.
+    updateNavigation(isAdmin); 
+    updateProfileDisplay();
+    if (isAdmin) { 
+        navigateToSection("admin"); 
+        renderAdminDashboard(); 
+    } else { 
+        navigateToSection("home"); 
+        renderUserHomePage(); 
+        if (userProfile.nextInvoiceNumber === undefined) {
+            openModal('setInitialInvoiceModal');
+        }
+    }
     updatePortalTitle();
 }
 
@@ -650,8 +689,8 @@ function addInvoiceRowToTable(itemData = {}, index = -1) {
         <td class="no-print pdf-hide"><button class="btn-danger btn-small delete-row-btn" onclick="deleteInvoiceRow(this)"><i class="fas fa-trash-alt" style="margin-right:0;"></i></button></td>
     `;
     const descSelect = newRow.querySelector('.item-description-select');
-    populateServiceTypeDropdowns(descSelect); // Pass the specific select element
-    if(item.code) descSelect.value = item.code; // Set selected value if item has a code
+    populateServiceTypeDropdowns(descSelect); 
+    if(item.code) descSelect.value = item.code; 
     
     newRow.querySelectorAll('input, select').forEach(input => input.addEventListener('change', () => updateInvoiceItemFromRow(newRow, itemIdx)));
     newRow.querySelectorAll('.custom-time-input').forEach(input => input.addEventListener('click', (e) => openCustomTimePicker(e.target, (time24) => { e.target.value = formatTime12Hour(time24); e.target.dataset.value24 = time24; updateInvoiceItemFromRow(newRow, itemIdx); })));
@@ -698,7 +737,7 @@ function updateInvoiceItemFromRow(rowElement, itemIndex) {
         }
     }
     rowElement.querySelector('.item-total').value = formatCurrency(item.totalAmount);
-    rowElement.querySelector('.item-code').value = item.code; // Ensure item code input is also updated
+    rowElement.querySelector('.item-code').value = item.code; 
 
     rowElement.querySelector('.date-print-value').textContent = formatDateForDisplay(item.date);
     rowElement.querySelector('.code-print-value').textContent = item.code;
@@ -743,7 +782,7 @@ async function saveAdminPortalSettings() { if (!userProfile.isAdmin) return; glo
 window.confirmResetGlobalSettings = () => { showMessage("Confirm Reset", "Reset all global settings to default? This cannot be undone.", "warning", {text: "Confirm Reset", action: executeResetGlobalSettings }); };
 async function executeResetGlobalSettings() { if (!userProfile.isAdmin) return; showLoading("Resetting..."); globalSettings = getDefaultGlobalSettings(); agreementCustomData = JSON.parse(JSON.stringify(defaultAgreementCustomData)); globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); const success = await saveGlobalSettingsToFirestore(); if (success) { renderAdminGlobalSettingsTab(); renderAdminAgreementCustomizationTab(); showMessage("Settings Reset", "Global settings reset to defaults.", "success"); } else { showMessage("Reset Failed", "Could not reset.", "error"); } hideLoading(); }
 function renderAdminServiceManagementTab() { if (!userProfile.isAdmin) return; clearAdminServiceForm(); renderAdminServicesTable(); populateServiceCategoryTypeDropdown(); renderAdminServiceRateFields(); }
-function populateServiceCategoryTypeDropdown() { /* Options are hardcoded in HTML, no dynamic population needed here unless requirements change */ }
+function populateServiceCategoryTypeDropdown() { /* Options are hardcoded in HTML */ }
 function renderAdminServiceRateFields() { if (!adminServiceRateFieldsContainerElement || !adminServiceCategoryTypeSelectElement) return; adminServiceRateFieldsContainerElement.innerHTML = ''; const category = adminServiceCategoryTypeSelectElement.value; let fieldsHtml = ''; if (category === SERVICE_CATEGORY_TYPES.CORE_STANDARD || category === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) { RATE_CATEGORIES.forEach(rc => { fieldsHtml += `<div class="form-group"><label for="rate_${rc}">${rc.charAt(0).toUpperCase() + rc.slice(1)} Rate ($):</label><input type="number" id="rate_${rc}" class="admin-service-rate" data-rate-key="${rc}" step="0.01" placeholder="0.00"></div>`; }); } else if (category === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || category === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || category === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) { fieldsHtml += `<div class="form-group"><label for="rate_flatRate">Flat Rate ($):</label><input type="number" id="rate_flatRate" class="admin-service-rate" data-rate-key="flatRate" step="0.01" placeholder="0.00"></div>`; } else if (category === SERVICE_CATEGORY_TYPES.TRAVEL_KM) { fieldsHtml += `<div class="form-group"><label for="rate_perKm">Rate per Km ($):</label><input type="number" id="rate_perKm" class="admin-service-rate" data-rate-key="perKm" step="0.01" placeholder="0.00"></div>`; } adminServiceRateFieldsContainerElement.innerHTML = `<div class="rate-inputs-grid">${fieldsHtml}</div>`; }
 function clearAdminServiceForm() { if(adminServiceIdInputElement) adminServiceIdInputElement.value = ""; if(adminServiceCodeInputElement) adminServiceCodeInputElement.value = ""; if(adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = ""; if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.selectedIndex = 0; if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = ""; if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = "None selected"; renderAdminServiceRateFields(); currentAdminServiceEditingId = null; }
 function renderAdminServicesTable() { if (!adminServicesTableBodyElement) return; adminServicesTableBodyElement.innerHTML = ''; adminManagedServices.forEach(service => { const row = adminServicesTableBodyElement.insertRow(); const primaryRateKey = Object.keys(service.rates || {}).find(k => k !== 'perKm' && k !== 'flatRate') || 'flatRate'; const primaryRate = service.rates ? (service.rates[primaryRateKey] || service.rates.perKm || 0) : 0; row.innerHTML = `<td>${service.code}</td><td>${service.description}</td><td>${(adminServiceCategoryTypeSelectElement.querySelector(`option[value="${service.categoryType}"]`)?.textContent || service.categoryType).split('(')[0].trim()}</td><td>${formatCurrency(primaryRate)}</td><td>${service.associatedTravelCode || '-'}</td><td><button class="btn-secondary btn-small" onclick="editAdminService('${service.id}')"><i class="fas fa-edit"></i></button> <button class="btn-danger btn-small" onclick="deleteAdminService('${service.id}')"><i class="fas fa-trash-alt"></i></button></td>`; }); }
