@@ -379,9 +379,10 @@
           <div class="card-subsection" style="margin-top: 20px; background-color: var(--warn-light, #fff9e6); border-color: var(--warn, #ffc107); padding:15px; border-radius:var(--radius);">
               <h4><i class="fas fa-user-clock"></i> Workers Awaiting Approval</h4>
               <div id="pendingWorkersListContainer" style="max-height: 300px; overflow-y:auto;">
-                  <ul id="pendingWorkersList" class="worker-list-auth" style="list-style-type: none; padding:0;">
-                      <li>Loading pending workers...</li>
-                  </ul>
+                 <li>
+    <i class="fas fa-user-clock"></i> [Worker Name] <small>([Worker Email/UID])</small>
+    <button class="btn-ok btn-small" onclick="approveWorkerInFirestore('[WORKER_UID_HERE]')">Approve</button>
+</li>
               </div>
               <p class="tip" id="noPendingWorkersMessage" style="display:none;">There are currently no workers awaiting approval.</p>
           </div>
@@ -390,9 +391,9 @@
           <div class="row" style="margin-top: 10px;">
               <div style="flex: 1; min-width: 280px; margin-right: 20px; max-height: 500px; overflow-y:auto; border: 1px solid var(--bd); padding:15px; border-radius:var(--radius);">
                   <h5><i class="fas fa-users"></i> Approved Support Workers</h5>
-                  <ul id="workersListForAuth" class="worker-list-auth" style="list-style-type: none; padding:0;">
-                      <li>Loading approved workers...</li>
-                  </ul>
+                  <li data-key="[WORKER_KEY]" onclick="selectWorkerForAuth('[WORKER_KEY]')">
+    <i class="fas fa-user-tie"></i> [Worker Name] <small>([Worker Email/UID])</small>
+</li>
               </div>
 
               <div style="flex: 2; min-width: 450px;">
