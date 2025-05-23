@@ -272,21 +272,19 @@ async function handleExistingUserProfile(data) {
     console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
 
     // FIX: Force admin recovery early if email matches admin
-    if (currentUserEmail.toLowerCase() === "tuckett.mitchell@gmail.com") {
-        if (!userProfile.isAdmin || userProfile.approved !== true) {
-            console.warn("[Auth Fix] Auto-elevating to admin and approving.");
-            userProfile.isAdmin = true;
-            userProfile.approved = true;
-            try {
-                await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), {
-                    isAdmin: true,
-                    approved: true
-                });
-            } catch (e) {
-                console.error("Auto-approve admin failed:", e);
-            }
-        }
+   if (currentUserEmail.toLowerCase() === "tuckett.mitchell@gmail.com") {
+    if (!userProfile.isAdmin || userProfile.approved !== true) {
+        console.warn("[Auth Fix] Auto-elevating to admin and approving.");
+        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), {
+            isAdmin: true,
+            approved: true
+        });
+
+        // Fetch fresh data to avoid stale state
+        const snap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"));
+        if (snap.exists()) userProfile = snap.data();
     }
+}
 
     // Re-run approval logic after patch
     const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true && !userProfile.isAdmin;
