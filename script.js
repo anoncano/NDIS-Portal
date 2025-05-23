@@ -208,63 +208,88 @@ async function initializeFirebaseApp() {
     } catch (error) { console.error("[FirebaseInit] Error:", error); logErrorToFirestore("initializeFirebaseApp", error.message, error); showAuthStatusMessage("System Error: " + error.message); hideLoading(); }
 }
 
-async function handleExistingUserProfile(userProfile) {
-  // 1️⃣ If they’re an admin, let them in unconditionally
-  if (userProfile.isAdmin) {
-    await loadAllDataForAdmin();
-    enterPortal(/* as admin */);
-    return false;
-  }
+async function setupAuthListener() {
+    return new Promise((resolve) => {
+        onAuthStateChanged(fbAuth, async (user) => {
+            showLoading("Authenticating...");
+            // Initially hide both main app and auth screen to prevent flicker
+            if(portalAppElement) portalAppElement.style.display = "none";
+            if(authScreenElement) authScreenElement.style.display = "none";
 
-  // 2️⃣ Only non-admins hit the approval gate
-  if (globalSettings.portalType==='organization' && !userProfile.approved) {
-    showMessage("Approval Required", …);
-    await fbSignOut(fbAuth);
-    return true;
-  }
+            try {
+                if (user) {
+                    currentUserId = user.uid; currentUserEmail = user.email;
+                    console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
+                    await loadGlobalSettingsFromFirestore(); 
+                    const profileData = await loadUserProfileFromFirestore(currentUserId);
+                    
+                    let flowInterrupted = false; 
+                    if (profileData) { 
+                        flowInterrupted = await handleExistingUserProfile(profileData); 
+                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
+                        flowInterrupted = await handleNewAdminProfile();
+                    } else if (currentUserId) { 
+                        flowInterrupted = await handleNewRegularUserProfile();
+                    } else { 
+                        await fbSignOut(fbAuth); 
+                        flowInterrupted = true;
+                    }
 
-  // 3️⃣ Now handle regular, approved users
-  await loadAllDataForUser();
-  enterPortal(/* as user */);
-  return false;
+                    if (!flowInterrupted) { 
+                        if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
+                        if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
+                        if(authScreenElement) authScreenElement.style.display = "none"; // Should already be hidden
+                        if(portalAppElement) portalAppElement.style.display = "flex"; // Show main app
+                        // enterPortal is called within the profile handlers if successful
+                    } else {
+                        console.log("[AuthListener] User flow interrupted (e.g. approval modal or sign out).");
+                        // If flow was interrupted by a modal, portalApp remains hidden.
+                        // If sign out was triggered, onAuthStateChanged will run again with user=null.
+                    }
+
+                } else { // User is signed out
+                    console.log("[AuthListener] User signed out.");
+                    currentUserId = null; currentUserEmail = null; userProfile = {};
+                    if(userIdDisplayElement) userIdDisplayElement.textContent = "Not Logged In";
+                    if(logoutButtonElement) logoutButtonElement.classList.add('hide');
+                    if(authScreenElement) authScreenElement.style.display = "flex"; // Show login screen
+                    if(portalAppElement) portalAppElement.style.display = "none";
+                    updateNavigation(false); navigateToSection("home"); // Reset nav to default
+                }
+            } catch (error) { 
+                console.error("[AuthListener] Error:", error); 
+                logErrorToFirestore("onAuthStateChanged", error.message, error); 
+                await fbSignOut(fbAuth); // Attempt to sign out on error
+                if(authScreenElement) authScreenElement.style.display = "flex"; 
+                if(portalAppElement) portalAppElement.style.display = "none";
+            }
+            finally { hideLoading(); if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } }
+        });
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            signInWithCustomToken(fbAuth, __initial_auth_token).catch(e => { console.error("Token sign-in error:", e); logErrorToFirestore("signInWithCustomToken", e.message, e); });
+        } else { console.log("[AuthListener] No token, waiting for state change or login."); }
+    });
 }
 
 async function handleExistingUserProfile(data) {
-    userProfile = data;
-    console.log(`[Auth] Existing profile. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
-    
-    const isUnapprovedOrgUser = !userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true;
-    console.log(`[Auth] IsUnapprovedOrgUser check: ${isUnapprovedOrgUser}. Admin status: ${userProfile.isAdmin}`);
-
-    if (isUnapprovedOrgUser) {
-        if(authScreenElement) authScreenElement.style.display = "none"; 
-        if(portalAppElement) portalAppElement.style.display = "none"; 
-        showMessage(
-            "Approval Required", 
-            "Your account is awaiting approval from an administrator. Please log out and try again later once approved.", 
-            "warning",
-            { text: 'OK', action: portalSignOut } 
-        );
-        return true; // Flow is interrupted
-    }
-    
-    if (userProfile.isAdmin) { 
-        await loadAllDataForAdmin(); 
-        enterPortal(true); 
-        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
-             console.log("[AuthListener] Admin needs portal setup wizard.");
-             openAdminSetupWizard();
-        }
-    } else { 
-        await loadAllDataForUser(); 
-        enterPortal(false); 
-        if (!userProfile.profileSetupComplete) {
-            console.log("[AuthListener] Regular user needs profile setup wizard.");
-            openUserSetupWizard();
-        }
-    }
-    return false; // Flow can proceed
+  userProfile = data;
+  // 1️⃣ Admins skip approval logic immediately
+  if (userProfile.isAdmin === true) {
+    await loadAllDataForAdmin();
+    enterPortal(true);
+    return false;
+  }
+  // 2️⃣ Only non-admins hit the approval gate
+  if (globalSettings.portalType==='organization' && userProfile.approved !== true) {
+    // …block and sign out…
+    return true;
+  }
+  // 3️⃣ Regular user flow
+  await loadAllDataForUser();
+  enterPortal(false);
+  return false;
 }
+
 
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login (admin@portal.com).");
