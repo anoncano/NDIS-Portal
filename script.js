@@ -377,7 +377,6 @@ async function handleNewAdminProfile() {
     }
 
     return false;
-}
 
 
 
