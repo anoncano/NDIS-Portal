@@ -3811,3 +3811,4 @@ function calculateInvoiceTotals() {
 async function saveAdminInvoiceCustomizations() {
     showMessage("Info", "Saving invoice customizations is not yet implemented.")
 }
+window.approveWorkerInFirestore = approveWorkerInFirestore;
