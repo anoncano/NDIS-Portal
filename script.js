@@ -2139,7 +2139,8 @@ if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
 if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 document.addEventListener('DOMContentLoaded', async () => {
     showLoading("Initializing Portal...");
-
+    const loginBtn    = $("#loginBtn");
+    const registerBtn = $("#registerBtn");
     await initializeFirebase();
 
     if (!isFirebaseInitialized) {
@@ -2307,8 +2308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.addEventListener('hashchange', () => setActive(location.hash));
 
- const loginBtn    = $("#loginBtn");
-    const registerBtn = $("#registerBtn");
+    
     console.log("[App] DOMContentLoaded processing complete.");
    
 
