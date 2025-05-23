@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <title>NDIS Support Portal</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="style.css"> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
           xintegrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  
+
   <script type="module">
     // This firebaseConfig will be used by script.js
     // It's populated with values from your Firebase project.
@@ -19,9 +20,9 @@
         authDomain: "ndis-portal-6ab1e.firebaseapp.com",
         databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
         projectId: "ndis-portal-6ab1e",
-        storageBucket: "ndis-portal-6ab1e.appspot.com", 
+        storageBucket: "ndis-portal-6ab1e.appspot.com",
         messagingSenderId: "663606000491",
-        appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
+        appId: "1:663606000491:web:350030eeae4212b899aa2e"
     };
 
     // Prioritize __firebase_config if available from the Canvas environment
@@ -29,10 +30,9 @@
         try {
             const parsedConfig = JSON.parse(__firebase_config);
             // Ensure all necessary keys are present in parsedConfig and are not placeholders
-            if (parsedConfig && 
+            if (parsedConfig &&
                 parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
                 parsedConfig.authDomain &&
-                // databaseURL is not strictly required for Firestore v9+ client SDK but good to have if RTDB is also used
                 (parsedConfig.databaseURL || parsedConfig.projectId) && // Check for projectId as a minimum for Firestore
                 parsedConfig.projectId &&
                 parsedConfig.storageBucket &&
@@ -53,23 +53,23 @@
 <body>
 
 <div id="authScreen">
-  <div class="dlg"> 
+  <div class="dlg">
       <h3><i class="fas fa-user-lock"></i> NDIS Portal Access</h3>
       <p style="text-align: center; margin-bottom: 20px; font-size: 0.9rem; color: var(--sec-dark);">Please sign in or register to continue.</p>
-      <form id="authForm"> 
+      <form id="authForm">
         <div class="form-group">
-          <label for="authEmail">Email</label> 
+          <label for="authEmail">Email</label>
           <input type="email" id="authEmail" placeholder="email@example.com" />
         </div>
         <div class="form-group">
-          <label for="authPassword">Password</label> 
+          <label for="authPassword">Password</label>
           <input type="password" id="authPassword" placeholder="••••••••" />
         </div>
         <div class="form-actions" style="justify-content: space-between;">
           <button type="button" id="loginBtn" class="btn-primary" style="flex-grow: 1;">Login</button>
           <button type="button" id="registerBtn" class="btn-secondary" style="flex-grow: 1;">Register</button>
         </div>
-      </form> 
+      </form>
       <div id="authStatusMessage" style="margin-top: 15px; text-align: center; color: var(--danger); font-size: 0.9rem;"></div>
     </div>
 </div>
@@ -106,13 +106,13 @@
             User ID: <span id="userIdDisplay">Not Logged In</span>
         </div>
 
-        <div id="homeUser" class="hide"> 
+        <div id="homeUser" class="hide">
           <p class="welcome-message">Welcome back, <span id="userNameDisplay">User</span>!</p>
           <div class="home-buttons-container">
                 <button id="rqBtn" class="btn-primary btn-large"><i class="fas fa-calendar-plus"></i> Request a Shift</button>
                 <button id="logTodayShiftBtn" class="btn-primary btn-large"><i class="fas fa-clipboard-list"></i> Log New Shift</button>
           </div>
-          
+
           <div id="shiftRequestsContainer" class="hide card-subsection" style="margin-top: 20px;">
             <h3><i class="fas fa-tasks"></i> Shift Requests</h3>
             <div class="table-responsive">
@@ -164,7 +164,7 @@
         </div>
         <h2><i class="fas fa-calculator"></i> Invoice – Week <span id="wkLbl"></span></h2>
 
-        <div id="invoicePdfContent"> 
+        <div id="invoicePdfContent">
             <div class="row">
               <div class="form-group">
                 <label for="invNo">Invoice #</label>
@@ -183,14 +183,14 @@
                 <tr>
                     <th>#</th>
                     <th>Date</th>
-                    <th class="column-code print-only pdf-show">Code</th> 
+                    <th class="column-code print-only pdf-show">Code</th>
                     <th>Description</th>
                     <th>Start</th>
                     <th>End</th>
-                    <th class="column-rate-type print-only pdf-show">Rate type</th> 
-                    <th class="print-only-column pdf-show">Rate/Unit ($)</th> 
-                    <th>Hours / Km</th> 
-                    <th class="no-print pdf-hide">Travel Input (Km)</th> <th class="no-print pdf-hide">Claim Travel</th> 
+                    <th class="column-rate-type print-only pdf-show">Rate type</th>
+                    <th class="print-only-column pdf-show">Rate/Unit ($)</th>
+                    <th>Hours / Km</th>
+                    <th class="no-print pdf-hide">Travel Input (Km)</th> <th class="no-print pdf-hide">Claim Travel</th>
                     <th>Total ($)</th>
                     <th class="no-print pdf-hide">Actions</th>
                 </tr>
@@ -201,16 +201,16 @@
               <div id="gstRow" style="display:none">GST 10 %:  <b id="gst">$0.00</b></div>
               <div>Total:  <b id="grand">$0.00</b></div>
             </div>
-        </div> 
+        </div>
         <div class="invoice-actions">
-            <button id="addInvRowUserActionBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Service Manually</button> 
+            <button id="addInvRowUserActionBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Service Manually</button>
             <button id="saveDraftBtn" class="btn-secondary"><i class="fas fa-save"></i> Save Draft</button>
-            <button id="generateInvoicePdfBtn" class="btn-secondary"><i class="fas fa-file-pdf"></i> Download PDF</button> 
+            <button id="generateInvoicePdfBtn" class="btn-secondary"><i class="fas fa-file-pdf"></i> Download PDF</button>
         </div>
       </section>
 
       <section id="agreement" class="card">
-        <h2 id="agreementDynamicTitle"><i class="fas fa-handshake"></i> Service Agreement</h2> 
+        <h2 id="agreementDynamicTitle"><i class="fas fa-handshake"></i> Service Agreement</h2>
 
         <div id="adminAgreementWorkerSelector" class="form-group card-subsection hide" style="margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: var(--radius); background-color: var(--sec-light);">
             <h4><i class="fas fa-user-cog"></i> Admin: View Agreement for Specific Worker</h4>
@@ -224,7 +224,7 @@
 
         <div id="agrChip" class="chip yellow">Draft – waiting for signatures</div>
 
-        <div id="agreementContentWrapper"> 
+        <div id="agreementContentWrapper">
             <div id="agreementHeaderForPdf" style="display:none; text-align:center; margin-bottom:20px;">
                 </div>
             <div id="agreementContentContainer" class="agreement-content">
@@ -237,7 +237,7 @@
         </div>
         <div class="agreement-actions">
             <button id="signBtn" class="btn-primary"><i class="fas fa-signature"></i> Sign agreement</button>
-            <button id="participantSignBtn" class="btn-primary hide"><i class="fas fa-user-edit"></i> Sign for Participant</button> 
+            <button id="participantSignBtn" class="btn-primary hide"><i class="fas fa-user-edit"></i> Sign for Participant</button>
             <button id="pdfBtn" class="btn-secondary hide"><i class="fas fa-file-pdf"></i> Download PDF</button>
         </div>
       </section>
@@ -249,7 +249,7 @@
             <button class="admin-tab-btn" data-target="adminServiceManagement"><i class="fas fa-concierge-bell"></i> NDIS Services</button>
             <button class="admin-tab-btn" data-target="adminAgreementCustomization"><i class="fas fa-file-alt"></i> Agreement Template</button>
             <button class="admin-tab-btn" data-target="adminWorkerManagement"><i class="fas fa-users-cog"></i> Worker Management</button>
-            </div>
+        </div>
 
         <div id="adminGlobalSettings" class="admin-content-panel active card-subsection">
             <h3><i class="fas fa-cogs"></i> Portal Global Settings</h3>
@@ -262,7 +262,7 @@
                     <div class="form-group"><label for="adminEditOrgContactEmail">Primary Contact Email:</label><input id="adminEditOrgContactEmail" type="email"></div>
                     <div class="form-group"><label for="adminEditOrgContactPhone">Primary Contact Phone:</label><input id="adminEditOrgContactPhone" type="text"></div>
                 </div>
-                <hr id="adminEditParticipantHr" /> 
+                <hr id="adminEditParticipantHr" />
                 <div id="adminEditParticipantDetailsSection" class="form-section">
                     <h4 id="adminEditParticipantTitle"><i class="fas fa-child"></i> Default Participant & Plan Details</h4>
                     <div class="form-group"><label for="adminEditParticipantName">Participant's Full Name:</label><input id="adminEditParticipantName" type="text"></div>
@@ -290,8 +290,8 @@
             <p>Define NDIS support services. All services defined here are globally available for worker authorization via "Worker Management".</p>
             <div id="adminServiceFormContainer" class="form-section">
                 <h4><i class="fas fa-plus-square"></i> Add/Edit Service</h4>
-                <input type="hidden" id="adminServiceId"> 
-                
+                <input type="hidden" id="adminServiceId">
+
                 <div class="form-group">
                     <label for="adminServiceCode">NDIS Item Code:</label>
                     <input type="text" id="adminServiceCode" placeholder="e.g., 01_011_0107_1_1">
@@ -313,7 +313,7 @@
                         <option value="other_flat_rate">Other - Single Flat Rate (e.g. Consumables)</option>
                     </select>
                 </div>
-                
+
                 <div id="adminServiceRateFieldsContainer">
                     </div>
 
@@ -354,7 +354,7 @@
         <div id="adminAgreementCustomization" class="admin-content-panel card-subsection">
             <h3><i class="fas fa-edit"></i> Service Agreement Customization</h3>
             <p>Structure your service agreement by adding and editing clauses. Use placeholders like <code>{{participantName}}</code>, <code>{{workerName}}</code>, <code>{{serviceList}}</code>, etc., within clause bodies. The <code>{{serviceList}}</code> placeholder will be replaced with the worker's authorized services.</p>
-            
+
             <div class="form-group">
                 <label for="adminAgreementOverallTitle">Overall Agreement Title:</label>
                 <input type="text" id="adminAgreementOverallTitle" placeholder="e.g., NDIS Service Agreement">
@@ -373,11 +373,11 @@
                 <p><em>Save changes to see an updated preview. Placeholders will not be filled here.</em></p>
             </div>
         </div>
-        
+
         <div id="adminWorkerManagement" class="admin-content-panel card-subsection">
           <h3><i class="fas fa-id-badge"></i> Worker Management</h3>
           <p>Manage support worker approvals and the NDIS services they are authorized to provide. Services must first be defined in the "NDIS Services" tab.</p>
-          
+
           <div class="card-subsection" style="margin-top: 20px; background-color: var(--warn-light, #fff9e6); border-color: var(--warn, #ffc107); padding:15px; border-radius:var(--radius);">
               <h4><i class="fas fa-user-clock"></i> Workers Awaiting Approval</h4>
               <div id="pendingWorkersList" style="max-height: 300px; overflow-y:auto;">
@@ -406,7 +406,7 @@
         </div>
       </section>
     </main>
-</div> 
+</div>
 
 <div id="rqModal" class="modal"><div class="dlg"><h3><i class="fas fa-calendar-check"></i> Request a shift</h3><div class="form-group"><label for="rqDate">Date</label><input type="date" id="rqDate"></div><div class="form-group"><label for="rqStart">Start Time</label><div class="custom-time-picker-container"><input type="text" id="rqStart" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><div class="form-group"><label for="rqEnd">End Time</label><div class="custom-time-picker-container"><input type="text" id="rqEnd" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><div class="form-group"><label for="rqReason">Reason (Optional)</label><textarea id="rqReason" rows="3" placeholder="Enter reason..."></textarea></div><div class="modal-actions">
     <button id="saveRequestBtn" class="btn-primary"><i class="fas fa-paper-plane"></i> Submit</button>
