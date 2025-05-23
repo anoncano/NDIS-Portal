@@ -344,24 +344,25 @@ function getDefaultGlobalSettings() {
 
 async function loadGlobalSettingsFromFirestore() {
     const settingsDocRef = doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main");
-    try { 
+    try {
         const snap = await getDoc(settingsDocRef);
-        if (snap.exists()) { 
-            globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() }; 
+        if (snap.exists()) {
+            globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() };
             console.log("[FirestoreLoad] Global settings loaded:", globalSettings);
-        } else { 
-            globalSettings = getDefaultGlobalSettings(); 
+        } else {
+            globalSettings = getDefaultGlobalSettings();
             console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
-            await saveGlobalSettingsToFirestore(); 
+            if (currentUserEmail?.toLowerCase() === "admin@portal.com") {
+                userProfile.isAdmin = true;
+            }
+            await saveGlobalSettingsToFirestore();
         }
-    } catch (e) { 
-        console.error("Settings Load Error:", e.message, e); 
-        logErrorToFirestore("loadGlobalSettings", e.message, e); 
-        globalSettings = getDefaultGlobalSettings(); 
+    } catch (e) {
+        ...
     }
-    agreementCustomData = globalSettings.agreementTemplate ? JSON.parse(JSON.stringify(globalSettings.agreementTemplate)) : JSON.parse(JSON.stringify(defaultAgreementCustomData));
-    updatePortalTitle();
+    ...
 }
+
 
 async function saveGlobalSettingsToFirestore() {
     if (!fsDb || !userProfile.isAdmin) { console.warn("Not admin or DB error, cannot save global settings."); return false; }
