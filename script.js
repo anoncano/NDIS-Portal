@@ -270,7 +270,17 @@ async function handleExistingUserProfile(data) {
     userProfile = data;
     console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
     console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
-    
+    if (userProfile.isAdmin === true && userProfile.approved !== true) {
+        console.warn("[Auth Warning] Admin is marked unapproved. Auto-approving...");
+        userProfile.approved = true;
+        try {
+            await updateDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), {
+                approved: true
+            });
+        } catch (e) {
+            console.error("Auto-approve admin failed:", e);
+        }
+    }
     if (userProfile.isAdmin === true) { // Explicit check for true
         console.log("[Auth Debug] Admin user identified (isAdmin is true). Proceeding to admin setup/portal.");
         await loadAllDataForAdmin(); 
