@@ -134,11 +134,11 @@ let allUsersCache = {};
 async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
     if (!fsDb || !appId || appId === 'ndis-portal-app-local') { console.error("Firestore not init/local dev, no log:", location, errorMsg, errorDetails); return; }
     try {
-        await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/logs/errors`), {
+        await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "error_logs"), { // Corrected path for error logs
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.3", userAgent: navigator.userAgent, url: window.location.href
+            appVersion: "1.1.4", userAgent: navigator.userAgent, url: window.location.href
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -154,18 +154,15 @@ function showMessage(title, text, type = 'info', okButtonConfig = null) {
     if (messageModalTitleElement) messageModalTitleElement.innerHTML = `<i class="fas ${iconClass}"></i> ${title}`;
     if (messageModalTextElement) messageModalTextElement.innerHTML = text;
 
-    const currentOkButton = $("#closeMessageModalBtn"); // Get the current button
+    const currentOkButton = $("#closeMessageModalBtn"); 
     if (currentOkButton) {
-        // Clone and replace the button to remove all previous listeners safely
         const newOkButton = currentOkButton.cloneNode(true);
         currentOkButton.parentNode.replaceChild(newOkButton, currentOkButton);
-        
-        // Work with the new button
         const freshOkButton = $("#closeMessageModalBtn"); 
 
         if (okButtonConfig && typeof okButtonConfig.action === 'function') {
             freshOkButton.textContent = okButtonConfig.text || 'OK';
-            freshOkButton.onclick = async () => { // Make it async to await the action
+            freshOkButton.onclick = async () => { 
                 if (okButtonConfig.action) {
                     await okButtonConfig.action(); 
                 }
@@ -282,7 +279,7 @@ async function handleExistingUserProfile(data) {
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login (admin@portal.com).");
     userProfile = { isAdmin: true, name: "Administrator", email: currentUserEmail, uid: currentUserId, approved: true, createdAt: serverTimestamp(), profileSetupComplete: true, nextInvoiceNumber: 1001 };
-    await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
+    await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), userProfile);
     await loadAllDataForAdmin(); 
     enterPortal(true); 
     if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) { 
@@ -296,7 +293,7 @@ async function handleNewRegularUserProfile() {
     console.log("[Auth] New regular user profile creation.");
     const isOrg = globalSettings.portalType === 'organization';
     userProfile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, approved: !isOrg, profileSetupComplete: false, nextInvoiceNumber: 1001, createdAt: serverTimestamp() };
-    await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
+    await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), userProfile);
     if (isOrg && userProfile.approved !== true) { 
         showMessage(
             "Registration Complete - Approval Required", 
@@ -326,7 +323,6 @@ function getDefaultGlobalSettings() {
 }
 
 async function loadGlobalSettingsFromFirestore() {
-    // Corrected path: artifacts/{appId}/public/data/portal_config/main
     const settingsDocRef = doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main");
     try { 
         const snap = await getDoc(settingsDocRef);
@@ -336,10 +332,10 @@ async function loadGlobalSettingsFromFirestore() {
         } else { 
             globalSettings = getDefaultGlobalSettings(); 
             console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
-            await saveGlobalSettingsToFirestore(); // Save defaults for the first time
+            await saveGlobalSettingsToFirestore(); 
         }
     } catch (e) { 
-        console.error("Settings Load Error:", e); 
+        console.error("Settings Load Error:", e.message, e); 
         logErrorToFirestore("loadGlobalSettings", e.message, e); 
         globalSettings = getDefaultGlobalSettings(); 
     }
@@ -350,7 +346,6 @@ async function loadGlobalSettingsFromFirestore() {
 async function saveGlobalSettingsToFirestore() {
     if (!fsDb || !userProfile.isAdmin) { console.warn("Not admin or DB error, cannot save global settings."); return false; }
     globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData));
-    // Corrected path: artifacts/{appId}/public/data/portal_config/main
     const settingsDocRef = doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main");
     try { 
         await setDoc(settingsDocRef, globalSettings, { merge: true }); 
@@ -363,8 +358,7 @@ async function saveGlobalSettingsToFirestore() {
 async function loadAdminServicesFromFirestore() {
     adminManagedServices = [];
     if (!fsDb) return;
-    // Path: artifacts/{appId}/public/services (collection)
-    const servicesCollectionRef = collection(fsDb, "artifacts", appId, "public", "services");
+    const servicesCollectionRef = collection(fsDb, "artifacts", appId, "public", "data", "ndis_services"); // Corrected path
     try { 
         const querySnapshot = await getDocs(servicesCollectionRef);
         querySnapshot.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
@@ -377,12 +371,10 @@ async function loadAllUsersForAdmin() {
     allUsersCache = {};
     if (!userProfile.isAdmin || !fsDb) return;
     try {
-        // Path: artifacts/{appId}/users (collection of user UIDs)
         const usersCollectionRef = collection(fsDb, "artifacts", appId, "users");
         const usersSnapshot = await getDocs(usersCollectionRef);
         const profilePromises = usersSnapshot.docs.map(userDoc => {
             const uid = userDoc.id;
-            // Path: artifacts/{appId}/users/{uid}/profile/details (document)
             const profileRef = doc(fsDb, "artifacts", appId, "users", uid, "profile", "details");
             return getDoc(profileRef).then(profileSnap => ({uid, profileSnap}));
         });
@@ -559,7 +551,6 @@ async function saveShiftRequest() {
     if (!requestData.date || !requestData.startTime || !requestData.endTime) { showMessage("Missing Info", "Date, start, and end times required.", "warning"); return; }
     showLoading("Submitting request...");
     try {
-        // Path: artifacts/{appId}/public/data/shift_requests/{auto_id}
         await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "shift_requests"), requestData);
         showMessage("Request Submitted", "Shift request sent.", "success");
         closeModal('rqModal'); requestDateInputElement.value = ""; requestStartTimeInputElement.value = ""; requestEndTimeInputElement.value = ""; requestReasonTextareaElement.value = "";
@@ -571,7 +562,6 @@ async function loadUserShiftRequests() {
     if (!currentUserId || !fsDb || !shiftRequestsTableBodyElement) return;
     shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Loading requests...</td></tr>';
     try {
-        // Path: artifacts/{appId}/public/data/shift_requests
         const q = query(collection(fsDb, "artifacts", appId, "public", "data", "shift_requests"), where("userId", "==", currentUserId)); 
         const snapshot = await getDocs(q);
         shiftRequestsTableBodyElement.innerHTML = ''; 
@@ -603,64 +593,175 @@ function saveShiftToInvoice() {
     logShiftDateInputElement.value = formatDateForInput(new Date()); logShiftSupportTypeSelectElement.selectedIndex = 0; logShiftStartTimeInputElement.value = ""; logShiftStartTimeInputElement.dataset.value24 = ""; logShiftEndTimeInputElement.value = ""; logShiftEndTimeInputElement.dataset.value24 = ""; logShiftClaimTravelToggleElement.checked = false; logShiftKmFieldsContainerElement.classList.add('hide'); logShiftStartKmInputElement.value = ""; logShiftEndKmInputElement.value = ""; logShiftCalculatedKmElement.textContent = "0.0 Km";
 }
 
-/* ========== Invoice Functions (Placeholders - to be fully implemented) ========== */
+/* ========== Invoice Functions ========== */
 function renderInvoiceSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.nextInvoiceNumber === undefined) { openModal('setInitialInvoiceModal'); } else { loadUserInvoiceDraft(); } populateInvoiceHeader(); renderInvoiceTable(); updateInvoiceTotals(); if(invoiceWeekLabelElement) invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value || Date.now())); }
 function populateInvoiceHeader() { if(providerNameInputElement) providerNameInputElement.value = userProfile.name || ""; if(providerAbnInputElement) providerAbnInputElement.value = userProfile.abn || ""; if(gstFlagInputElement) gstFlagInputElement.value = userProfile.gstRegistered ? "Yes" : "No"; if(invoiceNumberInputElement) invoiceNumberInputElement.value = currentInvoiceData.invoiceNumber || userProfile.nextInvoiceNumber || "INV-001"; if(invoiceDateInputElement) invoiceDateInputElement.value = currentInvoiceData.invoiceDate || formatDateForInput(new Date()); }
 function renderInvoiceTable() { if (!invoiceTableBodyElement) return; invoiceTableBodyElement.innerHTML = ''; currentInvoiceData.items.forEach((item, index) => addInvoiceRowToTable(item, index)); updateInvoiceTotals(); }
-function addInvoiceRowToTable(itemData = {}, index = -1) { /* ... (Implementation from previous version, ensure print spans are updated in updateInvoiceItemFromRow) ... */ }
-function addInvRowUserAction() { /* ... (Implementation from previous version) ... */ }
-function updateInvoiceItemFromRow(rowElement, itemIndex) { /* ... (Implementation from previous version, ensure print spans are updated) ... */ }
-window.deleteInvoiceRow = (button) => { /* ... (Implementation from previous version) ... */ };
-function updateInvoiceTotals() { /* ... (Implementation from previous version) ... */ }
-async function saveInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
-async function loadUserInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
-async function saveInitialInvoiceNumber() { /* ... (Implementation from previous version) ... */ }
-function generateInvoicePdf() { /* ... (Implementation from previous version) ... */ }
+function addInvoiceRowToTable(itemData = {}, index = -1) { 
+    if (!invoiceTableBodyElement) return;
+    const newRow = invoiceTableBodyElement.insertRow();
+    const itemIdx = (index === -1) ? currentInvoiceData.items.length -1 : index;
+    const item = currentInvoiceData.items[itemIdx] || itemData; 
 
-/* ========== Agreement Functions (Placeholders) ========== */
+    newRow.innerHTML = `
+        <td><span class="row-number">${itemIdx + 1}</span></td>
+        <td>
+            <input type="date" class="invoice-input-condensed item-date" value="${item.date || formatDateForInput(new Date())}">
+            <span class="date-print-value print-only">${formatDateForDisplay(item.date || new Date())}</span>
+        </td>
+        <td class="column-code pdf-show">
+            <input type="text" class="invoice-input-condensed item-code" value="${item.code || ''}" placeholder="Item Code" readonly>
+            <span class="code-print-value print-only">${item.code || ''}</span>
+        </td>
+        <td>
+            <select class="invoice-input-condensed item-description-select" style="min-width: 200px;"></select>
+            <span class="description-print-value print-only">${item.description || ''}</span>
+        </td>
+        <td>
+            <div class="custom-time-picker-container"><input type="text" class="custom-time-input item-start-time invoice-input-condensed" readonly placeholder="Select Time" value="${item.startTime ? formatTime12Hour(item.startTime) : ''}" data-value24="${item.startTime || ''}"></div>
+            <span class="start-time-print-value print-only">${item.startTime ? formatTime12Hour(item.startTime) : ''}</span>
+        </td>
+        <td>
+            <div class="custom-time-picker-container"><input type="text" class="custom-time-input item-end-time invoice-input-condensed" readonly placeholder="Select Time" value="${item.endTime ? formatTime12Hour(item.endTime) : ''}" data-value24="${item.endTime || ''}"></div>
+            <span class="end-time-print-value print-only">${item.endTime ? formatTime12Hour(item.endTime) : ''}</span>
+        </td>
+        <td class="column-rate-type pdf-show">
+            <input type="text" class="invoice-input-condensed item-rate-type" value="${item.rateType || 'weekday'}" readonly>
+            <span class="rate-type-print-value print-only">${item.rateType || 'weekday'}</span>
+        </td>
+        <td class="print-only-column pdf-show">
+            <input type="number" class="invoice-input-condensed item-rate-unit" value="${(item.ratePerUnit || 0).toFixed(2)}" step="0.01" style="width:80px;" readonly>
+            <span class="rate-unit-print-value print-only">${formatCurrency(item.ratePerUnit || 0)}</span>
+        </td>
+        <td>
+            <input type="number" class="invoice-input-condensed item-hours-km" value="${(item.hoursOrKm || 0).toFixed(2)}" step="0.01" style="width:80px;" readonly>
+            <span class="hours-km-print-value print-only">${(item.hoursOrKm || 0).toFixed(2)}</span>
+        </td>
+        <td class="no-print pdf-hide">
+            <input type="number" class="invoice-input-condensed item-travel-km-input" value="${item.travelKmInput || 0}" step="0.1" style="width:80px; ${item.isTravelService ? 'display:none;' : ''}" placeholder="Km">
+        </td>
+        <td class="no-print pdf-hide">
+            <label class="chk no-margin" style="justify-content: center;"><input type="checkbox" class="item-claim-travel" ${item.claimTravel ? 'checked' : ''} ${item.isTravelService ? 'disabled style="display:none;"' : ''}></label>
+        </td>
+        <td>
+            <input type="text" class="invoice-input-condensed item-total" value="${formatCurrency(item.totalAmount || 0)}" readonly style="width:100px;">
+            <span class="total-print-value print-only">${formatCurrency(item.totalAmount || 0)}</span>
+        </td>
+        <td class="no-print pdf-hide"><button class="btn-danger btn-small delete-row-btn" onclick="deleteInvoiceRow(this)"><i class="fas fa-trash-alt" style="margin-right:0;"></i></button></td>
+    `;
+    const descSelect = newRow.querySelector('.item-description-select');
+    populateServiceTypeDropdowns(descSelect); // Pass the specific select element
+    if(item.code) descSelect.value = item.code; // Set selected value if item has a code
+    
+    newRow.querySelectorAll('input, select').forEach(input => input.addEventListener('change', () => updateInvoiceItemFromRow(newRow, itemIdx)));
+    newRow.querySelectorAll('.custom-time-input').forEach(input => input.addEventListener('click', (e) => openCustomTimePicker(e.target, (time24) => { e.target.value = formatTime12Hour(time24); e.target.dataset.value24 = time24; updateInvoiceItemFromRow(newRow, itemIdx); })));
+}
+function addInvRowUserAction() { const newItem = { id: generateUniqueId(), date: formatDateForInput(new Date()), code: '', description: '', startTime: '', endTime: '', rateType: 'weekday', ratePerUnit: 0, hoursOrKm: 0, travelKmInput: 0, claimTravel: false, isTravelService: false, totalAmount: 0 }; currentInvoiceData.items.push(newItem); addInvoiceRowToTable(newItem, currentInvoiceData.items.length - 1); updateInvoiceTotals(); }
+function updateInvoiceItemFromRow(rowElement, itemIndex) { 
+    if (itemIndex < 0 || itemIndex >= currentInvoiceData.items.length) return;
+    const item = currentInvoiceData.items[itemIndex];
+    const descSelect = rowElement.querySelector('.item-description-select');
+    const serviceCode = descSelect.value;
+    const service = adminManagedServices.find(s => s.code === serviceCode);
+
+    item.date = rowElement.querySelector('.item-date').value;
+    item.code = serviceCode;
+    item.description = service ? service.description : (descSelect.options[descSelect.selectedIndex]?.text || '');
+    item.startTime = rowElement.querySelector('.item-start-time').dataset.value24;
+    item.endTime = rowElement.querySelector('.item-end-time').dataset.value24;
+    item.rateType = determineRateType(item.date, item.startTime);
+    rowElement.querySelector('.item-rate-type').value = item.rateType;
+    item.isTravelService = service && service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM;
+
+    if (item.isTravelService) {
+        item.hoursOrKm = parseFloat(rowElement.querySelector('.item-travel-km-input').value) || 0;
+        item.ratePerUnit = service && service.rates ? (service.rates.perKm || 0) : 0;
+        rowElement.querySelector('.item-claim-travel').checked = false;
+        rowElement.querySelector('.item-claim-travel').disabled = true;
+        rowElement.querySelector('.item-travel-km-input').style.display = 'inline-block';
+    } else {
+        item.hoursOrKm = calculateHours(item.startTime, item.endTime);
+        item.ratePerUnit = service && service.rates ? (service.rates[item.rateType] || service.rates.flatRate || 0) : 0;
+        rowElement.querySelector('.item-claim-travel').disabled = !service || !service.associatedTravelCode;
+        item.claimTravel = rowElement.querySelector('.item-claim-travel').checked;
+        rowElement.querySelector('.item-travel-km-input').style.display = item.claimTravel ? 'inline-block' : 'none';
+        item.travelKmInput = item.claimTravel ? (parseFloat(rowElement.querySelector('.item-travel-km-input').value) || 0) : 0;
+    }
+    rowElement.querySelector('.item-hours-km').value = item.hoursOrKm.toFixed(2);
+    rowElement.querySelector('.item-rate-unit').value = item.ratePerUnit.toFixed(2);
+    item.totalAmount = item.hoursOrKm * item.ratePerUnit;
+
+    if (item.claimTravel && !item.isTravelService && service && service.associatedTravelCode) {
+        const travelService = adminManagedServices.find(s => s.code === service.associatedTravelCode);
+        if (travelService && travelService.rates && travelService.rates.perKm) {
+            item.totalAmount += item.travelKmInput * travelService.rates.perKm;
+        }
+    }
+    rowElement.querySelector('.item-total').value = formatCurrency(item.totalAmount);
+    rowElement.querySelector('.item-code').value = item.code; // Ensure item code input is also updated
+
+    rowElement.querySelector('.date-print-value').textContent = formatDateForDisplay(item.date);
+    rowElement.querySelector('.code-print-value').textContent = item.code;
+    rowElement.querySelector('.description-print-value').textContent = item.description;
+    rowElement.querySelector('.start-time-print-value').textContent = formatTime12Hour(item.startTime);
+    rowElement.querySelector('.end-time-print-value').textContent = formatTime12Hour(item.endTime);
+    rowElement.querySelector('.rate-type-print-value').textContent = item.rateType;
+    rowElement.querySelector('.rate-unit-print-value').textContent = formatCurrency(item.ratePerUnit);
+    rowElement.querySelector('.hours-km-print-value').textContent = item.hoursOrKm.toFixed(2);
+    rowElement.querySelector('.total-print-value').textContent = formatCurrency(item.totalAmount);
+    updateInvoiceTotals();
+}
+window.deleteInvoiceRow = (button) => { const row = button.closest('tr'); const rowIndex = Array.from(invoiceTableBodyElement.rows).indexOf(row); if (rowIndex !== -1) { currentInvoiceData.items.splice(rowIndex, 1); row.remove(); invoiceTableBodyElement.querySelectorAll('.row-number').forEach((span, idx) => span.textContent = idx + 1); updateInvoiceTotals(); }};
+function updateInvoiceTotals() { currentInvoiceData.subtotal = currentInvoiceData.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0); currentInvoiceData.gst = userProfile.gstRegistered ? currentInvoiceData.subtotal * 0.10 : 0; currentInvoiceData.grandTotal = currentInvoiceData.subtotal + currentInvoiceData.gst; if(subtotalElement) subtotalElement.textContent = formatCurrency(currentInvoiceData.subtotal); if(gstRowElement) gstRowElement.style.display = userProfile.gstRegistered ? 'block' : 'none'; if(gstAmountElement) gstAmountElement.textContent = formatCurrency(currentInvoiceData.gst); if(grandTotalElement) grandTotalElement.textContent = formatCurrency(currentInvoiceData.grandTotal); }
+async function saveInvoiceDraft() { if (!currentUserId || !fsDb) { showMessage("Save Error", "Auth/DB unavailable.", "error"); return; } showLoading("Saving draft..."); currentInvoiceData.invoiceNumber = invoiceNumberInputElement.value; currentInvoiceData.invoiceDate = invoiceDateInputElement.value; try { await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "invoices", "draft"), { ...currentInvoiceData, updatedAt: serverTimestamp() }); showMessage("Draft Saved", "Invoice draft saved.", "success"); } catch (e) { console.error("Draft Save Error:", e); logErrorToFirestore("saveInvoiceDraft", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
+async function loadUserInvoiceDraft() { if (!currentUserId || !fsDb) return; try { const snap = await getDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "invoices", "draft")); if (snap.exists()) { currentInvoiceData = snap.data(); if (!currentInvoiceData.items) currentInvoiceData.items = []; } else { currentInvoiceData = { items: [], invoiceNumber: userProfile.nextInvoiceNumber || "INV-001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 }; } } catch (e) { console.error("Draft Load Error:", e); logErrorToFirestore("loadUserInvoiceDraft", e.message, e); currentInvoiceData = { items: [], invoiceNumber: userProfile.nextInvoiceNumber || "INV-001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 }; } if ($("#invoice")?.classList.contains("active")) { populateInvoiceHeader(); renderInvoiceTable(); } }
+async function saveInitialInvoiceNumber() { const n = parseInt(initialInvoiceNumberInputElement.value, 10); if (isNaN(n) || n <= 0) { showMessage("Invalid Number", "Enter positive number.", "warning"); return; } userProfile.nextInvoiceNumber = n; const success = await saveProfileDetails({ nextInvoiceNumber: n }); if (success) { closeModal('setInitialInvoiceModal'); if(invoiceNumberInputElement) invoiceNumberInputElement.value = n; currentInvoiceData.invoiceNumber = String(n); } }
+function generateInvoicePdf() { if (!invoicePdfContentElement) { showMessage("PDF Error", "Content not found.", "error"); return; } showLoading("Generating PDF..."); const filename = `Invoice-${currentInvoiceData.invoiceNumber || 'draft'}-${currentInvoiceData.invoiceDate || formatDateForInput(new Date())}.pdf`; $$('.print-only, .pdf-show').forEach(el => el.style.display = ''); $$('.no-print, .pdf-hide').forEach(el => el.style.display = 'none'); html2pdf().from(invoicePdfContentElement).set({ margin: [10,10,10,10], filename, image: {type:'jpeg', quality:0.98}, html2canvas:{scale:2, useCORS:true, logging:false}, jsPDF:{unit:'mm', format:'a4', orientation:'portrait'}, pagebreak:{mode:['avoid-all','css','legacy']} }).save().then(() => { hideLoading(); showMessage("PDF Generated", `Downloaded ${filename}.`, "success"); }).catch(err => { hideLoading(); console.error("PDF Error:", err); logErrorToFirestore("generateInvoicePdf", err.message, err); showMessage("PDF Error", err.message, "error"); }).finally(() => { $$('.print-only, .pdf-show').forEach(el => el.style.display = 'none'); $$('.no-print, .pdf-hide').forEach(el => el.style.display = ''); }); }
+
+/* ========== Agreement Functions ========== */
 function renderAgreementSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.isAdmin) { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.remove('hide'); populateAdminWorkerSelectorForAgreement(); clearAgreementDisplay(); } else { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.add('hide'); currentAgreementWorkerEmail = currentUserEmail; loadAndRenderServiceAgreement(); } }
 function populateAdminWorkerSelectorForAgreement() { if (!adminSelectWorkerForAgreementElement || !userProfile.isAdmin) return; adminSelectWorkerForAgreementElement.innerHTML = '<option value="">-- Select a Worker --</option>'; Object.values(allUsersCache).forEach(workerProfile => { if (workerProfile && !workerProfile.isAdmin && workerProfile.email) { const option = document.createElement('option'); option.value = workerProfile.email; option.textContent = `${workerProfile.name || 'N/A'} (${workerProfile.email})`; adminSelectWorkerForAgreementElement.appendChild(option); } }); }
-async function loadAndRenderServiceAgreement(forWorkerEmail = null) { /* ... (Full implementation needed) ... */ }
-function renderAgreementClauses(worker, settings, state) { /* ... (Full implementation needed) ... */ }
-function updateAgreementChip(state) { /* ... (Full implementation needed) ... */ }
-function openSignatureModal(who) { /* ... (Full implementation needed) ... */ }
-function initializeSignaturePad() { /* ... (Full implementation needed) ... */ }
-function clearSignaturePad() { /* ... (Full implementation needed) ... */ }
-function sigStart(e) { /* ... (Full implementation needed) ... */ }
-function sigDraw(e) { /* ... (Full implementation needed) ... */ }
-function sigEnd(e) { /* ... (Full implementation needed) ... */ }
-function getSigPenPosition(e) { /* ... (Full implementation needed) ... */ }
-async function saveSignature() { /* ... (Full implementation needed) ... */ }
-function generateAgreementPdf() { /* ... (Full implementation needed) ... */ }
-function clearAgreementDisplay() { /* ... (Full implementation needed) ... */ }
+async function loadAndRenderServiceAgreement(forWorkerEmail = null) { const targetEmail = forWorkerEmail || currentUserEmail; if (!targetEmail) { clearAgreementDisplay(); return; } let workerData = userProfile; if (forWorkerEmail && forWorkerEmail !== currentUserEmail) { workerData = allUsersCache[forWorkerEmail] || Object.values(allUsersCache).find(u => u.uid === forWorkerEmail); if (!workerData) { showMessage("Error", `Profile for ${forWorkerEmail} not found.`, "error"); clearAgreementDisplay(); return; } } if (!workerData || !workerData.uid) { console.warn("Worker data or UID missing for agreement:", targetEmail); clearAgreementDisplay(); return; } const agreementDocId = `${globalSettings.defaultParticipantNdisNo || 'participant'}_${workerData.uid}`; const agreementStateRef = doc(fsDb, "artifacts", appId, "public", "data", "service_agreements", agreementDocId); let agreementState = { workerSigned: false, participantSigned: false, workerSignatureDate: null, participantSignatureDate: null, workerSignatureDataUrl: null, participantSignatureDataUrl: null, agreementStartDate: formatDateForInput(new Date()), agreementEndDate: globalSettings.defaultPlanEndDate }; try { const snap = await getDoc(agreementStateRef); if (snap.exists()) agreementState = { ...agreementState, ...snap.data() }; } catch (e) { console.error("Agreement Load Error:", e); logErrorToFirestore("loadAgreementState", e.message, e); } if(agreementDynamicTitleElement) agreementDynamicTitleElement.textContent = agreementCustomData.overallTitle || "Service Agreement"; renderAgreementClauses(workerData, globalSettings, agreementState); if(participantSignatureImageElement) participantSignatureImageElement.src = agreementState.participantSignatureDataUrl || 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area'; if(participantSignatureDateElement) participantSignatureDateElement.textContent = agreementState.participantSignatureDate ? formatDateForDisplay(agreementState.participantSignatureDate) : '___'; if(workerSignatureImageElement) workerSignatureImageElement.src = agreementState.workerSignatureDataUrl || 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area'; if(workerSignatureDateElement) workerSignatureDateElement.textContent = agreementState.workerSignatureDate ? formatDateForDisplay(agreementState.workerSignatureDate) : '___'; updateAgreementChip(agreementState); if(signAgreementButtonElement) signAgreementButtonElement.classList.toggle('hide', agreementState.workerSigned || (userProfile.isAdmin && !forWorkerEmail)); if(participantSignButtonElement) participantSignButtonElement.classList.toggle('hide', agreementState.participantSigned || !userProfile.isAdmin); if(downloadAgreementPdfButtonElement) downloadAgreementPdfButtonElement.classList.toggle('hide', !(agreementState.workerSigned && agreementState.participantSigned)); }
+function renderAgreementClauses(worker, settings, state) { if (!agreementContentContainerElement) return; agreementContentContainerElement.innerHTML = ''; const startDate = state.agreementStartDate ? formatDateForDisplay(state.agreementStartDate) : formatDateForDisplay(new Date()); const endDate = state.agreementEndDate ? formatDateForDisplay(state.agreementEndDate) : "plan end date"; let serviceListHtml = "<ul>"; if (worker.authorizedServiceCodes && worker.authorizedServiceCodes.length > 0 && adminManagedServices.length > 0) { worker.authorizedServiceCodes.forEach(code => { const service = adminManagedServices.find(s => s.code === code); serviceListHtml += `<li>${service ? `${service.description} (Code: ${service.code})` : `Service code ${code} (Details not found)`}</li>`; }); } else { serviceListHtml += "<li>No specific services authorized/defined.</li>"; } serviceListHtml += "</ul>"; (agreementCustomData.clauses || []).forEach(clause => { const clauseDiv = document.createElement('div'); clauseDiv.classList.add('agreement-clause'); let body = clause.body.replace(/{{participantName}}/g, settings.defaultParticipantName || 'Participant').replace(/{{participantNdisNo}}/g, settings.defaultParticipantNdisNo || 'N/A').replace(/{{planEndDate}}/g, settings.defaultPlanEndDate ? formatDateForDisplay(settings.defaultPlanEndDate) : 'N/A').replace(/{{workerName}}/g, worker.name || 'Support Worker').replace(/{{workerAbn}}/g, worker.abn || 'N/A').replace(/{{serviceList}}/g, serviceListHtml).replace(/{{planManagerName}}/g, settings.defaultPlanManagerName || 'N/A').replace(/{{planManagerEmail}}/g, settings.defaultPlanManagerEmail || 'N/A').replace(/{{agreementStartDate}}/g, startDate).replace(/{{agreementEndDate}}/g, endDate).replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>'); clauseDiv.innerHTML = `<h3>${clause.heading}</h3><p>${body}</p>`; agreementContentContainerElement.appendChild(clauseDiv); }); }
+function updateAgreementChip(state) { if (!agreementChipElement) return; if (state.workerSigned && state.participantSigned) { agreementChipElement.textContent = "Signed & Active"; agreementChipElement.className = 'chip green'; } else if (state.workerSigned || state.participantSigned) { agreementChipElement.textContent = "Partially Signed"; agreementChipElement.className = 'chip yellow'; } else { agreementChipElement.textContent = "Draft – waiting for signatures"; agreementChipElement.className = 'chip yellow'; } }
+function openSignatureModal(who) { signingAs = who; if (signingAs === 'participant' && !userProfile.isAdmin) { showMessage("Permission Denied", "Only admins can sign for participant.", "error"); return; } openModal('sigModal'); initializeSignaturePad(); if(signatureModalElement) signatureModalElement.querySelector('h3').innerHTML = `<i class="fas fa-pencil-alt"></i> Draw Signature for ${signingAs === 'worker' ? (currentAgreementWorkerEmail || currentUserEmail).split('@')[0] : globalSettings.defaultParticipantName}`; }
+function initializeSignaturePad() { if (!signatureCanvasElement) return; sigCanvas = signatureCanvasElement; sigCtx = sigCanvas.getContext('2d'); const scale = window.devicePixelRatio || 1; sigCanvas.width = sigCanvas.offsetWidth * scale; sigCanvas.height = sigCanvas.offsetHeight * scale; sigCtx.scale(scale, scale); sigCtx.strokeStyle = '#333'; sigCtx.lineWidth = 2; sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round'; clearSignaturePad(); sigCanvas.removeEventListener('mousedown', sigStart); sigCanvas.removeEventListener('mousemove', sigDraw); sigCanvas.removeEventListener('mouseup', sigEnd); sigCanvas.removeEventListener('mouseout', sigEnd); sigCanvas.removeEventListener('touchstart', sigStart); sigCanvas.removeEventListener('touchmove', sigDraw); sigCanvas.removeEventListener('touchend', sigEnd); sigCanvas.addEventListener('mousedown', sigStart); sigCanvas.addEventListener('mousemove', sigDraw); sigCanvas.addEventListener('mouseup', sigEnd); sigCanvas.addEventListener('mouseout', sigEnd); sigCanvas.addEventListener('touchstart', sigStart, { passive: false }); sigCanvas.addEventListener('touchmove', sigDraw, { passive: false }); sigCanvas.addEventListener('touchend', sigEnd); }
+function clearSignaturePad() { if (sigCtx && sigCanvas) { sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height); sigCtx.fillStyle = "#fcfcfc"; sigCtx.fillRect(0,0, sigCanvas.width, sigCanvas.height); } sigPaths = []; }
+function sigStart(e) { e.preventDefault(); sigPen = true; const pos = getSigPenPosition(e); sigPaths.push([pos]); sigCtx.beginPath(); sigCtx.moveTo(pos.x, pos.y); }
+function sigDraw(e) { e.preventDefault(); if (!sigPen) return; const pos = getSigPenPosition(e); sigPaths[sigPaths.length - 1].push(pos); sigCtx.lineTo(pos.x, pos.y); sigCtx.stroke(); }
+function sigEnd(e) { e.preventDefault(); sigPen = false; sigCtx.closePath(); }
+function getSigPenPosition(e) { const rect = sigCanvas.getBoundingClientRect(); let x,y; if (e.touches && e.touches[0]) { x = e.touches[0].clientX - rect.left; y = e.touches[0].clientY - rect.top; } else { x = e.clientX - rect.left; y = e.clientY - rect.top; } return {x,y}; }
+async function saveSignature() { if (!sigCanvas || sigPaths.length === 0 || sigPaths.every(p => p.length < 2)) { showMessage("No Signature", "Please draw a signature.", "warning"); return; } const dataUrl = sigCanvas.toDataURL('image/png'); closeModal('sigModal'); showLoading("Saving signature..."); const workerForAgreement = allUsersCache[currentAgreementWorkerEmail] || userProfile; if (!workerForAgreement || !workerForAgreement.uid) { showMessage("Error", "Worker details not found.", "error"); hideLoading(); return; } const agreementDocId = `${globalSettings.defaultParticipantNdisNo || 'participant'}_${workerForAgreement.uid}`; const agreementStateRef = doc(fsDb, "artifacts", appId, "public", "data", "service_agreements", agreementDocId); let updateData = {}; if (signingAs === 'worker') { updateData = { workerSigned: true, workerSignatureDate: serverTimestamp(), workerSignatureDataUrl: dataUrl }; } else if (signingAs === 'participant' && userProfile.isAdmin) { updateData = { participantSigned: true, participantSignatureDate: serverTimestamp(), participantSignatureDataUrl: dataUrl }; } else { hideLoading(); showMessage("Error", "Invalid signing context.", "error"); return; } try { await setDoc(agreementStateRef, updateData, { merge: true }); showMessage("Signature Saved", "Signature saved.", "success"); await loadAndRenderServiceAgreement(currentAgreementWorkerEmail); } catch (e) { console.error("Sig Save Error:", e); logErrorToFirestore("saveSignature", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
+function generateAgreementPdf() { if (!agreementContentWrapperElement) { showMessage("PDF Error", "Content not found.", "error"); return; } showLoading("Generating Agreement PDF..."); const workerName = (currentAgreementWorkerEmail || currentUserEmail).split('@')[0]; const participantName = (globalSettings.defaultParticipantName || "Participant").replace(/\s+/g, '_'); const filename = `ServiceAgreement-${participantName}-${workerName}.pdf`; if(agreementHeaderForPdfElement) { agreementHeaderForPdfElement.innerHTML = `<h1>${agreementCustomData.overallTitle || "Service Agreement"}</h1>`; agreementHeaderForPdfElement.style.display = 'block'; } $$('.signature-image').forEach(img => { if (img.src.startsWith('data:')) img.crossOrigin = "anonymous"; }); html2pdf().from(agreementContentWrapperElement).set({ margin:[15,15,15,15], filename, image:{type:'jpeg', quality:0.98}, html2canvas:{scale:2,useCORS:true,logging:false,scrollY:-window.scrollY}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['avoid-all','css','legacy']} }).save().then(() => { if(agreementHeaderForPdfElement) agreementHeaderForPdfElement.style.display = 'none'; hideLoading(); showMessage("PDF Generated", `Downloaded ${filename}.`, "success"); }).catch(err => { if(agreementHeaderForPdfElement) agreementHeaderForPdfElement.style.display = 'none'; hideLoading(); console.error("Agreement PDF Error:", err); logErrorToFirestore("generateAgreementPdf", err.message, err); showMessage("PDF Error", err.message, "error"); }); }
+function clearAgreementDisplay() { if(agreementContentContainerElement) agreementContentContainerElement.innerHTML = '<p>Select a worker to view their agreement.</p>'; if(participantSignatureImageElement) participantSignatureImageElement.src = 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area'; if(participantSignatureDateElement) participantSignatureDateElement.textContent = '___'; if(workerSignatureImageElement) workerSignatureImageElement.src = 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area'; if(workerSignatureDateElement) workerSignatureDateElement.textContent = '___'; if(agreementChipElement) { agreementChipElement.textContent = "No Worker"; agreementChipElement.className = 'chip'; } if(signAgreementButtonElement) signAgreementButtonElement.classList.add('hide'); if(participantSignButtonElement) participantSignButtonElement.classList.add('hide'); if(downloadAgreementPdfButtonElement) downloadAgreementPdfButtonElement.classList.add('hide'); }
 
-/* ========== Admin Functions (Placeholders) ========== */
+/* ========== Admin Functions ========== */
 function renderAdminDashboard() { if (!userProfile.isAdmin) { navigateToSection("home"); return; } switchAdminTab(adminNavTabButtons.find(btn => btn.classList.contains('active'))?.dataset.target || 'adminGlobalSettings'); renderAdminGlobalSettingsTab(); }
 function switchAdminTab(targetId) { adminNavTabButtons.forEach(b => b.classList.toggle('active', b.dataset.target === targetId)); adminContentPanels.forEach(p => p.classList.toggle('active', p.id === targetId)); if (targetId === 'adminGlobalSettings') renderAdminGlobalSettingsTab(); if (targetId === 'adminServiceManagement') renderAdminServiceManagementTab(); if (targetId === 'adminAgreementCustomization') renderAdminAgreementCustomizationTab(); if (targetId === 'adminWorkerManagement') renderAdminWorkerManagementTab(); }
-function renderAdminGlobalSettingsTab() { /* ... (Full implementation needed) ... */ }
-async function saveAdminPortalSettings() { /* ... (Full implementation needed) ... */ }
-window.confirmResetGlobalSettings = () => { /* ... (Full implementation needed, with proper modal confirmation) ... */ };
-async function executeResetGlobalSettings() { /* ... (Full implementation needed) ... */ }
-function renderAdminServiceManagementTab() { /* ... (Full implementation needed) ... */ }
-function populateServiceCategoryTypeDropdown() { /* ... (Full implementation needed) ... */ }
-function renderAdminServiceRateFields() { /* ... (Full implementation needed) ... */ }
-function clearAdminServiceForm() { /* ... (Full implementation needed) ... */ }
-function renderAdminServicesTable() { /* ... (Full implementation needed) ... */ }
-window.editAdminService = (id) => { /* ... (Full implementation needed) ... */ };
-window.deleteAdminService = (id) => { /* ... (Full implementation needed, with proper modal confirmation) ... */ };
-async function _confirmDeleteServiceFirestore(id) { /* ... (Full implementation needed) ... */ }
-async function saveAdminServiceToFirestore() { /* ... (Full implementation needed) ... */ }
-function openTravelCodeSelectionModal() { /* ... (Full implementation needed) ... */ }
-function renderAdminAgreementCustomizationTab() { /* ... (Full implementation needed) ... */ }
-function renderAdminAgreementClausesEditor() { /* ... (Full implementation needed) ... */ }
-function addAdminAgreementClauseEditor() { /* ... (Full implementation needed) ... */ }
-function updateAdminAgreementPreview() { /* ... (Full implementation needed) ... */ }
-async function saveAdminAgreementCustomizationsToFirestore() { /* ... (Full implementation needed) ... */ }
+function renderAdminGlobalSettingsTab() { if (!userProfile.isAdmin) return; if(adminEditOrgNameInputElement) adminEditOrgNameInputElement.value = globalSettings.organizationName || ""; if(adminEditOrgAbnInputElement) adminEditOrgAbnInputElement.value = globalSettings.organizationAbn || ""; if(adminEditOrgContactEmailInputElement) adminEditOrgContactEmailInputElement.value = globalSettings.organizationContactEmail || ""; if(adminEditOrgContactPhoneInputElement) adminEditOrgContactPhoneInputElement.value = globalSettings.organizationContactPhone || ""; if(adminEditParticipantNameInputElement) adminEditParticipantNameInputElement.value = globalSettings.defaultParticipantName || ""; if(adminEditParticipantNdisNoInputElement) adminEditParticipantNdisNoInputElement.value = globalSettings.defaultParticipantNdisNo || ""; if(adminEditPlanManagerNameInputElement) adminEditPlanManagerNameInputElement.value = globalSettings.defaultPlanManagerName || ""; if(adminEditPlanManagerEmailInputElement) adminEditPlanManagerEmailInputElement.value = globalSettings.defaultPlanManagerEmail || ""; if(adminEditPlanManagerPhoneInputElement) adminEditPlanManagerPhoneInputElement.value = globalSettings.defaultPlanManagerPhone || ""; if(adminEditPlanEndDateInputElement) adminEditPlanEndDateInputElement.value = formatDateForInput(globalSettings.defaultPlanEndDate) || ""; if(inviteLinkCodeElement) inviteLinkCodeElement.textContent = `${window.location.origin}${window.location.pathname}?registerAsWorker=true&appId=${appId}`; }
+async function saveAdminPortalSettings() { if (!userProfile.isAdmin) return; globalSettings.organizationName = adminEditOrgNameInputElement.value.trim(); globalSettings.organizationAbn = adminEditOrgAbnInputElement.value.trim(); globalSettings.organizationContactEmail = adminEditOrgContactEmailInputElement.value.trim(); globalSettings.organizationContactPhone = adminEditOrgContactPhoneInputElement.value.trim(); globalSettings.defaultParticipantName = adminEditParticipantNameInputElement.value.trim(); globalSettings.defaultParticipantNdisNo = adminEditParticipantNdisNoInputElement.value.trim(); globalSettings.defaultPlanManagerName = adminEditPlanManagerNameInputElement.value.trim(); globalSettings.defaultPlanManagerEmail = adminEditPlanManagerEmailInputElement.value.trim(); globalSettings.defaultPlanManagerPhone = adminEditPlanManagerPhoneInputElement.value.trim(); globalSettings.defaultPlanEndDate = adminEditPlanEndDateInputElement.value; const success = await saveGlobalSettingsToFirestore(); if (success) showMessage("Settings Saved", "Global settings updated.", "success"); else showMessage("Save Error", "Could not save settings.", "error"); }
+window.confirmResetGlobalSettings = () => { showMessage("Confirm Reset", "Reset all global settings to default? This cannot be undone.", "warning", {text: "Confirm Reset", action: executeResetGlobalSettings }); };
+async function executeResetGlobalSettings() { if (!userProfile.isAdmin) return; showLoading("Resetting..."); globalSettings = getDefaultGlobalSettings(); agreementCustomData = JSON.parse(JSON.stringify(defaultAgreementCustomData)); globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); const success = await saveGlobalSettingsToFirestore(); if (success) { renderAdminGlobalSettingsTab(); renderAdminAgreementCustomizationTab(); showMessage("Settings Reset", "Global settings reset to defaults.", "success"); } else { showMessage("Reset Failed", "Could not reset.", "error"); } hideLoading(); }
+function renderAdminServiceManagementTab() { if (!userProfile.isAdmin) return; clearAdminServiceForm(); renderAdminServicesTable(); populateServiceCategoryTypeDropdown(); renderAdminServiceRateFields(); }
+function populateServiceCategoryTypeDropdown() { /* Options are hardcoded in HTML, no dynamic population needed here unless requirements change */ }
+function renderAdminServiceRateFields() { if (!adminServiceRateFieldsContainerElement || !adminServiceCategoryTypeSelectElement) return; adminServiceRateFieldsContainerElement.innerHTML = ''; const category = adminServiceCategoryTypeSelectElement.value; let fieldsHtml = ''; if (category === SERVICE_CATEGORY_TYPES.CORE_STANDARD || category === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) { RATE_CATEGORIES.forEach(rc => { fieldsHtml += `<div class="form-group"><label for="rate_${rc}">${rc.charAt(0).toUpperCase() + rc.slice(1)} Rate ($):</label><input type="number" id="rate_${rc}" class="admin-service-rate" data-rate-key="${rc}" step="0.01" placeholder="0.00"></div>`; }); } else if (category === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || category === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || category === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) { fieldsHtml += `<div class="form-group"><label for="rate_flatRate">Flat Rate ($):</label><input type="number" id="rate_flatRate" class="admin-service-rate" data-rate-key="flatRate" step="0.01" placeholder="0.00"></div>`; } else if (category === SERVICE_CATEGORY_TYPES.TRAVEL_KM) { fieldsHtml += `<div class="form-group"><label for="rate_perKm">Rate per Km ($):</label><input type="number" id="rate_perKm" class="admin-service-rate" data-rate-key="perKm" step="0.01" placeholder="0.00"></div>`; } adminServiceRateFieldsContainerElement.innerHTML = `<div class="rate-inputs-grid">${fieldsHtml}</div>`; }
+function clearAdminServiceForm() { if(adminServiceIdInputElement) adminServiceIdInputElement.value = ""; if(adminServiceCodeInputElement) adminServiceCodeInputElement.value = ""; if(adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = ""; if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.selectedIndex = 0; if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = ""; if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = "None selected"; renderAdminServiceRateFields(); currentAdminServiceEditingId = null; }
+function renderAdminServicesTable() { if (!adminServicesTableBodyElement) return; adminServicesTableBodyElement.innerHTML = ''; adminManagedServices.forEach(service => { const row = adminServicesTableBodyElement.insertRow(); const primaryRateKey = Object.keys(service.rates || {}).find(k => k !== 'perKm' && k !== 'flatRate') || 'flatRate'; const primaryRate = service.rates ? (service.rates[primaryRateKey] || service.rates.perKm || 0) : 0; row.innerHTML = `<td>${service.code}</td><td>${service.description}</td><td>${(adminServiceCategoryTypeSelectElement.querySelector(`option[value="${service.categoryType}"]`)?.textContent || service.categoryType).split('(')[0].trim()}</td><td>${formatCurrency(primaryRate)}</td><td>${service.associatedTravelCode || '-'}</td><td><button class="btn-secondary btn-small" onclick="editAdminService('${service.id}')"><i class="fas fa-edit"></i></button> <button class="btn-danger btn-small" onclick="deleteAdminService('${service.id}')"><i class="fas fa-trash-alt"></i></button></td>`; }); }
+window.editAdminService = (id) => { const service = adminManagedServices.find(s => s.id === id); if (!service) return; currentAdminServiceEditingId = id; if(adminServiceIdInputElement) adminServiceIdInputElement.value = id; if(adminServiceCodeInputElement) adminServiceCodeInputElement.value = service.code; if(adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = service.description; if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = service.categoryType; renderAdminServiceRateFields(); if (service.rates) { $$('.admin-service-rate').forEach(input => { const key = input.dataset.rateKey; if (service.rates[key] !== undefined) input.value = service.rates[key]; }); } if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = service.associatedTravelCode || ""; if(adminServiceTravelCodeDisplayElement) { const tc = adminManagedServices.find(s => s.code === service.associatedTravelCode); adminServiceTravelCodeDisplayElement.value = tc ? `${tc.description} (${tc.code})` : "None selected"; } };
+window.deleteAdminService = (id) => { showMessage("Confirm Delete", `Delete service? This cannot be undone.`, "warning", {text: "Confirm Delete", action: async () => await _confirmDeleteServiceFirestore(id) }); };
+async function _confirmDeleteServiceFirestore(id) { if (!fsDb) return; showLoading("Deleting service..."); try { await deleteDoc(doc(fsDb, "artifacts", appId, "public", "data", "ndis_services", id)); adminManagedServices = adminManagedServices.filter(s => s.id !== id); renderAdminServicesTable(); showMessage("Service Deleted", "Service removed.", "success"); } catch (e) { console.error("Service Delete Error:", e); logErrorToFirestore("deleteAdminService", e.message, e); showMessage("Delete Error", e.message, "error"); } finally { hideLoading(); } }
+async function saveAdminServiceToFirestore() { if (!fsDb || !userProfile.isAdmin) return; const code = adminServiceCodeInputElement.value.trim(); const description = adminServiceDescriptionInputElement.value.trim(); const categoryType = adminServiceCategoryTypeSelectElement.value; const associatedTravelCode = adminServiceTravelCodeInputElement.value.trim() || null; if (!code || !description) { showMessage("Missing Info", "Code and description are required.", "warning"); return; } const rates = {}; $$('.admin-service-rate').forEach(input => { if (input.value) rates[input.dataset.rateKey] = parseFloat(input.value); }); const serviceData = { code, description, categoryType, rates, associatedTravelCode, updatedAt: serverTimestamp() }; showLoading("Saving service..."); try { if (currentAdminServiceEditingId) { await setDoc(doc(fsDb, "artifacts", appId, "public", "data", "ndis_services", currentAdminServiceEditingId), serviceData, {merge: true}); const index = adminManagedServices.findIndex(s => s.id === currentAdminServiceEditingId); if (index > -1) adminManagedServices[index] = { id: currentAdminServiceEditingId, ...serviceData }; showMessage("Service Updated", "Service details saved.", "success"); } else { serviceData.createdAt = serverTimestamp(); const newDocRef = await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "ndis_services"), serviceData); adminManagedServices.push({ id: newDocRef.id, ...serviceData }); showMessage("Service Added", "New service created.", "success"); } clearAdminServiceForm(); renderAdminServicesTable(); populateServiceTypeDropdowns(); } catch (e) { console.error("Service Save Error:", e); logErrorToFirestore("saveAdminService", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
+function openTravelCodeSelectionModal() { if (!travelCodeListContainerElement) return; travelCodeListContainerElement.innerHTML = ""; const travelServices = adminManagedServices.filter(s => s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM); if (travelServices.length === 0) { travelCodeListContainerElement.innerHTML = "<p>No travel services defined.</p>"; } else { const ul = document.createElement('ul'); ul.className = 'modal-selectable-list'; travelServices.forEach(service => { const li = document.createElement('li'); li.textContent = `${service.description} (${service.code})`; li.dataset.code = service.code; li.onclick = () => { if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = service.code; if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = `${service.description} (${service.code})`; closeModal('travelCodeSelectionModal'); }; ul.appendChild(li); }); travelCodeListContainerElement.appendChild(ul); } openModal('travelCodeSelectionModal'); }
+function renderAdminAgreementCustomizationTab() { if (!userProfile.isAdmin || !adminAgreementOverallTitleInputElement || !adminAgreementClausesContainerElement) return; adminAgreementOverallTitleInputElement.value = agreementCustomData.overallTitle || defaultAgreementCustomData.overallTitle; renderAdminAgreementClausesEditor(); updateAdminAgreementPreview(); }
+function renderAdminAgreementClausesEditor() { if (!adminAgreementClausesContainerElement) return; adminAgreementClausesContainerElement.innerHTML = ''; (agreementCustomData.clauses || []).forEach((clause, index) => { const editorDiv = document.createElement('div'); editorDiv.className = 'agreement-clause-editor'; editorDiv.innerHTML = `<div class="form-group"><label for="clauseHeading_${clause.id}">Clause ${index + 1} Heading:</label><input type="text" id="clauseHeading_${clause.id}" value="${clause.heading}" data-clause-id="${clause.id}" class="clause-heading-input"></div><div class="form-group"><label for="clauseBody_${clause.id}">Clause ${index + 1} Body:</label><textarea id="clauseBody_${clause.id}" data-clause-id="${clause.id}" class="clause-body-input" rows="5">${clause.body}</textarea></div><button class="btn-danger btn-small remove-clause-btn" data-clause-id="${clause.id}"><i class="fas fa-trash-alt"></i> Remove</button><hr class="compact-hr">`; adminAgreementClausesContainerElement.appendChild(editorDiv); }); $$('.clause-heading-input, .clause-body-input').forEach(input => input.addEventListener('input', updateAdminAgreementPreview)); $$('.remove-clause-btn').forEach(btn => btn.addEventListener('click', (e) => { const id = e.currentTarget.dataset.clauseId; agreementCustomData.clauses = agreementCustomData.clauses.filter(c => c.id !== id); renderAdminAgreementClausesEditor(); updateAdminAgreementPreview(); })); }
+function addAdminAgreementClauseEditor() { const newId = `custom_${generateUniqueId()}`; agreementCustomData.clauses.push({ id: newId, heading: "New Clause", body: "Clause content..." }); renderAdminAgreementClausesEditor(); updateAdminAgreementPreview(); }
+function updateAdminAgreementPreview() { if (!adminAgreementPreviewElement) return; const temp = { overallTitle: adminAgreementOverallTitleInputElement.value, clauses: Array.from($$('.agreement-clause-editor')).map(ed => ({ id: ed.querySelector('.clause-heading-input').dataset.clauseId, heading: ed.querySelector('.clause-heading-input').value, body: ed.querySelector('.clause-body-input').value })) }; let html = `<h2>${temp.overallTitle || "Service Agreement"}</h2>`; temp.clauses.forEach(cl => { let body = cl.body.replace(/\n/g, '<br>').replace(/{{(.*?)}}/g, '<span style="color:var(--pri); font-style:italic;">[$1]</span>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>'); html += `<h3>${cl.heading}</h3><p>${body}</p>`; }); adminAgreementPreviewElement.innerHTML = html; }
+async function saveAdminAgreementCustomizationsToFirestore() { if (!userProfile.isAdmin) return; agreementCustomData.overallTitle = adminAgreementOverallTitleInputElement.value.trim(); agreementCustomData.clauses = Array.from($$('.agreement-clause-editor')).map(ed => ({ id: ed.querySelector('.clause-heading-input').dataset.clauseId, heading: ed.querySelector('.clause-heading-input').value.trim(), body: ed.querySelector('.clause-body-input').value.trim() })); const success = await saveGlobalSettingsToFirestore(); if (success) showMessage("Agreement Saved", "Template updated.", "success"); else showMessage("Save Error", "Could not save template.", "error"); }
 function renderAdminWorkerManagementTab() { if (!userProfile.isAdmin) return; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); }
-async function loadPendingApprovalWorkers() { /* ... (Full implementation needed, uses allUsersCache) ... */ }
-window.approveWorkerInFirestore = async (uid) => { /* ... (Full implementation needed, updates allUsersCache) ... */ };
-window.denyWorkerInFirestore = async (uid) => { /* ... (Full implementation needed, updates allUsersCache) ... */ };
-async function loadApprovedWorkersForAuthManagement() { /* ... (Full implementation needed, uses allUsersCache) ... */ }
+async function loadPendingApprovalWorkers() { if (!pendingWorkersListElement || !noPendingWorkersMessageElement) return; pendingWorkersListElement.innerHTML = '<p>Loading...</p>'; const pending = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === false); if (pending.length === 0) { noPendingWorkersMessageElement.style.display = 'block'; pendingWorkersListElement.innerHTML = ''; return; } noPendingWorkersMessageElement.style.display = 'none'; pendingWorkersListElement.innerHTML = ''; pending.forEach(w => { const div = document.createElement('div'); div.className = 'pending-worker-item'; div.innerHTML = `<span>${w.name || w.email} (${w.email})</span><div><button class="btn-primary btn-small" onclick="approveWorkerInFirestore('${w.uid}')"><i class="fas fa-check"></i> Approve</button><button class="btn-danger btn-small" onclick="denyWorkerInFirestore('${w.uid}')"><i class="fas fa-times"></i> Deny</button></div>`; pendingWorkersListElement.appendChild(div); }); }
+window.approveWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Approving..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: true, approvedAt: serverTimestamp(), approvedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = true; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); showMessage("Worker Approved", "Access granted.", "success"); } catch (e) { console.error("Approve Error:", e); logErrorToFirestore("approveWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
+window.denyWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Denying..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: 'denied', deniedAt: serverTimestamp(), deniedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = 'denied'; loadPendingApprovalWorkers(); showMessage("Worker Denied", "Access denied.", "info"); } catch (e) { console.error("Deny Error:", e); logErrorToFirestore("denyWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
+async function loadApprovedWorkersForAuthManagement() { if (!workersListForAuthElement) return; workersListForAuthElement.innerHTML = ''; const approved = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === true); if (approved.length === 0) { workersListForAuthElement.innerHTML = '<li>No approved workers.</li>'; return; } approved.forEach(w => { const li = document.createElement('li'); li.textContent = `${w.name || w.email} (${w.email})`; li.onclick = () => selectWorkerForAuth(w.uid, w.name || w.email); workersListForAuthElement.appendChild(li); }); }
 window.selectWorkerForAuth = (uid, name) => { selectedWorkerUIDForAuth = uid; if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.innerHTML = `<i class="fas fa-user-check"></i> Services for: ${name}`; if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.classList.remove('hide'); if(servicesListCheckboxesElement) servicesListCheckboxesElement.innerHTML = ''; const workerProfile = allUsersCache[uid]; const authorizedCodes = workerProfile?.authorizedServiceCodes || []; adminManagedServices.forEach(service => { const li = document.createElement('li'); li.innerHTML = `<label class="chk"><input type="checkbox" value="${service.code}" ${authorizedCodes.includes(service.code) ? 'checked' : ''}> ${service.description} (${service.code})</label>`; servicesListCheckboxesElement.appendChild(li); }); };
 async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", selectedWorkerUIDForAuth, "profile", "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
 
