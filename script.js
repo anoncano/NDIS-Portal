@@ -722,16 +722,17 @@ window.modalRegister = async function () {
   const newUserId = user.uid;
 
   const initialProfileData = {
+  const initialProfileData = {
     name:  email.split('@')[0],
     email,               // shorthand for email: email
     uid:   newUserId,
     isAdmin: false,
-    // list any other keys here, e.g.:
+    // …remove or replace the “…” line here…
     abn: "", gstRegistered: false, bsb: "", acc: "",
     files: [], authorizedServiceCodes: [],
     profileSetupComplete: false,
     nextInvoiceNumber: 1001,
-    approved: true,
+    approved: !isOrgPortal,
     createdAt: serverTimestamp(),
     createdBy: newUserId
   };
