@@ -272,23 +272,26 @@ async function setupAuthListener() {
 }
 
 async function handleExistingUserProfile(data) {
-  userProfile = data;
-  // 1️⃣ Admins skip approval logic immediately
-  if (userProfile.isAdmin === true) {
-    await loadAllDataForAdmin();
-    enterPortal(true);
+    userProfile = data;
+    console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}`);
+
+    if (userProfile.isAdmin) {
+        await loadAllDataForAdmin();
+        enterPortal(true);
+        return false;
+    }
+
+    if (globalSettings.portalType === 'organization' && !userProfile.approved) {
+        showMessage("Approval Required", "Your account awaits approval. Logging out.", "warning");
+        await fbSignOut(fbAuth);
+        return true;
+    }
+
+    await loadAllDataForUser();
+    enterPortal(false);
     return false;
-  }
-  // 2️⃣ Only non-admins hit the approval gate
-  if (globalSettings.portalType==='organization' && userProfile.approved !== true) {
-    // …block and sign out…
-    return true;
-  }
-  // 3️⃣ Regular user flow
-  await loadAllDataForUser();
-  enterPortal(false);
-  return false;
 }
+
 
 
 async function handleNewAdminProfile() {
