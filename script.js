@@ -2135,12 +2135,12 @@ function clearAdminServiceForm() {
     const formHeader = $("#adminServiceFormContainer h4");
     if(formHeader) formHeader.innerHTML = `<i class="fas fa-plus-square"></i> Add Service`;
 }
-if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
-if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 document.addEventListener('DOMContentLoaded', async () => {
     showLoading("Initializing Portal...");
     const loginBtn    = $("#loginBtn");
     const registerBtn = $("#registerBtn");
+    if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+    if (registerBtn) registerBtn.addEventListener("click", modalRegister);
     await initializeFirebase();
 
     if (!isFirebaseInitialized) {
