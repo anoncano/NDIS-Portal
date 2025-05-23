@@ -364,6 +364,10 @@ async function handleNewAdminProfile() {
     // Save full profile to profile/details
     await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
 
+    // ⏩ Force reload profile after creation to prevent stale data
+    const snap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"));
+    if (snap.exists()) userProfile = snap.data();
+
     await loadAllDataForAdmin(); 
     enterPortal(true); 
 
@@ -374,6 +378,7 @@ async function handleNewAdminProfile() {
 
     return false;
 }
+
 
 async function handleNewRegularUserProfile() {
     console.log("[Auth] New regular user profile creation.");
