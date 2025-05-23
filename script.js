@@ -265,48 +265,29 @@ if (profileData) {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-if (!userProfile.isAdmin) console.warn("[Auth Debug] Profile NOT marked as admin (yet)");
-    // If user is not admin but is the first in the system, auto-promote
-const usersRef = collection(fsDb, `artifacts/${appId}/users`);
-const freshSnap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
-if (freshSnap.exists()) userProfile = freshSnap.data();
 
+    const usersRef = collection(fsDb, `artifacts/${appId}/users`);
+    const snap = await getDocs(usersRef);
+    const isFirstUser = snap.size === 1 && snap.docs[0].id === currentUserId;
 
-if (isFirstUser && userProfile.isAdmin !== true) {
-    console.log("[Auth Debug] Auto-promoting first user to admin...");
-    await updateDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"), {
-        isAdmin: true,
-        approved: true
-    });
+    // Promote first user to admin
+    if (isFirstUser && userProfile.isAdmin !== true) {
+        console.log("[Auth Debug] Auto-promoting first user to admin...");
+        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"), {
+            isAdmin: true,
+            approved: true
+        });
+    }
 
+    // Always fetch fresh data after possible update
     const freshSnap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
     if (freshSnap.exists()) {
         userProfile = freshSnap.data();
-        console.log("[Auth Debug] Refetched userProfile after auto-promotion:", JSON.stringify(userProfile));
+        console.log("[Auth Debug] Refetched userProfile:", JSON.stringify(userProfile));
     }
-}
 
-
-    console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
     console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
-
-    // FIX: Force admin recovery early if email matches admin
-  if (userProfile.isAdmin === true && userProfile.approved !== true) {
-    console.warn("[Auth Fix] Auto-approving admin UID.");
-    try {
-        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"), {
-            approved: true
-        });
-
-        // 🔁 Fetch fresh data to avoid stale state
-        const snap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
-        if (snap.exists()) userProfile = snap.data();
-    } catch (e) {
-        console.error("[Auth Fix] Auto-approve failed:", e);
-    }
-}
-
-    // Re-run approval logic after patch
+    
     const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true && !userProfile.isAdmin;
     console.log(`[Auth Debug] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
 
@@ -322,6 +303,24 @@ if (isFirstUser && userProfile.isAdmin !== true) {
         );
         return true;
     }
+
+    if (userProfile.isAdmin) {
+        console.log("[Auth Debug] Admin user detected. Loading admin portal.");
+        await loadAllDataForAdmin();
+        enterPortal(true);
+        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
+            openAdminSetupWizard();
+        }
+    } else {
+        await loadAllDataForUser();
+        enterPortal(false);
+        if (!userProfile.profileSetupComplete) {
+            openUserSetupWizard();
+        }
+    }
+
+    return false;
+}
 
     if (userProfile.isAdmin) {
         console.log("[Auth Debug] Admin user detected. Loading admin portal.");
