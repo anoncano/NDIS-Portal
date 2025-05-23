@@ -2139,17 +2139,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoading("Initializing Portal...");
     
     await initializeFirebase();
-
+const loginBtn    = $("#loginBtn");
+    const registerBtn = $("#registerBtn");
+    if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+    if (registerBtn) registerBtn.addEventListener("click", modalRegister);
     if (!isFirebaseInitialized) {
         hideLoading();
         console.log("[App] Firebase not initialized. Halting further DOM-dependent setup.");
         return;
     }
 
-const loginBtn    = $("#loginBtn");
-    const registerBtn = $("#registerBtn");
-    if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
-    if (registerBtn) registerBtn.addEventListener("click", modalRegister);
+
 
 
     const addClauseBtn = $("#adminAddAgreementClauseBtn");
