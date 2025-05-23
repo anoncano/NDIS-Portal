@@ -268,68 +268,61 @@ async function setupAuthListener() {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-    console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}`);
+    console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
+    console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
 
-    // If this user is meant to be admin, but the data is incorrect
-    if (currentUserEmail.toLowerCase() === "admin@portal.com" && !userProfile.isAdmin) {
-        console.warn("[Auth Fix] Elevating admin@portal.com to admin.");
-        userProfile.isAdmin = true;
-        userProfile.approved = true;
-        try {
-            await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), {
-                isAdmin: true,
-                approved: true
-            });
-        } catch (e) {
-            console.error("[Auth Fix] Failed to update admin profile:", e);
+    // FIX: Force admin recovery early if email matches admin
+    if (currentUserEmail.toLowerCase() === "tuckett.mitchell@gmail.com") {
+        if (!userProfile.isAdmin || userProfile.approved !== true) {
+            console.warn("[Auth Fix] Auto-elevating to admin and approving.");
+            userProfile.isAdmin = true;
+            userProfile.approved = true;
+            try {
+                await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), {
+                    isAdmin: true,
+                    approved: true
+                });
+            } catch (e) {
+                console.error("Auto-approve admin failed:", e);
+            }
         }
     }
 
-    // Block unapproved org users
-    if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && !userProfile.approved) {
-        showMessage("Approval Required", "Your account awaits approval. Logging out.", "warning");
-        await fbSignOut(fbAuth);
+    // Re-run approval logic after patch
+    const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true && !userProfile.isAdmin;
+    console.log(`[Auth Debug] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
+
+    if (isUnapprovedOrgUser) {
+        console.log("[Auth Debug] Unapproved organization user. Showing approval modal.");
+        if (authScreenElement) authScreenElement.style.display = "none";
+        if (portalAppElement) portalAppElement.style.display = "none";
+        showMessage(
+            "Approval Required",
+            "Your account is awaiting approval from an administrator. Please log out and try again later once approved.",
+            "warning",
+            { text: 'OK', action: portalSignOut }
+        );
         return true;
     }
 
     if (userProfile.isAdmin) {
+        console.log("[Auth Debug] Admin user detected. Loading admin portal.");
         await loadAllDataForAdmin();
         enterPortal(true);
+        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
+            openAdminSetupWizard();
+        }
     } else {
         await loadAllDataForUser();
         enterPortal(false);
+        if (!userProfile.profileSetupComplete) {
+            openUserSetupWizard();
+        }
     }
 
     return false;
 }
 
-    
-    const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true;
-    console.log(`[Auth Debug] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
-
-    if (isUnapprovedOrgUser) {
-        console.log("[Auth Debug] Unapproved organization user. Showing approval modal.");
-        if(authScreenElement) authScreenElement.style.display = "none"; 
-        if(portalAppElement) portalAppElement.style.display = "none"; 
-        showMessage(
-            "Approval Required", 
-            "Your account is awaiting approval from an administrator. Please log out and try again later once approved.", 
-            "warning",
-            { text: 'OK', action: portalSignOut } 
-        );
-        return true; // Flow IS interrupted
-    }
-    
-    // Approved non-admin user or participant portal user
-    console.log("[Auth Debug] Approved non-admin or participant portal user. Proceeding.");
-    await loadAllDataForUser(); 
-    enterPortal(false); 
-    if (!userProfile.profileSetupComplete) {
-        console.log("[AuthListener] Regular user needs profile setup wizard.");
-        openUserSetupWizard();
-    }
-    return false; // Flow can proceed
-}
 
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login (admin@portal.com).");
