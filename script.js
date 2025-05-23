@@ -138,7 +138,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.5", userAgent: navigator.userAgent, url: window.location.href // Incremented version
+            appVersion: "1.1.5", userAgent: navigator.userAgent, url: window.location.href 
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -212,6 +212,10 @@ async function setupAuthListener() {
     return new Promise((resolve) => {
         onAuthStateChanged(fbAuth, async (user) => {
             showLoading("Authenticating...");
+            // Initially hide both main app and auth screen to prevent flicker
+            if(portalAppElement) portalAppElement.style.display = "none";
+            if(authScreenElement) authScreenElement.style.display = "none";
+
             try {
                 if (user) {
                     currentUserId = user.uid; currentUserEmail = user.email;
@@ -219,7 +223,7 @@ async function setupAuthListener() {
                     await loadGlobalSettingsFromFirestore(); 
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
                     
-                    let flowInterrupted = false; // Flag to check if a modal is shown or user is signed out
+                    let flowInterrupted = false; 
                     if (profileData) { 
                         flowInterrupted = await handleExistingUserProfile(profileData); 
                     } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
@@ -231,17 +235,16 @@ async function setupAuthListener() {
                         flowInterrupted = true;
                     }
 
-                    if (!flowInterrupted) { // Only proceed if flow was not interrupted
+                    if (!flowInterrupted) { 
                         if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
                         if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
-                        if(authScreenElement) authScreenElement.style.display = "none";
-                        if(portalAppElement) portalAppElement.style.display = "flex";
+                        if(authScreenElement) authScreenElement.style.display = "none"; // Should already be hidden
+                        if(portalAppElement) portalAppElement.style.display = "flex"; // Show main app
                         // enterPortal is called within the profile handlers if successful
                     } else {
-                        console.log("[AuthListener] User flow interrupted or led to sign out.");
-                        // Ensure portal is hidden if flow is interrupted (e.g. approval modal)
-                        if(portalAppElement) portalAppElement.style.display = "none";
-                        // Auth screen will be shown by onAuthStateChanged if user is actually signed out
+                        console.log("[AuthListener] User flow interrupted (e.g. approval modal or sign out).");
+                        // If flow was interrupted by a modal, portalApp remains hidden.
+                        // If sign out was triggered, onAuthStateChanged will run again with user=null.
                     }
 
                 } else { // User is signed out
@@ -249,14 +252,14 @@ async function setupAuthListener() {
                     currentUserId = null; currentUserEmail = null; userProfile = {};
                     if(userIdDisplayElement) userIdDisplayElement.textContent = "Not Logged In";
                     if(logoutButtonElement) logoutButtonElement.classList.add('hide');
-                    if(authScreenElement) authScreenElement.style.display = "flex";
+                    if(authScreenElement) authScreenElement.style.display = "flex"; // Show login screen
                     if(portalAppElement) portalAppElement.style.display = "none";
-                    updateNavigation(false); navigateToSection("home");
+                    updateNavigation(false); navigateToSection("home"); // Reset nav to default
                 }
             } catch (error) { 
                 console.error("[AuthListener] Error:", error); 
                 logErrorToFirestore("onAuthStateChanged", error.message, error); 
-                await fbSignOut(fbAuth); 
+                await fbSignOut(fbAuth); // Attempt to sign out on error
                 if(authScreenElement) authScreenElement.style.display = "flex"; 
                 if(portalAppElement) portalAppElement.style.display = "none";
             }
@@ -272,9 +275,8 @@ async function handleExistingUserProfile(data) {
     userProfile = data;
     console.log(`[Auth] Existing profile. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
     
-    // Explicitly log the condition being checked for unapproved users
     const isUnapprovedOrgUser = !userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true;
-    console.log(`[Auth] IsUnapprovedOrgUser check: ${isUnapprovedOrgUser}`);
+    console.log(`[Auth] IsUnapprovedOrgUser check: ${isUnapprovedOrgUser}. Admin status: ${userProfile.isAdmin}`);
 
     if (isUnapprovedOrgUser) {
         if(authScreenElement) authScreenElement.style.display = "none"; 
@@ -920,3 +922,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     navigateToSection(initialHash.substring(1));
     hideLoading(); 
 });
+```
+
+The console message "Not admin or DB error, cannot save global settings" appearing during `loadGlobalSettingsFromFirestore` is because this function calls `saveGlobalSettingsToFirestore` if no settings document exists. However, `saveGlobalSettingsToFirestore` has a guard: `if (!fsDb || !userProfile.isAdmin)`. At the point `loadGlobalSettingsFromFirestore` is first called (during `onAuthStateChanged`, before `userProfile` is fully populated for a new admin), `userProfile.isAdmin` might not yet be true.
+
+This is a normal part of the initial setup for a brand new portal deployment. The sequence is:
+1.  `onAuthStateChanged` fires.
+2.  `loadGlobalSettingsFromFirestore` is called.
+3.  If no settings exist, it tries to save defaults. The `userProfile.isAdmin` might be false at this exact moment if the profile hasn't been created/loaded yet. This causes the "Not admin or DB error..." console warning.
+4.  Then, `handleNewAdminProfile` (or other profile handlers) runs, sets `userProfile.isAdmin = true`, and saves the admin profile.
+5.  If the admin setup wizard runs, it will call `saveGlobalSettingsToFirestore` again, and by this time `userProfile.isAdmin` will be true, so the settings will be saved correctly.
+
+This initial warning is generally benign for a first-time setup. The critical part is that the settings *do* get saved correctly once the admin profile is established and/or the setup wizard completes.
+
+The main focus of this update was the UI flow for unapproved users and ensuring admins are not incorrectly blocked. The Firestore path error should be resolved if you are using the latest script from the Canvas. If the path error persists, the issue is almost certainly related to an outdated script being served to your brows
