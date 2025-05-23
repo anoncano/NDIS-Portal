@@ -274,13 +274,18 @@ if (freshSnap.exists()) userProfile = freshSnap.data();
 
 if (isFirstUser && userProfile.isAdmin !== true) {
     console.log("[Auth Debug] Auto-promoting first user to admin...");
-    userProfile.isAdmin = true;
-    userProfile.approved = true;
-    await updateDoc(doc(fsDb, `artifacts/${appId}/users`, currentUserId), {
+    await updateDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"), {
         isAdmin: true,
         approved: true
     });
+
+    const freshSnap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
+    if (freshSnap.exists()) {
+        userProfile = freshSnap.data();
+        console.log("[Auth Debug] Refetched userProfile after auto-promotion:", JSON.stringify(userProfile));
+    }
 }
+
 
     console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
     console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
