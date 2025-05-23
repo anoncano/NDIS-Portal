@@ -1795,6 +1795,7 @@ function displayPendingWorkersForAdmin() {
 }
 
 async function approveWorkerInFirestore(workerId) {
+    console.log(`[ADMIN APPROVAL CALLED] workerId received: ${workerId}`); // DEBUG LOG
     if (!isFirebaseInitialized || !fsDb || !(profile && profile.isAdmin)) {
         showMessage("Error", "Cannot approve worker. System not ready or insufficient permissions.");
         return;
@@ -1807,30 +1808,41 @@ async function approveWorkerInFirestore(workerId) {
     showLoading(`Approving worker ${workerId}...`);
     try {
         const workerProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${workerId}/profile`, "details");
+        console.log(`[ADMIN APPROVAL] Attempting to update Firestore for path: ${workerProfileDocRef.path}`); // DEBUG LOG
+
         await updateDoc(workerProfileDocRef, {
             approved: true,
             lastUpdated: serverTimestamp(),
             updatedBy: currentUserId // Admin's ID
         });
+        console.log(`[ADMIN APPROVAL] Successfully updated Firestore for workerId: ${workerId}. 'approved' should now be true.`); // DEBUG LOG
 
-        // Update local 'accounts' and 'pendingApprovalAccounts'
-        const workerEmail = Object.keys(accounts).find(key => accounts[key].profile.uid === workerId);
-        if (workerEmail && accounts[workerEmail]) {
+        // Update local 'accounts' and 'pendingApprovalAccounts' for immediate UI refresh for the admin
+        const workerEmail = Object.keys(accounts).find(key => accounts[key]?.profile?.uid === workerId);
+        if (workerEmail && accounts[workerEmail]?.profile) {
             accounts[workerEmail].profile.approved = true;
-        } else if (accounts[workerId]) { // Fallback if email was not the key
+            console.log(`[ADMIN APPROVAL] Updated local 'accounts' cache for email key: ${workerEmail}`);
+        } else if (accounts[workerId]?.profile) { // Fallback if email was not the key or user is keyed by UID
             accounts[workerId].profile.approved = true;
+            console.log(`[ADMIN APPROVAL] Updated local 'accounts' cache for UID key: ${workerId}`);
+        } else {
+            console.warn(`[ADMIN APPROVAL] Could not find worker ${workerId} in local 'accounts' cache to update 'approved' status.`);
         }
-        pendingApprovalAccounts = pendingApprovalAccounts.filter(p => p.uid !== workerId);
 
-        // Refresh display
+        const initialPendingCount = pendingApprovalAccounts.length;
+        pendingApprovalAccounts = pendingApprovalAccounts.filter(p => p.uid !== workerId);
+        console.log(`[ADMIN APPROVAL] Updated 'pendingApprovalAccounts'. Count changed from ${initialPendingCount} to ${pendingApprovalAccounts.length}.`);
+
+
+        // Refresh admin's display
         displayPendingWorkersForAdmin();
         displayWorkersForAuth(); // Refresh the main list too, as they are now approved
 
         showMessage("Worker Approved", `Worker ${workerId} has been approved.`);
 
     } catch (error) {
-        console.error("Error approving worker:", error);
-        logErrorToFirestore("approveWorkerInFirestore", error.message, {workerId, error});
+        console.error(`[ADMIN APPROVAL] Firestore update FAILED for workerId: ${workerId}`, error); // DEBUG LOG with error
+        logErrorToFirestore("approveWorkerInFirestore", error.message, { workerId, error });
         showMessage("Error", `Could not approve worker: ${error.message}`);
     } finally {
         hideLoading();
