@@ -138,7 +138,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.4", userAgent: navigator.userAgent, url: window.location.href
+            appVersion: "1.1.5", userAgent: navigator.userAgent, url: window.location.href // Incremented version
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -156,9 +156,9 @@ function showMessage(title, text, type = 'info', okButtonConfig = null) {
 
     const currentOkButton = $("#closeMessageModalBtn"); 
     if (currentOkButton) {
-        const newOkButton = currentOkButton.cloneNode(true); // Clone to remove old listeners
+        const newOkButton = currentOkButton.cloneNode(true); 
         currentOkButton.parentNode.replaceChild(newOkButton, currentOkButton);
-        const freshOkButton = $("#closeMessageModalBtn"); // Re-select the new button
+        const freshOkButton = $("#closeMessageModalBtn"); 
 
         if (okButtonConfig && typeof okButtonConfig.action === 'function') {
             freshOkButton.textContent = okButtonConfig.text || 'OK';
@@ -216,34 +216,32 @@ async function setupAuthListener() {
                 if (user) {
                     currentUserId = user.uid; currentUserEmail = user.email;
                     console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
-                    await loadGlobalSettingsFromFirestore(); // Load settings early
+                    await loadGlobalSettingsFromFirestore(); 
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
                     
-                    let canProceedToPortal = false;
+                    let flowInterrupted = false; // Flag to check if a modal is shown or user is signed out
                     if (profileData) { 
-                        canProceedToPortal = !(await handleExistingUserProfile(profileData)); // Negate because handler returns true if flow is interrupted
+                        flowInterrupted = await handleExistingUserProfile(profileData); 
                     } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
-                        canProceedToPortal = !(await handleNewAdminProfile());
+                        flowInterrupted = await handleNewAdminProfile();
                     } else if (currentUserId) { 
-                        canProceedToPortal = !(await handleNewRegularUserProfile());
+                        flowInterrupted = await handleNewRegularUserProfile();
                     } else { 
-                        await fbSignOut(fbAuth); // Should not happen if user object exists
+                        await fbSignOut(fbAuth); 
+                        flowInterrupted = true;
                     }
 
-                    if (canProceedToPortal) {
+                    if (!flowInterrupted) { // Only proceed if flow was not interrupted
                         if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
                         if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
                         if(authScreenElement) authScreenElement.style.display = "none";
                         if(portalAppElement) portalAppElement.style.display = "flex";
-                        // enterPortal will be called by the handler functions if successful
+                        // enterPortal is called within the profile handlers if successful
                     } else {
-                        // If canProceedToPortal is false, it means a modal (like approval) is shown,
-                        // or user was signed out. Ensure main app is hidden.
-                        if(portalAppElement) portalAppElement.style.display = "none";
-                        if(authScreenElement && !messageModalElement.style.display.includes('flex')) { // Only show auth if no other modal is up
-                             authScreenElement.style.display = "flex";
-                        }
                         console.log("[AuthListener] User flow interrupted or led to sign out.");
+                        // Ensure portal is hidden if flow is interrupted (e.g. approval modal)
+                        if(portalAppElement) portalAppElement.style.display = "none";
+                        // Auth screen will be shown by onAuthStateChanged if user is actually signed out
                     }
 
                 } else { // User is signed out
@@ -259,7 +257,7 @@ async function setupAuthListener() {
                 console.error("[AuthListener] Error:", error); 
                 logErrorToFirestore("onAuthStateChanged", error.message, error); 
                 await fbSignOut(fbAuth); 
-                if(authScreenElement) authScreenElement.style.display = "flex"; // Ensure login is shown on error
+                if(authScreenElement) authScreenElement.style.display = "flex"; 
                 if(portalAppElement) portalAppElement.style.display = "none";
             }
             finally { hideLoading(); if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } }
@@ -272,19 +270,24 @@ async function setupAuthListener() {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-    console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}`);
-    if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true) {
-        if(authScreenElement) authScreenElement.style.display = "none"; // Hide auth screen
-        if(portalAppElement) portalAppElement.style.display = "none"; // Ensure portal app is hidden
+    console.log(`[Auth] Existing profile. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
+    
+    // Explicitly log the condition being checked for unapproved users
+    const isUnapprovedOrgUser = !userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true;
+    console.log(`[Auth] IsUnapprovedOrgUser check: ${isUnapprovedOrgUser}`);
+
+    if (isUnapprovedOrgUser) {
+        if(authScreenElement) authScreenElement.style.display = "none"; 
+        if(portalAppElement) portalAppElement.style.display = "none"; 
         showMessage(
             "Approval Required", 
             "Your account is awaiting approval from an administrator. Please log out and try again later once approved.", 
             "warning",
-            { text: 'OK', action: portalSignOut } // Changed button text to OK
+            { text: 'OK', action: portalSignOut } 
         );
         return true; // Flow is interrupted
     }
-    // If admin or approved user
+    
     if (userProfile.isAdmin) { 
         await loadAllDataForAdmin(); 
         enterPortal(true); 
@@ -328,7 +331,7 @@ async function handleNewRegularUserProfile() {
             "Registration Complete - Approval Required", 
             "Your account has been created and is awaiting administrator approval. Please log out and try again later.", 
             "info",
-            { text: 'OK', action: portalSignOut } // Changed button text to OK
+            { text: 'OK', action: portalSignOut } 
         );
         return true; // Flow is interrupted
     }
@@ -429,8 +432,6 @@ async function loadAllDataForAdmin() { showLoading("Loading admin data..."); awa
 /* ========== Portal Entry & Navigation ========== */
 function enterPortal(isAdmin) {
     console.log(`Entering portal. Admin: ${isAdmin}`);
-    // This function is now called by the profile handlers *after* checks.
-    // UI visibility for authScreen and portalApp is handled in onAuthStateChanged and profile handlers.
     updateNavigation(isAdmin); 
     updateProfileDisplay();
     if (isAdmin) { 
