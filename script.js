@@ -715,13 +715,30 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
+  const email    = $("#authEmail")?.value.trim();
+  const password = $("#authPassword")?.value.trim();
+  // …validation, loading UI, etc…
+  const { user } = await createUserWithEmailAndPassword(fbAuth, email, password);
+  const newUserId = user.uid;
+
   const initialProfileData = {
-  name: email.split('@')[0],
-  email: email,
-  uid: newUserId,
-  isAdmin: false,
-  …  
+    name:  email.split('@')[0],
+    email,               // shorthand for email: email
+    uid:   newUserId,
+    isAdmin: false,
+    // list any other keys here, e.g.:
+    abn: "", gstRegistered: false, bsb: "", acc: "",
+    files: [], authorizedServiceCodes: [],
+    profileSetupComplete: false,
+    nextInvoiceNumber: 1001,
+    approved: true,
+    createdAt: serverTimestamp(),
+    createdBy: newUserId
+  };
+
+  // …then setDoc(...) and the rest…
 };
+
 
 
   showAuthStatusMessage("", false);
