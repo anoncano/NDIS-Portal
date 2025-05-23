@@ -715,19 +715,75 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
-    // \…remove or replace the “…” line here…
-    abn: "", gstRegistered: false, bsb: "", acc: "",
-    files: [], authorizedServiceCodes: [],
-    profileSetupComplete: false,
-    nextInvoiceNumber: 1001,
-    approved: !isOrgPortal,
-    createdAt: serverTimestamp(),
-    createdBy: newUserId
+  const emailInput = $("#authEmail");
+  const passwordInput = $("#authPassword");
+  const email = emailInput ? emailInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value.trim() : "";
 
+  showAuthStatusMessage("", false); // Clear any previous messages
 
-  };
+  if (!email || !validateEmail(email) || !password || password.length < 6) {
+      return showAuthStatusMessage("Valid email and a password of at least 6 characters are required for registration.");
+  }
+  if (!isFirebaseInitialized || !fbAuth || !fsDb) {
+      return showAuthStatusMessage("System Error: Registration service not ready. Please refresh.");
+  }
 
-  // …then setDoc(...) and the rest…
+  try {
+    showLoading("Registering...");
+    const userCredential = await createUserWithEmailAndPassword(fbAuth, email, password);
+
+    if (userCredential && userCredential.user) {
+        const newUserId = userCredential.user.uid;
+        // Ensure globalSettings is loaded or has a default value before this point
+        // For example, globalSettings might be loaded during initializeFirebase()
+        const isOrgPortal = globalSettings.portalType === 'organization';
+
+        const initialProfileData = {
+            name: email.split('@')[0], // Default name from email
+            email: email,
+            uid: newUserId,
+            isAdmin: false,
+            abn: "", // From your snippet
+            gstRegistered: false, // From your snippet
+            bsb: "", // From your snippet
+            acc: "", // From your snippet
+            files: [], // From your snippet
+            authorizedServiceCodes: [], // From your snippet
+            profileSetupComplete: false, // From your snippet
+            nextInvoiceNumber: 1001, // From your snippet
+            approved: !isOrgPortal, // From your snippet - new users in org portal are not pre-approved
+            createdAt: serverTimestamp(), // From your snippet
+            createdBy: newUserId // From your snippet - links profile creation to the user ID
+        };
+
+        const userProfileDocRef = doc(fsDb, `artifacts/${appId}/users/${newUserId}/profile`, "details");
+        await setDoc(userProfileDocRef, initialProfileData);
+
+        // Feedback to user
+        if (isOrgPortal && !initialProfileData.approved) {
+             showMessage("Registration Successful", "Your account has been created and is awaiting administrator approval. You will be logged out shortly.");
+             // Optional: Sign out user if approval is needed, forcing onAuthStateChanged to handle the "logged out" state.
+             // await fbSignOut(fbAuth);
+        } else {
+             showMessage("Registration Successful", "Your account has been created! You can now log in.");
+        }
+        // Clear form fields after successful registration attempt
+        if(emailInput) emailInput.value = "";
+        if(passwordInput) passwordInput.value = "";
+    }
+
+  } catch (err) {
+      console.error("Registration Failed:", err);
+      logErrorToFirestore("modalRegister", err.message, err); // Assuming logErrorToFirestore is defined
+      let userMessage = "Could not create account. The email might already be in use or there could be a network issue.";
+      if (err.code === 'auth/email-already-in-use') {
+          userMessage = "This email address is already registered. Please try logging in or use a different email.";
+      }
+      showAuthStatusMessage(userMessage);
+  } finally {
+      hideLoading();
+  }
 };
 
 
