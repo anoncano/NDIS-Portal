@@ -2135,7 +2135,8 @@ function clearAdminServiceForm() {
     const formHeader = $("#adminServiceFormContainer h4");
     if(formHeader) formHeader.innerHTML = `<i class="fas fa-plus-square"></i> Add Service`;
 }
-
+if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 document.addEventListener('DOMContentLoaded', async () => {
     showLoading("Initializing Portal...");
 
@@ -2148,8 +2149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
-if (registerBtn) registerBtn.addEventListener("click", modalRegister);
+
 
     const addClauseBtn = $("#adminAddAgreementClauseBtn");
     if (addClauseBtn) addClauseBtn.addEventListener('click', handleAddAgreementClause);
