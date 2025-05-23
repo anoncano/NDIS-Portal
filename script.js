@@ -768,7 +768,7 @@ window.modalLogin = async function () {
         } finally {
             hideLoading();
         }
-    }
+    };
 
 
 window.editProfile = function() {
