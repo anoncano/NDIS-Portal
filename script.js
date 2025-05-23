@@ -770,8 +770,7 @@ window.modalRegister = async function () {
       hideLoading();
   }
 };
-  // …then setDoc(...) and the rest…
-};
+
 
 
 
