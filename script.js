@@ -346,7 +346,7 @@ function navigateToSection(sectionId) {
     if (sectionId === "invoice") renderInvoiceSection();
     if (sectionId === "agreement") renderAgreementSection();
     if (sectionId === "admin") renderAdminDashboard();
-    console.log(`Mapsd to #${sectionId}`);
+    console.log(`Navigated to #${sectionId}`);
 }
 
 /* ========== Auth Functions ========== */
@@ -497,7 +497,7 @@ function setupEventListeners() {
     saveAdminServiceButtonElement?.addEventListener('click', saveAdminServiceToFirestore);
     clearAdminServiceFormButtonElement?.addEventListener('click', clearAdminServiceForm);
     selectTravelCodeButtonElement?.addEventListener('click', openTravelCodeSelectionModal);
-    adminServiceCategoryTypeSelectElement?.addEventListener('change', renderAdminServiceRateFields); // Complete listener
+    adminServiceCategoryTypeSelectElement?.addEventListener('change', renderAdminServiceRateFields); // Corrected
 
     // Admin Agreement Customization
     adminAddAgreementClauseButtonElement?.addEventListener('click', addAdminAgreementClauseEditor);
