@@ -55,7 +55,7 @@ const loginButtonElement = $("#loginBtn"), registerButtonElement = $("#registerB
 const userIdDisplayElement = $("#userIdDisplay"), portalTitleDisplayElement = $("#portalTitleDisplay");
 const sideNavLinks = $$("nav#side a.link"), bottomNavLinks = $$("nav#bottom a.bLink"), adminTabElement = $("#adminTab");
 const homeUserDivElement = $("#homeUser"), userNameDisplayElement = $("#userNameDisplay"), requestShiftButtonElement = $("#rqBtn"), logTodayShiftButtonElement = $("#logTodayShiftBtn");
-const shiftRequestsContainerElement = $("#shiftRequestsContainer"), shiftRequestsTableBodyElement = $("#rqTbl tbody"); // Added shiftRequestsContainerElement
+const shiftRequestsContainerElement = $("#shiftRequestsContainer"), shiftRequestsTableBodyElement = $("#rqTbl tbody");
 const profileNameElement = $("#profileName"), profileAbnElement = $("#profileAbn"), profileGstElement = $("#profileGst"), profileBsbElement = $("#profileBsb"), profileAccElement = $("#profileAcc");
 const profileFilesListElement = $("#profileFilesList"), profileFileUploadElement = $("#profileFileUpload"), uploadProfileDocumentsButtonElement = $("#uploadProfileDocumentsBtn"), editProfileButtonElement = $("#editProfileBtn");
 const setInitialInvoiceModalElement = $("#setInitialInvoiceModal"), initialInvoiceNumberInputElement = $("#initialInvoiceNumberInput"), saveInitialInvoiceNumberButtonElement = $("#saveInitialInvoiceNumberBtn");
@@ -67,7 +67,7 @@ const agreementDynamicTitleElement = $("#agreementDynamicTitle"), adminAgreement
 const agreementChipElement = $("#agrChip"), agreementContentContainerElement = $("#agreementContentContainer"), participantSignatureImageElement = $("#sigP"), participantSignatureDateElement = $("#dP");
 const workerSignatureImageElement = $("#sigW"), workerSignatureDateElement = $("#dW"), signAgreementButtonElement = $("#signBtn"), participantSignButtonElement = $("#participantSignBtn"), downloadAgreementPdfButtonElement = $("#pdfBtn"), agreementContentWrapperElement = $("#agreementContentWrapper"), agreementHeaderForPdfElement = $("#agreementHeaderForPdf");
 const adminNavTabButtons = $$(".admin-tab-btn"), adminContentPanels = $$(".admin-content-panel");
-const adminEditOrgDetailsSectionElement = $("#adminEditOrgDetailsSection"), adminEditParticipantHrElement = $("#adminEditParticipantHr"), adminEditParticipantTitleElement = $("#adminEditParticipantTitle"); // For portal type UI changes
+const adminEditOrgDetailsSectionElement = $("#adminEditOrgDetailsSection"), adminEditParticipantHrElement = $("#adminEditParticipantHr"), adminEditParticipantTitleElement = $("#adminEditParticipantTitle"); 
 const adminEditOrgNameInputElement = $("#adminEditOrgName"), adminEditOrgAbnInputElement = $("#adminEditOrgAbn"), adminEditOrgContactEmailInputElement = $("#adminEditOrgContactEmail"), adminEditOrgContactPhoneInputElement = $("#adminEditOrgContactPhone");
 const adminEditParticipantNameInputElement = $("#adminEditParticipantName"), adminEditParticipantNdisNoInputElement = $("#adminEditParticipantNdisNo"), adminEditPlanManagerNameInputElement = $("#adminEditPlanManagerName"), adminEditPlanManagerEmailInputElement = $("#adminEditPlanManagerEmail"), adminEditPlanManagerPhoneInputElement = $("#adminEditPlanManagerPhone"), adminEditPlanEndDateInputElement = $("#adminEditPlanEndDate");
 const saveAdminPortalSettingsButtonElement = $("#saveAdminPortalSettingsBtn"), resetGlobalSettingsToDefaultsButtonElement = $("#resetGlobalSettingsToDefaultsBtn"), inviteLinkCodeElement = $("#invite"), copyInviteLinkButtonElement = $("#copyLinkBtn");
@@ -86,11 +86,11 @@ const wizardFilesInputElement = $("#wFiles"), wizardFilesListElement = $("#wFile
 const wizardPrevButton4Element = $("#wizPrevBtn4"), wizardFinishButtonElement = $("#wizFinishBtn");
 const adminSetupWizardModalElement = $("#adminSetupWizard"), adminWizardStepElements = $$("#adminSetupWizard .wizard-step-content"), adminWizardIndicatorElements = $$("#adminSetupWizard .wizard-step-indicator");
 const adminWizardPortalTypeRadioElements = $$("input[name='adminWizPortalType']"), adminWizardNextButton1Element = $("#adminWizNextBtn1");
-const adminWizardOrgFieldsDivElement = $("#adminWizOrgFields"), adminWizardUserFieldsDivElement = $("#adminWizUserFields"); // For admin wizard step 2
-const adminWizardStep2TitleElement = $("#adminWizStep2Title"); // For admin wizard step 2 title
+const adminWizardOrgFieldsDivElement = $("#adminWizOrgFields"), adminWizardUserFieldsDivElement = $("#adminWizUserFields"); 
+const adminWizardStep2TitleElement = $("#adminWizStep2Title"); 
 const adminWizardOrgNameInputElement = $("#adminWizOrgName"), adminWizardOrgAbnInputElement = $("#adminWizOrgAbn"), adminWizardOrgContactEmailInputElement = $("#adminWizOrgContactEmail"), adminWizardOrgContactPhoneInputElement = $("#adminWizOrgContactPhone");
 const adminWizardUserNameInputElement = $("#adminWizUserName"), adminWizardPrevButton2Element = $("#adminWizPrevBtn2"), adminWizardNextButton2Element = $("#adminWizNextBtn2");
-const adminWizardStep3TitleElement = $("#adminWizStep3Title"); // For admin wizard step 3 title
+const adminWizardStep3TitleElement = $("#adminWizStep3Title"); 
 const adminWizardParticipantNameInputElement = $("#adminWizParticipantName"), adminWizardParticipantNdisNoInputElement = $("#adminWizParticipantNdisNo"), adminWizardPlanManagerNameInputElement = $("#adminWizPlanManagerName"), adminWizardPlanManagerEmailInputElement = $("#adminWizPlanManagerEmail"), adminWizardPlanManagerPhoneInputElement = $("#adminWizPlanManagerPhone"), adminWizardPlanEndDateInputElement = $("#adminWizPlanEndDate");
 const adminWizardPrevButton3Element = $("#adminWizPrevBtn3"), adminWizardFinishButtonElement = $("#adminWizFinishBtn");
 const customTimePickerElement = $("#customTimePicker"), timePickerAmPmButtonsContainerElement = $("#timePickerAmPmButtons"), timePickerHoursContainerElement = $("#timePickerHours"), timePickerMinutesContainerElement = $("#timePickerMinutes"), timePickerBackButtonElement = $("#timePickerBackButton"), setTimeButtonElement = $("#setTimeButton"), cancelTimeButtonElement = $("#cancelTimeButton"), currentTimePickerStepLabelElement = $("#currentTimePickerStepLabel");
@@ -120,14 +120,14 @@ let defaultAgreementCustomData = {
 const RATE_CATEGORIES = ["weekday", "evening", "night", "saturday", "sunday", "public"];
 const SERVICE_CATEGORY_TYPES = { CORE_STANDARD: 'core_standard', CORE_HIGH_INTENSITY: 'core_high_intensity', CAPACITY_THERAPY_STD: 'capacity_therapy_std', CAPACITY_SPECIALIST: 'capacity_specialist', TRAVEL_KM: 'travel_km', OTHER_FLAT_RATE: 'other_flat_rate' };
 let sigCanvas, sigCtx, sigPen = false, sigPaths = [];
-let currentAgreementWorkerEmail = null; // Stores email of worker whose agreement admin is viewing
+let currentAgreementWorkerEmail = null; 
 let signingAs = 'worker';
 let isFirebaseInitialized = false, initialAuthComplete = false;
-let selectedWorkerUIDForAuth = null; // UID of worker selected by admin for service authorization
+let selectedWorkerUIDForAuth = null; 
 let currentAdminServiceEditingId = null;
 let currentTimePickerStep = 'ampm', selectedMinute = null, selectedHour12 = null, selectedAmPm = null, activeTimeInput = null, timePickerCallback = null;
 let currentAdminWizardStep = 1, currentUserWizardStep = 1;
-let wizardFileUploads = null; // Will store FileList object
+let wizardFileUploads = null; 
 let allUsersCache = {}; 
 
 /* ========== Error Logging ========== */
@@ -138,7 +138,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.1", userAgent: navigator.userAgent, url: window.location.href
+            appVersion: "1.1.2", userAgent: navigator.userAgent, url: window.location.href
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -148,12 +148,40 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
 function showLoading(message = "Loading...") { if (loadingOverlayElement) { loadingOverlayElement.querySelector('p').textContent = message; loadingOverlayElement.style.display = "flex"; } }
 function hideLoading() { if (loadingOverlayElement) loadingOverlayElement.style.display = "none"; }
 function showAuthStatusMessage(message, isError = true) { if (authStatusMessageElement) { authStatusMessageElement.textContent = message; authStatusMessageElement.style.color = isError ? 'var(--danger)' : 'var(--ok)'; authStatusMessageElement.style.display = message ? 'block' : 'none'; } }
-function showMessage(title, text, type = 'info') {
+
+// Enhanced showMessage function
+let currentMessageModalOkListener = null; 
+
+function showMessage(title, text, type = 'info', okButtonConfig = null) {
     const iconClass = type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle';
     if (messageModalTitleElement) messageModalTitleElement.innerHTML = `<i class="fas ${iconClass}"></i> ${title}`;
     if (messageModalTextElement) messageModalTextElement.innerHTML = text;
+
+    if (closeMessageModalButtonElement) {
+        // Clone and replace the button to remove all previous listeners safely
+        const newOkButton = closeMessageModalButtonElement.cloneNode(true);
+        closeMessageModalButtonElement.parentNode.replaceChild(newOkButton, closeMessageModalButtonElement);
+        // Update reference to the new button
+        const currentOkButton = $("#closeMessageModalBtn"); // Re-select the new button
+
+        if (okButtonConfig && typeof okButtonConfig.action === 'function') {
+            currentOkButton.textContent = okButtonConfig.text || 'OK';
+            currentOkButton.onclick = async () => {
+                await okButtonConfig.action(); // Await if it's async
+                closeModal('messageModal');
+                // Restore default text for next time if needed, though it's cloned each time now
+                // currentOkButton.textContent = 'OK'; 
+            };
+        } else {
+            currentOkButton.textContent = 'OK';
+            currentOkButton.onclick = () => {
+                closeModal('messageModal');
+            };
+        }
+    }
     if (messageModalElement) messageModalElement.style.display = "flex";
 }
+
 function openModal(modalId) { const modal = $(`#${modalId}`); if (modal) modal.style.display = 'flex'; }
 function closeModal(modalId) { const modal = $(`#${modalId}`); if (modal) modal.style.display = 'none'; }
 
@@ -202,7 +230,7 @@ async function setupAuthListener() {
                     if (profileData) { signedOut = await handleExistingUserProfile(profileData); }
                     else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { signedOut = await handleNewAdminProfile(); }
                     else if (currentUserId) { signedOut = await handleNewRegularUserProfile(); }
-                    else { await fbSignOut(fbAuth); signedOut = true; } // Should not happen if user object exists
+                    else { await fbSignOut(fbAuth); signedOut = true; } 
                     if (signedOut) console.log("[AuthListener] User flow led to sign out.");
                 } else {
                     console.log("[AuthListener] User signed out.");
@@ -225,14 +253,20 @@ async function setupAuthListener() {
 async function handleExistingUserProfile(data) {
     userProfile = data;
     console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}`);
-    if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true) { // Check for explicit true
-        showMessage("Approval Required", "Your account awaits approval or is not currently approved. Logging out.", "warning");
-        await fbSignOut(fbAuth); return true;
+    if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && userProfile.approved !== true) {
+        showMessage(
+            "Approval Required", 
+            "Your account is awaiting approval from an administrator. Please log out and try again later once approved.", 
+            "warning",
+            { text: 'Logout', action: portalSignOut }
+        );
+        // No direct sign out here, modal button handles it.
+        return true; // Indicates a flow that prevents immediate portal entry
     }
     if (userProfile.isAdmin) { 
         await loadAllDataForAdmin(); 
         enterPortal(true); 
-        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) { // More specific check for admin wizard
+        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
              console.log("[AuthListener] Admin needs portal setup wizard.");
              openAdminSetupWizard();
         }
@@ -244,17 +278,16 @@ async function handleExistingUserProfile(data) {
             openUserSetupWizard();
         }
     }
-    return false;
+    return false; // User can proceed
 }
 
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login (admin@portal.com).");
     userProfile = { isAdmin: true, name: "Administrator", email: currentUserEmail, uid: currentUserId, approved: true, createdAt: serverTimestamp(), profileSetupComplete: true, nextInvoiceNumber: 1001 };
     await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
-    await loadAllDataForAdmin(); // Load admin data
-    enterPortal(true); // Enter as admin
-    // For a brand new admin, global settings setup is crucial.
-    if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) { // If global settings also indicate first time
+    await loadAllDataForAdmin(); 
+    enterPortal(true); 
+    if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) { 
         console.log("[AuthListener] New admin needs portal setup wizard.");
         openAdminSetupWizard();
     }
@@ -266,9 +299,14 @@ async function handleNewRegularUserProfile() {
     const isOrg = globalSettings.portalType === 'organization';
     userProfile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, approved: !isOrg, profileSetupComplete: false, nextInvoiceNumber: 1001, createdAt: serverTimestamp() };
     await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
-    if (isOrg && userProfile.approved !== true) { // Check for explicit true
-        showMessage("Registration Complete", "Your account has been created and is awaiting administrator approval. You will be logged out.", "info");
-        await fbSignOut(fbAuth); return true;
+    if (isOrg && userProfile.approved !== true) { 
+        showMessage(
+            "Registration Complete - Approval Required", 
+            "Your account has been created and is awaiting administrator approval. Please log out and try again later.", 
+            "info",
+            { text: 'Logout', action: portalSignOut }
+        );
+        return true; // User will be logged out by modal action
     }
     await loadAllDataForUser();
     enterPortal(false);
@@ -372,7 +410,7 @@ function navigateToSection(sectionId) {
     if (sectionId === "profile") renderProfileSection();
     if (sectionId === "invoice") renderInvoiceSection();
     if (sectionId === "agreement") renderAgreementSection();
-    if (sectionId === "admin" && userProfile.isAdmin) renderAdminDashboard(); else if (sectionId === "admin" && !userProfile.isAdmin) navigateToSection("home"); // Prevent non-admin access
+    if (sectionId === "admin" && userProfile.isAdmin) renderAdminDashboard(); else if (sectionId === "admin" && !userProfile.isAdmin) navigateToSection("home"); 
     if (sectionId === "home") renderUserHomePage();
     console.log(`Navigated to #${sectionId}`);
 }
@@ -446,7 +484,7 @@ async function uploadProfileDocuments(filesToUploadParam = null) {
     showLoading(`Uploading ${files.length} file(s)...`);
     const uploadedFileObjects = [];
     try {
-        for (const file of Array.from(files)) { // Ensure iteration over FileList
+        for (const file of Array.from(files)) { 
             const uniqueName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
             const storagePath = `artifacts/${appId}/users/${currentUserId}/profileDocuments/${uniqueName}`;
             const fileRef = ref(fbStorage, storagePath);
@@ -457,25 +495,21 @@ async function uploadProfileDocuments(filesToUploadParam = null) {
         await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), { files: arrayUnion(...uploadedFileObjects), updatedAt: serverTimestamp() });
         userProfile.files = [...(userProfile.files || []), ...uploadedFileObjects];
         renderProfileFilesList(); 
-        if(profileFileUploadElement) profileFileUploadElement.value = ""; // Clear main input
+        if(profileFileUploadElement) profileFileUploadElement.value = ""; 
         showMessage("Upload Successful", `${uploadedFileObjects.length} file(s) uploaded.`, "success");
     } catch (e) { console.error("Upload Error:", e); logErrorToFirestore("uploadProfileDocs", e.message, e); showMessage("Upload Failed", e.message, "error"); }
     finally { hideLoading(); }
 }
 window.confirmDeleteProfileDocument = (name, path) => { 
-    showMessage("Confirm Delete", `Delete "${name}"? This cannot be undone.`, "warning"); 
-    if (messageModalElement) {
-        const okBtn = messageModalElement.querySelector('#closeMessageModalBtn');
-        const originalOkText = okBtn.textContent;
-        const originalOkListener = okBtn.onclick;
-        okBtn.textContent = "Confirm Delete";
-        okBtn.onclick = async () => {
-            await executeDeleteProfileDocument(name, path);
-            closeModal('messageModal');
-            okBtn.textContent = originalOkText; 
-            okBtn.onclick = originalOkListener; 
-        };
-    }
+    showMessage(
+        "Confirm Delete", 
+        `Delete "${name}"? This cannot be undone.`, 
+        "warning",
+        { 
+            text: "Confirm Delete", 
+            action: async () => { await executeDeleteProfileDocument(name, path); }
+        }
+    ); 
 };
 window.executeDeleteProfileDocument = async (fileName, storagePath) => {
     if (!currentUserId || !fbStorage || !fsDb) { showMessage("Delete Error", "Services unavailable.", "error"); return; }
@@ -514,12 +548,12 @@ async function loadUserShiftRequests() {
     if (!currentUserId || !fsDb || !shiftRequestsTableBodyElement) return;
     shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Loading requests...</td></tr>';
     try {
-        const q = query(collection(fsDb, `artifacts/${appId}/public/shiftRequests`), where("userId", "==", currentUserId)); // Consider orderBy requestedAt
+        const q = query(collection(fsDb, `artifacts/${appId}/public/shiftRequests`), where("userId", "==", currentUserId)); 
         const snapshot = await getDocs(q);
         shiftRequestsTableBodyElement.innerHTML = ''; 
         if (snapshot.empty) { shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">No shift requests found.</td></tr>'; if(shiftRequestsContainerElement) shiftRequestsContainerElement.classList.add('hide'); return; }
         if(shiftRequestsContainerElement) shiftRequestsContainerElement.classList.remove('hide');
-        snapshot.docs.sort((a,b) => (b.data().requestedAt?.toDate() || 0) - (a.data().requestedAt?.toDate() || 0)).forEach(doc => { // Sort by date descending
+        snapshot.docs.sort((a,b) => (b.data().requestedAt?.toDate() || 0) - (a.data().requestedAt?.toDate() || 0)).forEach(doc => { 
             const req = doc.data();
             const row = shiftRequestsTableBodyElement.insertRow();
             row.innerHTML = `<td>${formatDateForDisplay(req.date)}</td><td>${formatTime12Hour(req.startTime)}</td><td>${formatTime12Hour(req.endTime)}</td><td>${req.reason || '-'}</td><td><span class="chip ${req.status === 'approved' ? 'green' : req.status === 'denied' ? 'red' : 'yellow'}">${req.status}</span></td>`;
@@ -545,64 +579,64 @@ function saveShiftToInvoice() {
     logShiftDateInputElement.value = formatDateForInput(new Date()); logShiftSupportTypeSelectElement.selectedIndex = 0; logShiftStartTimeInputElement.value = ""; logShiftStartTimeInputElement.dataset.value24 = ""; logShiftEndTimeInputElement.value = ""; logShiftEndTimeInputElement.dataset.value24 = ""; logShiftClaimTravelToggleElement.checked = false; logShiftKmFieldsContainerElement.classList.add('hide'); logShiftStartKmInputElement.value = ""; logShiftEndKmInputElement.value = ""; logShiftCalculatedKmElement.textContent = "0.0 Km";
 }
 
-/* ========== Invoice Functions ========== */
+/* ========== Invoice Functions (Placeholders - to be fully implemented) ========== */
 function renderInvoiceSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.nextInvoiceNumber === undefined) { openModal('setInitialInvoiceModal'); } else { loadUserInvoiceDraft(); } populateInvoiceHeader(); renderInvoiceTable(); updateInvoiceTotals(); if(invoiceWeekLabelElement) invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value || Date.now())); }
 function populateInvoiceHeader() { if(providerNameInputElement) providerNameInputElement.value = userProfile.name || ""; if(providerAbnInputElement) providerAbnInputElement.value = userProfile.abn || ""; if(gstFlagInputElement) gstFlagInputElement.value = userProfile.gstRegistered ? "Yes" : "No"; if(invoiceNumberInputElement) invoiceNumberInputElement.value = currentInvoiceData.invoiceNumber || userProfile.nextInvoiceNumber || "INV-001"; if(invoiceDateInputElement) invoiceDateInputElement.value = currentInvoiceData.invoiceDate || formatDateForInput(new Date()); }
 function renderInvoiceTable() { if (!invoiceTableBodyElement) return; invoiceTableBodyElement.innerHTML = ''; currentInvoiceData.items.forEach((item, index) => addInvoiceRowToTable(item, index)); updateInvoiceTotals(); }
-function addInvoiceRowToTable(itemData = {}, index = -1) { /* ... (Implementation from previous version, ensure print spans are updated in updateInvoiceItemFromRow) ... */ }
-function addInvRowUserAction() { /* ... (Implementation from previous version) ... */ }
-function updateInvoiceItemFromRow(rowElement, itemIndex) { /* ... (Implementation from previous version, ensure print spans are updated) ... */ }
-window.deleteInvoiceRow = (button) => { /* ... (Implementation from previous version) ... */ };
-function updateInvoiceTotals() { /* ... (Implementation from previous version) ... */ }
-async function saveInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
-async function loadUserInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
-async function saveInitialInvoiceNumber() { /* ... (Implementation from previous version) ... */ }
-function generateInvoicePdf() { /* ... (Implementation from previous version) ... */ }
+function addInvoiceRowToTable(itemData = {}, index = -1) { /* ... (Full implementation needed) ... */ }
+function addInvRowUserAction() { /* ... (Full implementation needed) ... */ }
+function updateInvoiceItemFromRow(rowElement, itemIndex) { /* ... (Full implementation needed) ... */ }
+window.deleteInvoiceRow = (button) => { /* ... (Full implementation needed) ... */ };
+function updateInvoiceTotals() { /* ... (Full implementation needed) ... */ }
+async function saveInvoiceDraft() { /* ... (Full implementation needed) ... */ }
+async function loadUserInvoiceDraft() { /* ... (Full implementation needed) ... */ }
+async function saveInitialInvoiceNumber() { /* ... (Full implementation needed) ... */ }
+function generateInvoicePdf() { /* ... (Full implementation needed) ... */ }
 
-/* ========== Agreement Functions ========== */
+/* ========== Agreement Functions (Placeholders) ========== */
 function renderAgreementSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.isAdmin) { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.remove('hide'); populateAdminWorkerSelectorForAgreement(); clearAgreementDisplay(); } else { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.add('hide'); currentAgreementWorkerEmail = currentUserEmail; loadAndRenderServiceAgreement(); } }
 function populateAdminWorkerSelectorForAgreement() { if (!adminSelectWorkerForAgreementElement || !userProfile.isAdmin) return; adminSelectWorkerForAgreementElement.innerHTML = '<option value="">-- Select a Worker --</option>'; Object.values(allUsersCache).forEach(workerProfile => { if (workerProfile && !workerProfile.isAdmin && workerProfile.email) { const option = document.createElement('option'); option.value = workerProfile.email; option.textContent = `${workerProfile.name || 'N/A'} (${workerProfile.email})`; adminSelectWorkerForAgreementElement.appendChild(option); } }); }
-async function loadAndRenderServiceAgreement(forWorkerEmail = null) { /* ... (Implementation from previous version, ensure workerData is fetched correctly using allUsersCache) ... */ }
-function renderAgreementClauses(worker, settings, state) { /* ... (Implementation from previous version) ... */ }
-function updateAgreementChip(state) { /* ... (Implementation from previous version) ... */ }
-function openSignatureModal(who) { /* ... (Implementation from previous version) ... */ }
-function initializeSignaturePad() { /* ... (Implementation from previous version) ... */ }
-function clearSignaturePad() { /* ... (Implementation from previous version) ... */ }
-function sigStart(e) { /* ... (Implementation from previous version) ... */ }
-function sigDraw(e) { /* ... (Implementation from previous version) ... */ }
-function sigEnd(e) { /* ... (Implementation from previous version) ... */ }
-function getSigPenPosition(e) { /* ... (Implementation from previous version) ... */ }
-async function saveSignature() { /* ... (Implementation from previous version, ensure workerForAgreement uses allUsersCache for admin) ... */ }
-function generateAgreementPdf() { /* ... (Implementation from previous version) ... */ }
-function clearAgreementDisplay() { /* ... (Implementation from previous version) ... */ }
+async function loadAndRenderServiceAgreement(forWorkerEmail = null) { /* ... (Full implementation needed) ... */ }
+function renderAgreementClauses(worker, settings, state) { /* ... (Full implementation needed) ... */ }
+function updateAgreementChip(state) { /* ... (Full implementation needed) ... */ }
+function openSignatureModal(who) { /* ... (Full implementation needed) ... */ }
+function initializeSignaturePad() { /* ... (Full implementation needed) ... */ }
+function clearSignaturePad() { /* ... (Full implementation needed) ... */ }
+function sigStart(e) { /* ... (Full implementation needed) ... */ }
+function sigDraw(e) { /* ... (Full implementation needed) ... */ }
+function sigEnd(e) { /* ... (Full implementation needed) ... */ }
+function getSigPenPosition(e) { /* ... (Full implementation needed) ... */ }
+async function saveSignature() { /* ... (Full implementation needed) ... */ }
+function generateAgreementPdf() { /* ... (Full implementation needed) ... */ }
+function clearAgreementDisplay() { /* ... (Full implementation needed) ... */ }
 
-/* ========== Admin Functions ========== */
+/* ========== Admin Functions (Placeholders) ========== */
 function renderAdminDashboard() { if (!userProfile.isAdmin) { navigateToSection("home"); return; } switchAdminTab(adminNavTabButtons.find(btn => btn.classList.contains('active'))?.dataset.target || 'adminGlobalSettings'); renderAdminGlobalSettingsTab(); }
 function switchAdminTab(targetId) { adminNavTabButtons.forEach(b => b.classList.toggle('active', b.dataset.target === targetId)); adminContentPanels.forEach(p => p.classList.toggle('active', p.id === targetId)); if (targetId === 'adminGlobalSettings') renderAdminGlobalSettingsTab(); if (targetId === 'adminServiceManagement') renderAdminServiceManagementTab(); if (targetId === 'adminAgreementCustomization') renderAdminAgreementCustomizationTab(); if (targetId === 'adminWorkerManagement') renderAdminWorkerManagementTab(); }
-function renderAdminGlobalSettingsTab() { /* ... (Implementation from previous version) ... */ }
-async function saveAdminPortalSettings() { /* ... (Implementation from previous version) ... */ }
-window.confirmResetGlobalSettings = () => { /* ... (Implementation from previous version, with proper modal confirmation) ... */ };
-async function executeResetGlobalSettings() { /* ... (Implementation from previous version) ... */ }
-function renderAdminServiceManagementTab() { /* ... (Implementation from previous version) ... */ }
-function populateServiceCategoryTypeDropdown() { /* ... (Implementation from previous version) ... */ }
-function renderAdminServiceRateFields() { /* ... (Implementation from previous version) ... */ }
-function clearAdminServiceForm() { /* ... (Implementation from previous version) ... */ }
-function renderAdminServicesTable() { /* ... (Implementation from previous version) ... */ }
-window.editAdminService = (id) => { /* ... (Implementation from previous version) ... */ };
-window.deleteAdminService = (id) => { /* ... (Implementation from previous version, with proper modal confirmation) ... */ };
-async function _confirmDeleteServiceFirestore(id) { /* ... (Implementation from previous version) ... */ }
-async function saveAdminServiceToFirestore() { /* ... (Implementation from previous version) ... */ }
-function openTravelCodeSelectionModal() { /* ... (Implementation from previous version) ... */ }
-function renderAdminAgreementCustomizationTab() { /* ... (Implementation from previous version) ... */ }
-function renderAdminAgreementClausesEditor() { /* ... (Implementation from previous version) ... */ }
-function addAdminAgreementClauseEditor() { /* ... (Implementation from previous version) ... */ }
-function updateAdminAgreementPreview() { /* ... (Implementation from previous version) ... */ }
-async function saveAdminAgreementCustomizationsToFirestore() { /* ... (Implementation from previous version) ... */ }
+function renderAdminGlobalSettingsTab() { /* ... (Full implementation needed) ... */ }
+async function saveAdminPortalSettings() { /* ... (Full implementation needed) ... */ }
+window.confirmResetGlobalSettings = () => { /* ... (Full implementation needed, with proper modal confirmation) ... */ };
+async function executeResetGlobalSettings() { /* ... (Full implementation needed) ... */ }
+function renderAdminServiceManagementTab() { /* ... (Full implementation needed) ... */ }
+function populateServiceCategoryTypeDropdown() { /* ... (Full implementation needed) ... */ }
+function renderAdminServiceRateFields() { /* ... (Full implementation needed) ... */ }
+function clearAdminServiceForm() { /* ... (Full implementation needed) ... */ }
+function renderAdminServicesTable() { /* ... (Full implementation needed) ... */ }
+window.editAdminService = (id) => { /* ... (Full implementation needed) ... */ };
+window.deleteAdminService = (id) => { /* ... (Full implementation needed, with proper modal confirmation) ... */ };
+async function _confirmDeleteServiceFirestore(id) { /* ... (Full implementation needed) ... */ }
+async function saveAdminServiceToFirestore() { /* ... (Full implementation needed) ... */ }
+function openTravelCodeSelectionModal() { /* ... (Full implementation needed) ... */ }
+function renderAdminAgreementCustomizationTab() { /* ... (Full implementation needed) ... */ }
+function renderAdminAgreementClausesEditor() { /* ... (Full implementation needed) ... */ }
+function addAdminAgreementClauseEditor() { /* ... (Full implementation needed) ... */ }
+function updateAdminAgreementPreview() { /* ... (Full implementation needed) ... */ }
+async function saveAdminAgreementCustomizationsToFirestore() { /* ... (Full implementation needed) ... */ }
 function renderAdminWorkerManagementTab() { if (!userProfile.isAdmin) return; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); }
-async function loadPendingApprovalWorkers() { /* ... (Implementation from previous version, uses allUsersCache) ... */ }
-window.approveWorkerInFirestore = async (uid) => { /* ... (Implementation from previous version, updates allUsersCache) ... */ };
-window.denyWorkerInFirestore = async (uid) => { /* ... (Implementation from previous version, updates allUsersCache) ... */ };
-async function loadApprovedWorkersForAuthManagement() { /* ... (Implementation from previous version, uses allUsersCache) ... */ }
+async function loadPendingApprovalWorkers() { /* ... (Full implementation needed, uses allUsersCache) ... */ }
+window.approveWorkerInFirestore = async (uid) => { /* ... (Full implementation needed, updates allUsersCache) ... */ };
+window.denyWorkerInFirestore = async (uid) => { /* ... (Full implementation needed, updates allUsersCache) ... */ };
+async function loadApprovedWorkersForAuthManagement() { /* ... (Full implementation needed, uses allUsersCache) ... */ }
 window.selectWorkerForAuth = (uid, name) => { selectedWorkerUIDForAuth = uid; if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.innerHTML = `<i class="fas fa-user-check"></i> Services for: ${name}`; if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.classList.remove('hide'); if(servicesListCheckboxesElement) servicesListCheckboxesElement.innerHTML = ''; const workerProfile = allUsersCache[uid]; const authorizedCodes = workerProfile?.authorizedServiceCodes || []; adminManagedServices.forEach(service => { const li = document.createElement('li'); li.innerHTML = `<label class="chk"><input type="checkbox" value="${service.code}" ${authorizedCodes.includes(service.code) ? 'checked' : ''}> ${service.description} (${service.code})</label>`; servicesListCheckboxesElement.appendChild(li); }); };
 async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, `artifacts/${appId}/users/${selectedWorkerUIDForAuth}/profile`, "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
 
@@ -619,7 +653,7 @@ async function finishUserWizard() {
     const success = await saveProfileDetails(profileUpdates);
     if (success) {
         if (wizardFileUploads && wizardFileUploads.length > 0) {
-            await uploadProfileDocuments(wizardFileUploads); // Pass FileList directly
+            await uploadProfileDocuments(wizardFileUploads); 
         }
         closeModal('wiz'); showMessage("Setup Complete", "Your profile is updated.", "success"); enterPortal(userProfile.isAdmin);
     }
@@ -657,7 +691,7 @@ function setupEventListeners() {
     authPasswordInputElement?.addEventListener('keypress', e => { if (e.key === 'Enter') modalLogin(); });
     $$("nav#side a.link, nav#bottom a.bLink").forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigateToSection(a.hash.substring(1)); }));
     editProfileButtonElement?.addEventListener('click', () => openUserSetupWizard());
-    uploadProfileDocumentsButtonElement?.addEventListener('click', () => uploadProfileDocuments()); // No param, uses main input
+    uploadProfileDocumentsButtonElement?.addEventListener('click', () => uploadProfileDocuments()); 
     addInvoiceRowButtonElement?.addEventListener('click', addInvRowUserAction);
     saveDraftButtonElement?.addEventListener('click', saveInvoiceDraft);
     generateInvoicePdfButtonElement?.addEventListener('click', generateInvoicePdf);
@@ -684,7 +718,11 @@ function setupEventListeners() {
     saveRequestButtonElement?.addEventListener('click', saveShiftRequest);
     closeLogShiftModalButtonElement?.addEventListener('click', () => closeModal('logShiftModal'));
     saveShiftToInvoiceButtonElement?.addEventListener('click', saveShiftToInvoice);
-    closeMessageModalButtonElement?.addEventListener('click', () => closeModal('messageModal'));
+    // Default closeMessageModalButtonElement listener (set once)
+    closeMessageModalButtonElement?.addEventListener('click', () => {
+        // This is the default action if no specific action was set by showMessage
+        closeModal('messageModal');
+    });
     wizardNextButton1Element?.addEventListener('click', () => wizardNext('user')); wizardNextButton2Element?.addEventListener('click', () => wizardNext('user')); wizardNextButton3Element?.addEventListener('click', () => { wizardFileUploads = wizardFilesInputElement.files; wizardNext('user'); });
     wizardPrevButton2Element?.addEventListener('click', () => wizardPrev('user')); wizardPrevButton3Element?.addEventListener('click', () => wizardPrev('user')); wizardPrevButton4Element?.addEventListener('click', () => wizardPrev('user'));
     wizardFinishButtonElement?.addEventListener('click', finishUserWizard);
@@ -695,7 +733,7 @@ function setupEventListeners() {
     cancelTimeButtonElement?.addEventListener('click', () => closeModal('customTimePicker'));
     setTimeButtonElement?.addEventListener('click', handleSetTime);
     timePickerBackButtonElement?.addEventListener('click', handleTimePickerBack);
-    confirmTravelCodeSelectionButtonElement?.addEventListener('click', () => { /* Logic handled by li.onclick */ closeModal('travelCodeSelectionModal'); });
+    confirmTravelCodeSelectionButtonElement?.addEventListener('click', () => { closeModal('travelCodeSelectionModal'); });
     closeTravelCodeSelectionModalButtonElement?.addEventListener('click', () => closeModal('travelCodeSelectionModal'));
     requestShiftButtonElement?.addEventListener('click', () => { requestDateInputElement.value = formatDateForInput(new Date()); openModal('rqModal'); });
     logTodayShiftButtonElement?.addEventListener('click', () => { populateServiceTypeDropdowns(logShiftSupportTypeSelectElement); logShiftDateInputElement.value = formatDateForInput(new Date()); openModal('logShiftModal'); });
@@ -712,7 +750,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log("DOM fully loaded and parsed");
     showLoading("Initializing Portal...");
     await initializeFirebaseApp();
-    setupEventListeners();
+    setupEventListeners(); // Call this once
     const initialHash = window.location.hash || '#home';
     navigateToSection(initialHash.substring(1));
     hideLoading(); 
