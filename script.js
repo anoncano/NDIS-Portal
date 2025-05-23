@@ -771,11 +771,6 @@ window.modalRegister = async function () {
   }
 };
 
-
-
-
-  showAuthStatusMessage("", false);
-
   if (!email || !validateEmail(email) || !password || password.length < 6) {
       return showAuthStatusMessage("Valid email and a password of at least 6 characters are required for registration.");
   }
@@ -2407,7 +2402,7 @@ function handleHomePageDisplay() {
         const homeUserDiv = $("#homeUser");
         if (homeUserDiv) homeUserDiv.classList.remove('hide');
         const userNameDisplaySpan = $("#userNameDisplay");
-        if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUsercurrentUsercurrentUserEmail.split('@')[0] : "User");
+        if (userNameDisplaySpan) userNameDisplaySpan.textContent = profile.name || (currentUserEmail ? currentUsercurrentUserEmail.split('@')[0] : "User");
 
         loadShiftRequestsForUserDisplay();
 
