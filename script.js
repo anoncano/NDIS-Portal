@@ -342,16 +342,37 @@ async function handleExistingUserProfile(data) {
 
 
 async function handleNewAdminProfile() {
-    console.log("[Auth] New admin login (admin@portal.com).");
-    userProfile = { isAdmin: true, name: "Administrator", email: currentUserEmail, uid: currentUserId, approved: true, createdAt: serverTimestamp(), profileSetupComplete: true, nextInvoiceNumber: 1001 };
-    await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), userProfile);
+    console.log("[Auth] New admin login (auto-promoted first user).");
+
+    userProfile = {
+        isAdmin: true,
+        name: "Administrator",
+        email: currentUserEmail,
+        uid: currentUserId,
+        approved: true,
+        createdAt: serverTimestamp(),
+        profileSetupComplete: true,
+        nextInvoiceNumber: 1001
+    };
+
+    // Save to root user doc for approval checks
+    await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}`), {
+        isAdmin: true,
+        approved: true
+    });
+
+    // Save full profile to profile/details
+    await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
+
     await loadAllDataForAdmin(); 
     enterPortal(true); 
-    if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) { 
+
+    if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
         console.log("[AuthListener] New admin needs portal setup wizard.");
         openAdminSetupWizard();
     }
-    return false; 
+
+    return false;
 }
 
 async function handleNewRegularUserProfile() {
