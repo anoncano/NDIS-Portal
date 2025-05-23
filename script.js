@@ -715,12 +715,7 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
-  const initialProfileData = {
-    name:  email.split('@')[0],
-    email,               // shorthand for email: email
-    uid:   newUserId,
-    isAdmin: false,
-    // …remove or replace the “…” line here…
+    // \…remove or replace the “…” line here…
     abn: "", gstRegistered: false, bsb: "", acc: "",
     files: [], authorizedServiceCodes: [],
     profileSetupComplete: false,
