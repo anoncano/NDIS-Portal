@@ -2137,10 +2137,7 @@ function clearAdminServiceForm() {
 }
 document.addEventListener('DOMContentLoaded', async () => {
     showLoading("Initializing Portal...");
-    const loginBtn    = $("#loginBtn");
-    const registerBtn = $("#registerBtn");
-    if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
-    if (registerBtn) registerBtn.addEventListener("click", modalRegister);
+    
     await initializeFirebase();
 
     if (!isFirebaseInitialized) {
@@ -2149,7 +2146,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-
+const loginBtn    = $("#loginBtn");
+    const registerBtn = $("#registerBtn");
+    if (loginBtn)    loginBtn.addEventListener("click", modalLogin);
+    if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 
 
     const addClauseBtn = $("#adminAddAgreementClauseBtn");
