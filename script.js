@@ -5,7 +5,7 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut as fbSignOut,
-    onAuthStateChanged,
+    onAuthStateChanged, 
     signInWithCustomToken
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 // Firestore imports
