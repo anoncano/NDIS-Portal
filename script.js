@@ -208,67 +208,25 @@ async function initializeFirebaseApp() {
     } catch (error) { console.error("[FirebaseInit] Error:", error); logErrorToFirestore("initializeFirebaseApp", error.message, error); showAuthStatusMessage("System Error: " + error.message); hideLoading(); }
 }
 
-async function setupAuthListener() {
-    return new Promise((resolve) => {
-        onAuthStateChanged(fbAuth, async (user) => {
-            showLoading("Authenticating...");
-            // Initially hide both main app and auth screen to prevent flicker
-            if(portalAppElement) portalAppElement.style.display = "none";
-            if(authScreenElement) authScreenElement.style.display = "none";
+async function handleExistingUserProfile(userProfile) {
+  // 1️⃣ If they’re an admin, let them in unconditionally
+  if (userProfile.isAdmin) {
+    await loadAllDataForAdmin();
+    enterPortal(/* as admin */);
+    return false;
+  }
 
-            try {
-                if (user) {
-                    currentUserId = user.uid; currentUserEmail = user.email;
-                    console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
-                    await loadGlobalSettingsFromFirestore(); 
-                    const profileData = await loadUserProfileFromFirestore(currentUserId);
-                    
-                    let flowInterrupted = false; 
-                    if (profileData) { 
-                        flowInterrupted = await handleExistingUserProfile(profileData); 
-                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com") { 
-                        flowInterrupted = await handleNewAdminProfile();
-                    } else if (currentUserId) { 
-                        flowInterrupted = await handleNewRegularUserProfile();
-                    } else { 
-                        await fbSignOut(fbAuth); 
-                        flowInterrupted = true;
-                    }
+  // 2️⃣ Only non-admins hit the approval gate
+  if (globalSettings.portalType==='organization' && !userProfile.approved) {
+    showMessage("Approval Required", …);
+    await fbSignOut(fbAuth);
+    return true;
+  }
 
-                    if (!flowInterrupted) { 
-                        if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
-                        if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
-                        if(authScreenElement) authScreenElement.style.display = "none"; // Should already be hidden
-                        if(portalAppElement) portalAppElement.style.display = "flex"; // Show main app
-                        // enterPortal is called within the profile handlers if successful
-                    } else {
-                        console.log("[AuthListener] User flow interrupted (e.g. approval modal or sign out).");
-                        // If flow was interrupted by a modal, portalApp remains hidden.
-                        // If sign out was triggered, onAuthStateChanged will run again with user=null.
-                    }
-
-                } else { // User is signed out
-                    console.log("[AuthListener] User signed out.");
-                    currentUserId = null; currentUserEmail = null; userProfile = {};
-                    if(userIdDisplayElement) userIdDisplayElement.textContent = "Not Logged In";
-                    if(logoutButtonElement) logoutButtonElement.classList.add('hide');
-                    if(authScreenElement) authScreenElement.style.display = "flex"; // Show login screen
-                    if(portalAppElement) portalAppElement.style.display = "none";
-                    updateNavigation(false); navigateToSection("home"); // Reset nav to default
-                }
-            } catch (error) { 
-                console.error("[AuthListener] Error:", error); 
-                logErrorToFirestore("onAuthStateChanged", error.message, error); 
-                await fbSignOut(fbAuth); // Attempt to sign out on error
-                if(authScreenElement) authScreenElement.style.display = "flex"; 
-                if(portalAppElement) portalAppElement.style.display = "none";
-            }
-            finally { hideLoading(); if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } }
-        });
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            signInWithCustomToken(fbAuth, __initial_auth_token).catch(e => { console.error("Token sign-in error:", e); logErrorToFirestore("signInWithCustomToken", e.message, e); });
-        } else { console.log("[AuthListener] No token, waiting for state change or login."); }
-    });
+  // 3️⃣ Now handle regular, approved users
+  await loadAllDataForUser();
+  enterPortal(/* as user */);
+  return false;
 }
 
 async function handleExistingUserProfile(data) {
