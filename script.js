@@ -219,9 +219,9 @@ async function setupAuthListener() {
                 if (user) {
                     currentUserId = user.uid; currentUserEmail = user.email;
                     console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
-                    await loadGlobalSettingsFromFirestore(); 
-                    const profileData = await loadUserProfileFromFirestore(currentUserId);
-                    
+                    await loadGlobalSettingsFromFirestore();
+const profileData = await loadUserProfileFromFirestore(currentUserId);
+
                     let flowInterrupted = false; 
                     if (profileData) { 
                         flowInterrupted = await handleExistingUserProfile(profileData); 
