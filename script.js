@@ -138,7 +138,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.6", userAgent: navigator.userAgent, url: window.location.href // Incremented version
+            appVersion: "1.1.6", userAgent: navigator.userAgent, url: window.location.href 
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -212,8 +212,8 @@ async function setupAuthListener() {
     return new Promise((resolve) => {
         onAuthStateChanged(fbAuth, async (user) => {
             showLoading("Authenticating...");
-            if(portalAppElement) portalAppElement.style.display = "none"; // Hide app by default
-            if(authScreenElement) authScreenElement.style.display = "none"; // Hide auth by default
+            if(portalAppElement) portalAppElement.style.display = "none"; 
+            if(authScreenElement) authScreenElement.style.display = "none"; 
 
             try {
                 if (user) {
@@ -240,8 +240,6 @@ async function setupAuthListener() {
                         if(portalAppElement) portalAppElement.style.display = "flex"; 
                     } else {
                         console.log("[AuthListener] User flow interrupted (e.g. approval modal or sign out).");
-                        // If flowInterrupted is true, an appropriate modal is already shown, or sign-out is in progress.
-                        // No need to explicitly show authScreen here, as onAuthStateChanged will run again if sign-out occurs.
                     }
 
                 } else { // User is signed out
@@ -270,13 +268,13 @@ async function setupAuthListener() {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-    console.log(`[Auth] Existing profile for ${currentUserEmail}. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
+    // Log details for admin blocking diagnosis
+    console.log(`[Auth] handleExistingUserProfile for ${currentUserEmail}. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
     
-    if (userProfile.isAdmin) { // Admin user
+    if (userProfile.isAdmin) { 
         console.log("[Auth] Admin user identified. Proceeding to admin setup/portal.");
         await loadAllDataForAdmin(); 
         enterPortal(true); 
-        // Check if admin setup wizard is needed (only if portal setup is not complete)
         if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
              console.log("[AuthListener] Admin needs portal setup wizard.");
              openAdminSetupWizard();
@@ -284,7 +282,6 @@ async function handleExistingUserProfile(data) {
         return false; // Flow NOT interrupted
     }
     
-    // Non-admin user
     const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true;
     console.log(`[Auth] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
 
@@ -300,14 +297,13 @@ async function handleExistingUserProfile(data) {
         return true; // Flow IS interrupted
     }
     
-    // Approved non-admin user or participant portal user
     await loadAllDataForUser(); 
     enterPortal(false); 
     if (!userProfile.profileSetupComplete) {
         console.log("[AuthListener] Regular user needs profile setup wizard.");
         openUserSetupWizard();
     }
-    return false; // Flow can proceed
+    return false; 
 }
 
 async function handleNewAdminProfile() {
@@ -368,11 +364,8 @@ async function loadGlobalSettingsFromFirestore() {
         } else { 
             globalSettings = getDefaultGlobalSettings(); 
             console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
-            // Only attempt to save if an admin is potentially setting up for the first time.
-            // The userProfile might not be fully populated here yet.
-            // This save is conditional and might be better handled after admin profile creation.
-            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile || userProfile.isAdmin)) { // Check if it's likely the first admin
-                 await saveGlobalSettingsToFirestore(); // This might still show "Not admin" if userProfile isn't set.
+            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile || userProfile.isAdmin)) { 
+                 await saveGlobalSettingsToFirestore(); 
             }
         }
     } catch (e) { 
@@ -385,7 +378,6 @@ async function loadGlobalSettingsFromFirestore() {
 }
 
 async function saveGlobalSettingsToFirestore() {
-    // Ensure userProfile is populated and isAdmin is checked.
     if (!fsDb || !userProfile || !userProfile.isAdmin) { 
         console.warn("SaveGlobalSettings: Not admin or DB error, or userProfile not ready. Cannot save global settings."); 
         return false; 
@@ -896,11 +888,7 @@ function setupEventListeners() {
     saveRequestButtonElement?.addEventListener('click', saveShiftRequest);
     closeLogShiftModalButtonElement?.addEventListener('click', () => closeModal('logShiftModal'));
     saveShiftToInvoiceButtonElement?.addEventListener('click', saveShiftToInvoice);
-    // Default closeMessageModalButtonElement listener (set once)
-    // This is now handled dynamically by showMessage
-    // closeMessageModalButtonElement?.addEventListener('click', () => {
-    //     closeModal('messageModal');
-    // });
+    
     wizardNextButton1Element?.addEventListener('click', () => wizardNext('user')); wizardNextButton2Element?.addEventListener('click', () => wizardNext('user')); wizardNextButton3Element?.addEventListener('click', () => { wizardFileUploads = wizardFilesInputElement.files; wizardNext('user'); });
     wizardPrevButton2Element?.addEventListener('click', () => wizardPrev('user')); wizardPrevButton3Element?.addEventListener('click', () => wizardPrev('user')); wizardPrevButton4Element?.addEventListener('click', () => wizardPrev('user'));
     wizardFinishButtonElement?.addEventListener('click', finishUserWizard);
@@ -933,50 +921,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     navigateToSection(initialHash.substring(1));
     hideLoading(); 
 });
-```
-
-I've updated the script in the Canvas with the following key changes:
-
-1.  **Admin Access Debugging in `handleExistingUserProfile`:**
-    * Added `console.log` statements to output `userProfile.isAdmin`, `userProfile.approved`, and `globalSettings.portalType` *before* the condition that shows the "Approval Required" modal. This will help diagnose why an admin might be incorrectly flagged.
-    * The logic now explicitly checks `if (userProfile.isAdmin)` first. If true, it proceeds with admin-specific actions and returns `false` (flow not interrupted). Only if not an admin does it then check the approval status for organization users.
-
-2.  **Modal Flow for Unapproved Users:**
-    * **`onAuthStateChanged`:**
-        * When a user is authenticated, `authScreenElement` is hidden immediately.
-        * `portalAppElement` is also initially hidden.
-        * The `flowInterrupted` flag returned by the profile handlers determines the next step.
-        * If `flowInterrupted` is `false`, `portalAppElement` is shown, and `enterPortal` is called.
-        * If `flowInterrupted` is `true` (meaning the approval modal is shown), `portalAppElement` remains hidden. The `authScreenElement` will naturally reappear when `portalSignOut` (triggered by the modal's "OK" button) completes and `onAuthStateChanged` runs again with a `null` user.
-    * **`handleExistingUserProfile` and `handleNewRegularUserProfile`:**
-        * When an unapproved user is detected, these functions now ensure `authScreenElement` and `portalAppElement` are hidden before calling `showMessage`.
-        * The `okButtonConfig` for `showMessage` is set to `{ text: 'OK', action: portalSignOut }`.
-        * They return `true` to signal the flow interruption.
-
-3.  **Firestore Path for Global Settings:**
-    * The paths in `loadGlobalSettingsFromFirestore` and `saveGlobalSettingsToFirestore` are re-verified to be `doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main")`.
-    * The `saveGlobalSettingsToFirestore` function's guard now also checks `userProfile` itself to prevent errors if called too early: `if (!fsDb || !userProfile || !userProfile.isAdmin)`.
-    * In `loadGlobalSettingsFromFirestore`, the attempt to save default settings if none exist is now more carefully conditioned to only happen if it's likely the first admin setup (e.g., `currentUserEmail` is the admin email and `userProfile.isAdmin` is true, though `userProfile` might not be fully set at this exact point in a very first run).
-
-4.  **Firestore Path for Error Logs:**
-    * The `logErrorToFirestore` function now uses `collection(fsDb, "artifacts", appId, "public", "data", "error_logs")`.
-
-5.  **Firestore Path for NDIS Services:**
-    * `loadAdminServicesFromFirestore` and `saveAdminServiceToFirestore` now use `collection(fsDb, "artifacts", appId, "public", "data", "ndis_services")`.
-
-6.  **Firestore Path for Service Agreements:**
-    * `loadAndRenderServiceAgreement` and `saveSignature` now use `doc(fsDb, "artifacts", appId, "public", "data", "service_agreements", agreementDocId)`.
-
-7.  **Firestore Path for Shift Requests:**
-    * `saveShiftRequest` and `loadUserShiftRequests` now use `collection(fsDb, "artifacts", appId, "public", "data", "shift_requests")`.
-
-**Crucial Next Step:**
-
-* **CLEAR YOUR BROWSER CACHE AND HARD RELOAD.** The persistent Firestore path error strongly suggests your browser is executing an older version of `script.js`. The script in the Canvas *does* have the corrected paths.
-
-After ensuring the latest script is running:
-* **Test Admin Login:** Check the console for the new logs in `handleExistingUserProfile` if the admin is still blocked. This will show the exact data being used for the decision.
-* **Test Unapproved User Login:** Verify the "Approval Required" modal appears over a blank background (no main app, no login form visible behind it) and that clicking "OK" logs the user out and returns them to the login screen.
-* **Check Firestore Data for Admin:** If an admin is blocked, verify in your Firestore database that the admin user's document under `/artifacts/{appId}/users/{adminUID}/profile/details` has `isAdmin: true` and, if `globalSettings.portalType` is `organization`, also `approved: true`.
-
-Let me know the results of these tests, especially the console logs if the admin is still block
