@@ -138,7 +138,7 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.1.2", userAgent: navigator.userAgent, url: window.location.href
+            appVersion: "1.1.3", userAgent: navigator.userAgent, url: window.location.href
         });
         console.info("Error logged:", location);
     } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
@@ -149,32 +149,31 @@ function showLoading(message = "Loading...") { if (loadingOverlayElement) { load
 function hideLoading() { if (loadingOverlayElement) loadingOverlayElement.style.display = "none"; }
 function showAuthStatusMessage(message, isError = true) { if (authStatusMessageElement) { authStatusMessageElement.textContent = message; authStatusMessageElement.style.color = isError ? 'var(--danger)' : 'var(--ok)'; authStatusMessageElement.style.display = message ? 'block' : 'none'; } }
 
-// Enhanced showMessage function
-let currentMessageModalOkListener = null; 
-
 function showMessage(title, text, type = 'info', okButtonConfig = null) {
     const iconClass = type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle';
     if (messageModalTitleElement) messageModalTitleElement.innerHTML = `<i class="fas ${iconClass}"></i> ${title}`;
     if (messageModalTextElement) messageModalTextElement.innerHTML = text;
 
-    if (closeMessageModalButtonElement) {
+    const currentOkButton = $("#closeMessageModalBtn"); // Get the current button
+    if (currentOkButton) {
         // Clone and replace the button to remove all previous listeners safely
-        const newOkButton = closeMessageModalButtonElement.cloneNode(true);
-        closeMessageModalButtonElement.parentNode.replaceChild(newOkButton, closeMessageModalButtonElement);
-        // Update reference to the new button
-        const currentOkButton = $("#closeMessageModalBtn"); // Re-select the new button
+        const newOkButton = currentOkButton.cloneNode(true);
+        currentOkButton.parentNode.replaceChild(newOkButton, currentOkButton);
+        
+        // Work with the new button
+        const freshOkButton = $("#closeMessageModalBtn"); 
 
         if (okButtonConfig && typeof okButtonConfig.action === 'function') {
-            currentOkButton.textContent = okButtonConfig.text || 'OK';
-            currentOkButton.onclick = async () => {
-                await okButtonConfig.action(); // Await if it's async
+            freshOkButton.textContent = okButtonConfig.text || 'OK';
+            freshOkButton.onclick = async () => { // Make it async to await the action
+                if (okButtonConfig.action) {
+                    await okButtonConfig.action(); 
+                }
                 closeModal('messageModal');
-                // Restore default text for next time if needed, though it's cloned each time now
-                // currentOkButton.textContent = 'OK'; 
             };
         } else {
-            currentOkButton.textContent = 'OK';
-            currentOkButton.onclick = () => {
+            freshOkButton.textContent = 'OK';
+            freshOkButton.onclick = () => {
                 closeModal('messageModal');
             };
         }
@@ -260,8 +259,7 @@ async function handleExistingUserProfile(data) {
             "warning",
             { text: 'Logout', action: portalSignOut }
         );
-        // No direct sign out here, modal button handles it.
-        return true; // Indicates a flow that prevents immediate portal entry
+        return true; 
     }
     if (userProfile.isAdmin) { 
         await loadAllDataForAdmin(); 
@@ -278,7 +276,7 @@ async function handleExistingUserProfile(data) {
             openUserSetupWizard();
         }
     }
-    return false; // User can proceed
+    return false; 
 }
 
 async function handleNewAdminProfile() {
@@ -306,7 +304,7 @@ async function handleNewRegularUserProfile() {
             "info",
             { text: 'Logout', action: portalSignOut }
         );
-        return true; // User will be logged out by modal action
+        return true; 
     }
     await loadAllDataForUser();
     enterPortal(false);
@@ -319,7 +317,7 @@ async function handleNewRegularUserProfile() {
 
 /* ========== Data Loading & Saving ========== */
 async function loadUserProfileFromFirestore(uid) {
-    try { const snap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details")); return snap.exists() ? snap.data() : null; }
+    try { const snap = await getDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details")); return snap.exists() ? snap.data() : null; }
     catch (e) { console.error("Profile Load Error:", e); logErrorToFirestore("loadUserProfile", e.message, e); return null; }
 }
 
@@ -328,10 +326,23 @@ function getDefaultGlobalSettings() {
 }
 
 async function loadGlobalSettingsFromFirestore() {
-    try { const snap = await getDoc(doc(fsDb, `artifacts/${appId}/public/settings`, "global"));
-        if (snap.exists()) { globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() }; } 
-        else { globalSettings = getDefaultGlobalSettings(); await saveGlobalSettingsToFirestore(); }
-    } catch (e) { console.error("Settings Load Error:", e); logErrorToFirestore("loadGlobalSettings", e.message, e); globalSettings = getDefaultGlobalSettings(); }
+    // Corrected path: artifacts/{appId}/public/data/portal_config/main
+    const settingsDocRef = doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main");
+    try { 
+        const snap = await getDoc(settingsDocRef);
+        if (snap.exists()) { 
+            globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() }; 
+            console.log("[FirestoreLoad] Global settings loaded:", globalSettings);
+        } else { 
+            globalSettings = getDefaultGlobalSettings(); 
+            console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
+            await saveGlobalSettingsToFirestore(); // Save defaults for the first time
+        }
+    } catch (e) { 
+        console.error("Settings Load Error:", e); 
+        logErrorToFirestore("loadGlobalSettings", e.message, e); 
+        globalSettings = getDefaultGlobalSettings(); 
+    }
     agreementCustomData = globalSettings.agreementTemplate ? JSON.parse(JSON.stringify(globalSettings.agreementTemplate)) : JSON.parse(JSON.stringify(defaultAgreementCustomData));
     updatePortalTitle();
 }
@@ -339,14 +350,23 @@ async function loadGlobalSettingsFromFirestore() {
 async function saveGlobalSettingsToFirestore() {
     if (!fsDb || !userProfile.isAdmin) { console.warn("Not admin or DB error, cannot save global settings."); return false; }
     globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData));
-    try { await setDoc(doc(fsDb, `artifacts/${appId}/public/settings`, "global"), globalSettings, { merge: true }); console.log("Global settings saved."); return true; }
+    // Corrected path: artifacts/{appId}/public/data/portal_config/main
+    const settingsDocRef = doc(fsDb, "artifacts", appId, "public", "data", "portal_config", "main");
+    try { 
+        await setDoc(settingsDocRef, globalSettings, { merge: true }); 
+        console.log("Global settings saved."); 
+        return true; 
+    }
     catch (e) { console.error("Settings Save Error:", e); logErrorToFirestore("saveGlobalSettings", e.message, e); return false; }
 }
 
 async function loadAdminServicesFromFirestore() {
     adminManagedServices = [];
     if (!fsDb) return;
-    try { const querySnapshot = await getDocs(collection(fsDb, `artifacts/${appId}/public/services`));
+    // Path: artifacts/{appId}/public/services (collection)
+    const servicesCollectionRef = collection(fsDb, "artifacts", appId, "public", "services");
+    try { 
+        const querySnapshot = await getDocs(servicesCollectionRef);
         querySnapshot.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
         console.log("Admin services loaded:", adminManagedServices.length);
     } catch (e) { console.error("Services Load Error:", e); logErrorToFirestore("loadAdminServices", e.message, e); }
@@ -357,11 +377,13 @@ async function loadAllUsersForAdmin() {
     allUsersCache = {};
     if (!userProfile.isAdmin || !fsDb) return;
     try {
-        const usersCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
+        // Path: artifacts/{appId}/users (collection of user UIDs)
+        const usersCollectionRef = collection(fsDb, "artifacts", appId, "users");
         const usersSnapshot = await getDocs(usersCollectionRef);
         const profilePromises = usersSnapshot.docs.map(userDoc => {
             const uid = userDoc.id;
-            const profileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
+            // Path: artifacts/{appId}/users/{uid}/profile/details (document)
+            const profileRef = doc(fsDb, "artifacts", appId, "users", uid, "profile", "details");
             return getDoc(profileRef).then(profileSnap => ({uid, profileSnap}));
         });
         const results = await Promise.all(profilePromises);
@@ -468,7 +490,7 @@ async function saveProfileDetails(updates) {
     if (!currentUserId || !fsDb) return false;
     showLoading("Saving profile...");
     try {
-        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), { ...updates, updatedAt: serverTimestamp() });
+        await updateDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), { ...updates, updatedAt: serverTimestamp() });
         userProfile = { ...userProfile, ...updates };
         updateProfileDisplay();
         showMessage("Profile Updated", "Your details saved.", "success");
@@ -492,7 +514,7 @@ async function uploadProfileDocuments(filesToUploadParam = null) {
             const downloadURL = await getDownloadURL(snapshot.ref);
             uploadedFileObjects.push({ name: file.name, url: downloadURL, storagePath, uploadedAt: serverTimestamp() });
         }
-        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), { files: arrayUnion(...uploadedFileObjects), updatedAt: serverTimestamp() });
+        await updateDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), { files: arrayUnion(...uploadedFileObjects), updatedAt: serverTimestamp() });
         userProfile.files = [...(userProfile.files || []), ...uploadedFileObjects];
         renderProfileFilesList(); 
         if(profileFileUploadElement) profileFileUploadElement.value = ""; 
@@ -517,7 +539,7 @@ window.executeDeleteProfileDocument = async (fileName, storagePath) => {
     try {
         await deleteObject(ref(fbStorage, storagePath));
         const updatedFiles = (userProfile.files || []).filter(f => f.storagePath !== storagePath);
-        await updateDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), { files: updatedFiles, updatedAt: serverTimestamp() });
+        await updateDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), { files: updatedFiles, updatedAt: serverTimestamp() });
         userProfile.files = updatedFiles;
         renderProfileFilesList();
         showMessage("File Deleted", `"${fileName}" deleted.`, "success");
@@ -537,7 +559,8 @@ async function saveShiftRequest() {
     if (!requestData.date || !requestData.startTime || !requestData.endTime) { showMessage("Missing Info", "Date, start, and end times required.", "warning"); return; }
     showLoading("Submitting request...");
     try {
-        await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/shiftRequests`), requestData);
+        // Path: artifacts/{appId}/public/data/shift_requests/{auto_id}
+        await fsAddDoc(collection(fsDb, "artifacts", appId, "public", "data", "shift_requests"), requestData);
         showMessage("Request Submitted", "Shift request sent.", "success");
         closeModal('rqModal'); requestDateInputElement.value = ""; requestStartTimeInputElement.value = ""; requestEndTimeInputElement.value = ""; requestReasonTextareaElement.value = "";
         loadUserShiftRequests();
@@ -548,7 +571,8 @@ async function loadUserShiftRequests() {
     if (!currentUserId || !fsDb || !shiftRequestsTableBodyElement) return;
     shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Loading requests...</td></tr>';
     try {
-        const q = query(collection(fsDb, `artifacts/${appId}/public/shiftRequests`), where("userId", "==", currentUserId)); 
+        // Path: artifacts/{appId}/public/data/shift_requests
+        const q = query(collection(fsDb, "artifacts", appId, "public", "data", "shift_requests"), where("userId", "==", currentUserId)); 
         const snapshot = await getDocs(q);
         shiftRequestsTableBodyElement.innerHTML = ''; 
         if (snapshot.empty) { shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">No shift requests found.</td></tr>'; if(shiftRequestsContainerElement) shiftRequestsContainerElement.classList.add('hide'); return; }
@@ -583,15 +607,15 @@ function saveShiftToInvoice() {
 function renderInvoiceSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.nextInvoiceNumber === undefined) { openModal('setInitialInvoiceModal'); } else { loadUserInvoiceDraft(); } populateInvoiceHeader(); renderInvoiceTable(); updateInvoiceTotals(); if(invoiceWeekLabelElement) invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value || Date.now())); }
 function populateInvoiceHeader() { if(providerNameInputElement) providerNameInputElement.value = userProfile.name || ""; if(providerAbnInputElement) providerAbnInputElement.value = userProfile.abn || ""; if(gstFlagInputElement) gstFlagInputElement.value = userProfile.gstRegistered ? "Yes" : "No"; if(invoiceNumberInputElement) invoiceNumberInputElement.value = currentInvoiceData.invoiceNumber || userProfile.nextInvoiceNumber || "INV-001"; if(invoiceDateInputElement) invoiceDateInputElement.value = currentInvoiceData.invoiceDate || formatDateForInput(new Date()); }
 function renderInvoiceTable() { if (!invoiceTableBodyElement) return; invoiceTableBodyElement.innerHTML = ''; currentInvoiceData.items.forEach((item, index) => addInvoiceRowToTable(item, index)); updateInvoiceTotals(); }
-function addInvoiceRowToTable(itemData = {}, index = -1) { /* ... (Full implementation needed) ... */ }
-function addInvRowUserAction() { /* ... (Full implementation needed) ... */ }
-function updateInvoiceItemFromRow(rowElement, itemIndex) { /* ... (Full implementation needed) ... */ }
-window.deleteInvoiceRow = (button) => { /* ... (Full implementation needed) ... */ };
-function updateInvoiceTotals() { /* ... (Full implementation needed) ... */ }
-async function saveInvoiceDraft() { /* ... (Full implementation needed) ... */ }
-async function loadUserInvoiceDraft() { /* ... (Full implementation needed) ... */ }
-async function saveInitialInvoiceNumber() { /* ... (Full implementation needed) ... */ }
-function generateInvoicePdf() { /* ... (Full implementation needed) ... */ }
+function addInvoiceRowToTable(itemData = {}, index = -1) { /* ... (Implementation from previous version, ensure print spans are updated in updateInvoiceItemFromRow) ... */ }
+function addInvRowUserAction() { /* ... (Implementation from previous version) ... */ }
+function updateInvoiceItemFromRow(rowElement, itemIndex) { /* ... (Implementation from previous version, ensure print spans are updated) ... */ }
+window.deleteInvoiceRow = (button) => { /* ... (Implementation from previous version) ... */ };
+function updateInvoiceTotals() { /* ... (Implementation from previous version) ... */ }
+async function saveInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
+async function loadUserInvoiceDraft() { /* ... (Implementation from previous version) ... */ }
+async function saveInitialInvoiceNumber() { /* ... (Implementation from previous version) ... */ }
+function generateInvoicePdf() { /* ... (Implementation from previous version) ... */ }
 
 /* ========== Agreement Functions (Placeholders) ========== */
 function renderAgreementSection() { if (!userProfile || !currentUserId) { navigateToSection("home"); return; } if (userProfile.isAdmin) { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.remove('hide'); populateAdminWorkerSelectorForAgreement(); clearAgreementDisplay(); } else { if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.add('hide'); currentAgreementWorkerEmail = currentUserEmail; loadAndRenderServiceAgreement(); } }
@@ -638,7 +662,7 @@ window.approveWorkerInFirestore = async (uid) => { /* ... (Full implementation n
 window.denyWorkerInFirestore = async (uid) => { /* ... (Full implementation needed, updates allUsersCache) ... */ };
 async function loadApprovedWorkersForAuthManagement() { /* ... (Full implementation needed, uses allUsersCache) ... */ }
 window.selectWorkerForAuth = (uid, name) => { selectedWorkerUIDForAuth = uid; if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.innerHTML = `<i class="fas fa-user-check"></i> Services for: ${name}`; if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.classList.remove('hide'); if(servicesListCheckboxesElement) servicesListCheckboxesElement.innerHTML = ''; const workerProfile = allUsersCache[uid]; const authorizedCodes = workerProfile?.authorizedServiceCodes || []; adminManagedServices.forEach(service => { const li = document.createElement('li'); li.innerHTML = `<label class="chk"><input type="checkbox" value="${service.code}" ${authorizedCodes.includes(service.code) ? 'checked' : ''}> ${service.description} (${service.code})</label>`; servicesListCheckboxesElement.appendChild(li); }); };
-async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, `artifacts/${appId}/users/${selectedWorkerUIDForAuth}/profile`, "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
+async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", selectedWorkerUIDForAuth, "profile", "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
 
 /* ========== Modal & Wizard Functions ========== */
 function openUserSetupWizard() { currentUserWizardStep = 1; wizardFileUploads = null; navigateWizard('user', 1); if(userSetupWizardModalElement) openModal('wiz'); populateUserWizardFromProfile(); }
