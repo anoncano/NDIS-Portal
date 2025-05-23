@@ -380,30 +380,6 @@ async function handleNewAdminProfile() {
 }
 
 
-async function handleNewRegularUserProfile() {
-    console.log("[Auth] New regular user profile creation.");
-    const isOrg = globalSettings.portalType === 'organization';
-    userProfile = { name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId, isAdmin: false, approved: !isOrg, profileSetupComplete: false, nextInvoiceNumber: 1001, createdAt: serverTimestamp() };
-    await setDoc(doc(fsDb, "artifacts", appId, "users", currentUserId, "profile", "details"), userProfile);
-    if (isOrg && userProfile.approved !== true) { 
-        if(authScreenElement) authScreenElement.style.display = "none"; 
-        if(portalAppElement) portalAppElement.style.display = "none"; 
-        showMessage(
-            "Registration Complete - Approval Required", 
-            "Your account has been created and is awaiting administrator approval. Please log out and try again later.", 
-            "info",
-            { text: 'OK', action: portalSignOut } 
-        );
-        return true; 
-    }
-    await loadAllDataForUser();
-    enterPortal(false);
-    if (!userProfile.profileSetupComplete) {
-        console.log("[AuthListener] New regular user needs profile setup wizard.");
-        openUserSetupWizard();
-    }
-    return false; 
-}
 
 /* ========== Data Loading & Saving ========== */
 async function loadUserProfileFromFirestore(uid) {
