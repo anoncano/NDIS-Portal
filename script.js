@@ -2307,10 +2307,10 @@ if (registerBtn) registerBtn.addEventListener("click", modalRegister);
 
     window.addEventListener('hashchange', () => setActive(location.hash));
 
-
-    console.log("[App] DOMContentLoaded processing complete.");
-    const loginBtn    = $("#loginBtn");
+ const loginBtn    = $("#loginBtn");
     const registerBtn = $("#registerBtn");
+    console.log("[App] DOMContentLoaded processing complete.");
+   
 
 });
 
