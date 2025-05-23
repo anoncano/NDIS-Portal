@@ -265,6 +265,21 @@ if (profileData) {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
+    // If user is not admin but is the first in the system, auto-promote
+const usersRef = collection(fsDb, `artifacts/${appId}/users`);
+const snap = await getDocs(usersRef);
+const isFirstUser = snap.size === 1 && snap.docs[0].id === currentUserId;
+
+if (isFirstUser && userProfile.isAdmin !== true) {
+    console.log("[Auth Debug] Auto-promoting first user to admin...");
+    userProfile.isAdmin = true;
+    userProfile.approved = true;
+    await updateDoc(doc(fsDb, `artifacts/${appId}/users`, currentUserId), {
+        isAdmin: true,
+        approved: true
+    });
+}
+
     console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
     console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
 
