@@ -367,7 +367,22 @@ async function loadUserProfileFromFirestore(uid) {
 }
 
 function getDefaultGlobalSettings() {
-    return { portalTitle: "NDIS Support Portal", organizationName: "Your Organization", organizationAbn: "", organizationContactEmail: "", organizationContactPhone: "", defaultParticipantName: "Participant", defaultParticipantNdisNo: "", defaultPlanManagerName: "", defaultPlanManagerEmail: "", defaultPlanManagerPhone: "", defaultPlanEndDate: formatDateForInput(new Date(new Date().setFullYear(new Date().getFullYear() + 1))), setupComplete: false, adminSetupComplete: false, portalType: "organization", agreementTemplate: JSON.parse(JSON.stringify(defaultAgreementCustomData)) };
+    return {
+        portalTitle: "NDIS Support Portal",
+        organizationName: "Org Name",
+        organizationAbn: "ABN",
+        organizationContactEmail: "contact@example.com",
+        organizationContactPhone: "000-000-000",
+        defaultParticipantName: "Participant Name",
+        defaultParticipantNdisNo: "000000000",
+        defaultPlanManagerName: "PM Name",
+        defaultPlanManagerEmail: "pm@example.com",
+        defaultPlanManagerPhone: "111-111-111",
+        defaultPlanEndDate: formatDateForInput(new Date(new Date().setFullYear(new Date().getFullYear() + 1))),
+        setupComplete: false,
+        portalType: "organization",
+        agreementTemplate: JSON.parse(JSON.stringify(defaultAgreementCustomData))
+    };
 }
 
 async function loadGlobalSettingsFromFirestore() {
