@@ -259,7 +259,8 @@ if (profileData) {
         });
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             signInWithCustomToken(fbAuth, __initial_auth_token).catch(e => { console.error("Token sign-in error:", e); logErrorToFirestore("signInWithCustomToken", e.message, e); });
-        } else { console.log("[AuthListener] No token, waiting for state change or login."); }
+        } else { console.log("[AuthListener] No token, waiting f
+                             or state change or login."); }
     });
 }
 
@@ -270,7 +271,6 @@ async function handleExistingUserProfile(data) {
     const snap = await getDocs(usersRef);
     const isFirstUser = snap.size === 1 && snap.docs[0].id === currentUserId;
 
-    // Promote first user to admin
     if (isFirstUser && userProfile.isAdmin !== true) {
         console.log("[Auth Debug] Auto-promoting first user to admin...");
         await updateDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"), {
@@ -279,7 +279,6 @@ async function handleExistingUserProfile(data) {
         });
     }
 
-    // Always fetch fresh data after possible update
     const freshSnap = await getDoc(doc(fsDb, `artifacts/${appId}/users/${userProfile.uid}/profile`, "details"));
     if (freshSnap.exists()) {
         userProfile = freshSnap.data();
@@ -321,25 +320,6 @@ async function handleExistingUserProfile(data) {
 
     return false;
 }
-
-    if (userProfile.isAdmin) {
-        console.log("[Auth Debug] Admin user detected. Loading admin portal.");
-        await loadAllDataForAdmin();
-        enterPortal(true);
-        if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
-            openAdminSetupWizard();
-        }
-    } else {
-        await loadAllDataForUser();
-        enterPortal(false);
-        if (!userProfile.profileSetupComplete) {
-            openUserSetupWizard();
-        }
-    }
-
-    return false;
-}
-
 
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login (auto-promoted first user).");
