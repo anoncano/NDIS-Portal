@@ -219,9 +219,9 @@ async function setupAuthListener() {
                 if (user) {
                     currentUserId = user.uid; currentUserEmail = user.email;
                     console.log("[AuthListener] User authenticated:", currentUserId, currentUserEmail);
-                    await loadGlobalSettingsFromFirestore();
-const profileData = await loadUserProfileFromFirestore(currentUserId);
-
+                    await loadGlobalSettingsFromFirestore(); 
+                    const profileData = await loadUserProfileFromFirestore(currentUserId);
+                    
                     let flowInterrupted = false; 
                     if (profileData) { 
                         flowInterrupted = await handleExistingUserProfile(profileData); 
@@ -268,7 +268,6 @@ const profileData = await loadUserProfileFromFirestore(currentUserId);
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-    // Log details for admin blocking diagnosis
     console.log(`[Auth] handleExistingUserProfile for ${currentUserEmail}. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
     
     if (userProfile.isAdmin) { 
@@ -279,7 +278,7 @@ async function handleExistingUserProfile(data) {
              console.log("[AuthListener] Admin needs portal setup wizard.");
              openAdminSetupWizard();
         }
-        return false; // Flow NOT interrupted
+        return false; 
     }
     
     const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true;
@@ -294,7 +293,7 @@ async function handleExistingUserProfile(data) {
             "warning",
             { text: 'OK', action: portalSignOut } 
         );
-        return true; // Flow IS interrupted
+        return true; 
     }
     
     await loadAllDataForUser(); 
@@ -364,7 +363,7 @@ async function loadGlobalSettingsFromFirestore() {
         } else { 
             globalSettings = getDefaultGlobalSettings(); 
             console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
-            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile || userProfile.isAdmin)) { 
+            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile.uid || userProfile.isAdmin)) { // Check if it's likely the first admin, ensure userProfile.isAdmin is checked if profile is loaded
                  await saveGlobalSettingsToFirestore(); 
             }
         }
