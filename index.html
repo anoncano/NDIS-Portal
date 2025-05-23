@@ -24,15 +24,16 @@
         appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
     };
 
-    // Prioritize __firebase_config if available
+    // Prioritize __firebase_config if available from the Canvas environment
     if (typeof __firebase_config !== 'undefined' && __firebase_config) {
         try {
             const parsedConfig = JSON.parse(__firebase_config);
-            // Ensure all necessary keys are present in parsedConfig
+            // Ensure all necessary keys are present in parsedConfig and are not placeholders
             if (parsedConfig && 
                 parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
                 parsedConfig.authDomain &&
-                parsedConfig.databaseURL && // Check if databaseURL is needed for Firestore v9+ (usually not for client)
+                // databaseURL is not strictly required for Firestore v9+ client SDK but good to have if RTDB is also used
+                (parsedConfig.databaseURL || parsedConfig.projectId) && // Check for projectId as a minimum for Firestore
                 parsedConfig.projectId &&
                 parsedConfig.storageBucket &&
                 parsedConfig.messagingSenderId &&
@@ -68,7 +69,8 @@
           <button type="button" id="loginBtn" class="btn-primary" style="flex-grow: 1;">Login</button>
           <button type="button" id="registerBtn" class="btn-secondary" style="flex-grow: 1;">Register</button>
         </div>
-      </form> <div id="authStatusMessage" style="margin-top: 15px; text-align: center; color: var(--danger); font-size: 0.9rem;"></div>
+      </form> 
+      <div id="authStatusMessage" style="margin-top: 15px; text-align: center; color: var(--danger); font-size: 0.9rem;"></div>
     </div>
 </div>
 
@@ -229,8 +231,8 @@
                 </div>
             <hr>
             <div class="signWrap">
-              <div><b>Participant</b><br><img id="sigP" alt="Participant Signature Area" class="signature-image"><br>Date <span id="dP">___</span></div>
-              <div><b>Support Worker</b><br><img id="sigW" alt="Support Worker Signature Area" class="signature-image"><br>Date <span id="dW">___</span></div>
+              <div><b>Participant</b><br><img id="sigP" alt="Participant Signature Area" class="signature-image" src="https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area"><br>Date <span id="dP">___</span></div>
+              <div><b>Support Worker</b><br><img id="sigW" alt="Support Worker Signature Area" class="signature-image" src="https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area"><br>Date <span id="dW">___</span></div>
             </div>
         </div>
         <div class="agreement-actions">
@@ -247,7 +249,7 @@
             <button class="admin-tab-btn" data-target="adminServiceManagement"><i class="fas fa-concierge-bell"></i> NDIS Services</button>
             <button class="admin-tab-btn" data-target="adminAgreementCustomization"><i class="fas fa-file-alt"></i> Agreement Template</button>
             <button class="admin-tab-btn" data-target="adminWorkerManagement"><i class="fas fa-users-cog"></i> Worker Management</button>
-        </div>
+            </div>
 
         <div id="adminGlobalSettings" class="admin-content-panel active card-subsection">
             <h3><i class="fas fa-cogs"></i> Portal Global Settings</h3>
@@ -322,7 +324,7 @@
                         <button id="selectTravelCodeBtn" class="btn-secondary btn-small"><i class="fas fa-route"></i> Select/Change</button>
                     </div>
                     <input type="hidden" id="adminServiceTravelCode">
-                    <p class="tip">If this service can have travel claimed for it, select an existing NDIS Travel Item Code defined elsewhere in this list. The travel item should have its per-KM rate set (usually as its Weekday Rate).</p>
+                    <p class="tip">If this service can have travel claimed for it, select an existing NDIS Travel Item Code defined elsewhere in this list. The travel item should have its per-KM rate set.</p>
                 </div>
 
                 <div class="form-actions">
@@ -378,12 +380,8 @@
           
           <div class="card-subsection" style="margin-top: 20px; background-color: var(--warn-light, #fff9e6); border-color: var(--warn, #ffc107); padding:15px; border-radius:var(--radius);">
               <h4><i class="fas fa-user-clock"></i> Workers Awaiting Approval</h4>
-              <div id="pendingWorkersListContainer" style="max-height: 300px; overflow-y:auto;">
-                 <li>
-    <i class="fas fa-user-clock"></i> [Worker Name] <small>([Worker Email/UID])</small>
-    <button class="btn-ok btn-small" onclick="approveWorkerInFirestore('[WORKER_UID_HERE]')">Approve</button>
-</li>
-              </div>
+              <div id="pendingWorkersList" style="max-height: 300px; overflow-y:auto;">
+                 </div>
               <p class="tip" id="noPendingWorkersMessage" style="display:none;">There are currently no workers awaiting approval.</p>
           </div>
 
@@ -391,9 +389,8 @@
           <div class="row" style="margin-top: 10px;">
               <div style="flex: 1; min-width: 280px; margin-right: 20px; max-height: 500px; overflow-y:auto; border: 1px solid var(--bd); padding:15px; border-radius:var(--radius);">
                   <h5><i class="fas fa-users"></i> Approved Support Workers</h5>
-                  <li data-key="[WORKER_KEY]" onclick="selectWorkerForAuth('[WORKER_KEY]')">
-    <i class="fas fa-user-tie"></i> [Worker Name] <small>([Worker Email/UID])</small>
-</li>
+                  <ul id="workersListForAuth" class="modal-selectable-list">
+                    </ul>
               </div>
 
               <div style="flex: 2; min-width: 450px;">
@@ -407,7 +404,6 @@
               </div>
           </div>
         </div>
-
       </section>
     </main>
 </div> 
@@ -441,7 +437,7 @@
     <button id="adminWizPrevBtn2" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
     <button id="adminWizNextBtn2" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="adminWizStep3" class="wizard-step-content hide"><h4 id="adminWizStep3Title">Step 3: Participant Details</h4><div class="form-group"><label for="adminWizParticipantName">Participant Name:</label><input id="adminWizParticipantName" type="text"></div><div class="form-group"><label for="adminWizParticipantNdisNo">NDIS No.:</label><input id="adminWizParticipantNdisNo" type="text"></div><div class="form-group"><label for="adminWizPlanManagerName">Plan Manager:</label><input id="adminWizPlanManagerName" type="text"></div><div class="form-group"><label for="adminWizPlanManagerEmail">Plan Manager Email:</label><input id="adminWizPlanManagerEmail" type="email"></div><div class="form-group"><label for="adminWizPlanManagerPhone">Plan Manager Phone:</label><input id="adminWizPlanManagerPhone" type="text"></div><div class="form-group"><label for="adminWizPlanEndDate">Plan End Date:</label><input id="adminWizPlanEndDate" type="date"></div><div class="modal-actions">
     <button id="adminWizPrevBtn3" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="adminWizFinishBtn" class="btn-primary"><i class="fas fa-check"></i> Finish Setup</button></div></div><div id="adminWizStep4" class="wizard-step-content hide"></div></div></div>
+    <button id="adminWizFinishBtn" class="btn-primary"><i class="fas fa-check"></i> Finish Setup</button></div></div></div></div>
 
 <div id="customTimePicker" class="custom-time-picker-dropdown hide"><div class="time-picker-header">Select Time <span id="currentTimePickerStepLabel"></span></div><div id="timePickerStepAmPm" class="time-picker-step"><label>Period:</label><div id="timePickerAmPmButtons" class="time-options-grid time-options-grid-condensed"></div></div><div id="timePickerStepHour" class="time-picker-step hide"><label>Hour (1-12):</label><div id="timePickerHours" class="time-options-grid"></div></div><div id="timePickerStepMinute" class="time-picker-step hide"><label>Minute:</label><div id="timePickerMinutes" class="time-options-grid time-options-grid-condensed"></div></div><div class="time-picker-actions"><button id="timePickerBackButton" class="btn-secondary btn-small hide"><i class="fas fa-chevron-left"></i> Back</button><button id="setTimeButton" class="btn-primary btn-small" disabled><i class="fas fa-clock"></i> Set Time</button><button id="cancelTimeButton" class="btn-secondary btn-small"><i class="fas fa-times-circle"></i> Cancel</button></div></div>
 
@@ -456,7 +452,8 @@
             <label for="travelCodeFilterInput">Filter services:</label>
             <input type="text" id="travelCodeFilterInput" placeholder="Type to filter...">
         </div>
-        <div id="travelCodeListContainer" class="modal-list-container"></div>
+        <div id="travelCodeListContainer" class="modal-list-container">
+            </div>
         <div class="modal-actions">
             <button id="confirmTravelCodeSelectionBtn" class="btn-primary"><i class="fas fa-check-square"></i> Confirm Selection</button>
             <button id="closeTravelCodeSelectionModalBtn" class="btn-secondary"><i class="fas fa-times-circle"></i> Cancel</button>
