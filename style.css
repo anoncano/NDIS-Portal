@@ -1,471 +1,594 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>NDIS Support Portal</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
-          xintegrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
-          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+:root {
+  --pri: #007bff; /* Primary blue */
+  --pri-dark: #0056b3;
+  --pri-light: #e0f0ff; /* Lighter primary for backgrounds */
+  --sec: #6c757d;  /* Secondary grey */
+  --sec-dark: #545b62;
+  --sec-light: #f0f3f5; /* Even lighter grey for subtle backgrounds */
+  --light: #f8f9fa; /* Light grey page background */
+  --dark: #212529; /* Darker text for better contrast */
+  --bd: #ced4da;   /* Border color */
+  --bg: #ffffff;      /* Card background */
+  --head:#e9ecef; /* Table header background */
+  --row-alt:#f8f9fa;  /* Table row alt background */
+  --ok: #28a745;   /* Success green */
+  --ok-dark: #1e7e34;
+  --warn: #ffc107; /* Warning yellow */
+  --warn-dark: #d39e00;
+  --warn-text: #664d03; /* Darker yellow text for better contrast on yellow bg */
+  --danger: #dc3545; /* Danger red */
+  --danger-dark: #bd2130;
+  --shadow: 0 0.2rem 0.75rem rgba(0, 0, 0, 0.07); /* Softer, slightly larger shadow */
+  --radius: 0.4rem; /* Slightly more rounded corners */
+  --input-padding-y: 0.6rem; 
+  --input-padding-x: 0.9rem;
+  --input-font-size: 0.95rem;
+  --font-family-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+* { 
+  box-sizing: border-box; 
+  font-family: var(--font-family-sans-serif); 
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--light) !important; /* Ensure light page background */
+  color: var(--dark) !important; /* Ensure dark text */
+  font-size: 16px;
+  line-height: 1.6; 
+  /* DEBUG: Add a very obvious border to check if this CSS file is loading */
+  border: 10px solid red !important;  
+}
+
+/* ========== AUTHENTICATION SCREEN ========== */
+#authScreen {
+  display: flex; 
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0; 
+  background-color: var(--light) !important; 
+  z-index: 3000; 
+  padding: 20px;
+  animation: fadeInBackdrop 0.3s ease-out;
+}
+
+#authScreen .dlg { 
+  background: var(--bg) !important; /* Ensure white dialog */
+  color: var(--dark) !important; /* Ensure dark text in dialog */
+  padding: 30px 35px;
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 420px; 
+  text-align: left;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  animation: slideInModal 0.3s ease-out;
+}
+#authScreen .dlg h3 {
+  margin-top: 0;
+  margin-bottom: 15px; 
+  font-size: 1.8rem; 
+  color: var(--pri-dark) !important;
+  text-align: center; 
+  font-weight: 700;
+}
+#authScreen .dlg h3 i {
+  margin-right: 12px;
+  color: var(--pri);
+}
+#authScreen .form-actions {
+    margin-top: 25px;
+    gap: 15px; 
+}
+#authScreen .form-actions button {
+    font-size: 1rem; 
+    padding: 12px 20px;
+}
+
+
+/* ========== PORTAL APPLICATION CONTAINER ========== */
+#portalApp {
+  display: none; /* Initially hidden, JS will show it after auth */
+  /* display: flex; */ /* Corrected: JS will handle display, but if shown it should be flex */
+  width: 100%;
+  min-height: 100vh;
+  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+}
+
+
+/* ========== NAVIGATION ========== */
+nav#side {
+  width: 260px; 
+  background: var(--pri-dark); /* This should be dark blue */
+  color: var(--bg); /* Text color should be white (var(--bg)) */
+  display: flex;
+  flex-direction: column;
+  padding: 24px 15px; 
+  gap: 8px; 
+  box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+  z-index: 100; 
+}
+nav#side h1 { 
+  margin: 0 0 24px; 
+  font-size: 1.6rem; 
+  font-weight: 700; 
+  text-align: center; 
+  line-height: 1.2; 
+  letter-spacing: -0.5px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: var(--bg) !important; /* Explicitly white text for title */
+}
+nav#side h1 i { margin-right: 10px; color: var(--pri-light); }
+
+nav#side a.link {
+  color: rgba(255,255,255,0.9); text-decoration: none; padding: 14px 20px; 
+  border-radius: var(--radius); font-size: 1rem; font-weight: 500;
+  transition: background-color 0.2s ease-in-out, color 0.2s, transform 0.1s ease;
+  display: flex; 
+  align-items: center;
+}
+nav#side a.link i { margin-right: 12px; width: 20px; text-align: center; } 
+nav#side a.link.active, nav#side a.link:hover { 
+  background: var(--pri); 
+  color: #fff !important; 
+  transform: translateX(3px); 
+}
+nav#bottom { display: none; } /* Hidden by default, shown on mobile */
+
+/* ========== MAIN CONTENT ========== */
+main { 
+  flex: 1; 
+  padding: 30px 25px; 
+  overflow-y: auto; 
+  position: relative; 
+  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+}
+.card {
+  max-width: 1100px; 
+  margin: 0 auto 30px auto; 
+  background: var(--bg) !important; /* Ensure white card background */
+  color: var(--dark) !important; /* Ensure dark text in card */
+  padding: 30px 35px; 
+  border-radius: var(--radius); 
+  box-shadow: var(--shadow); 
+  border: 1px solid var(--bd);
+}
+section.card { display: none; } /* Sections are hidden by default, JS shows active one */
+section.card.active { display: block; animation: fadeInContent 0.4s ease-out; }
+
+@keyframes fadeInContent {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+h2 { 
+  margin: 0 0 30px; 
+  font-size: 1.9rem; 
+  font-weight: 600; 
+  color: var(--pri-dark) !important; 
+  border-bottom: 2px solid var(--pri-light); 
+  padding-bottom: 15px; 
+}
+h2 i { margin-right: 12px; }
+h3 { margin: 30px 0 20px; font-size: 1.45rem; font-weight: 600; color: var(--dark) !important; }
+h3 i { margin-right: 10px; color: var(--sec-dark); }
+h4 { margin: 22px 0 15px; font-size: 1.15rem; font-weight: 600; color: var(--sec-dark) !important; }
+h4 i { margin-right: 8px; }
+hr { border: none; border-top: 1px solid #e0e0e0; margin: 30px 0; }
+hr.compact-hr { margin: 18px 0; }
+
+.card-subsection {
+  padding: 20px;
+  background-color: var(--sec-light) !important; /* Ensure light subsection background */
+  border-radius: calc(var(--radius) - 2px);
+  margin-bottom: 25px;
+  border: 1px solid #e0e5eb;
+}
+.form-section {
+  padding: 20px;
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  background-color: #fdfdfd !important; /* Ensure light form section background */
+}
+
+
+/* ========== FORMS ========== */
+.form-group { margin-bottom: 20px; } 
+label { 
+  font-size: 0.9rem; 
+  color: var(--sec-dark) !important; 
+  display: block; 
+  margin-bottom: 8px; 
+  font-weight: 600; 
+}
+label i { margin-right: 6px; }
+
+input[type="text"], input[type="password"], input[type="email"],
+input[type="date"], input[type="number"], input[type="file"],
+select, textarea {
+  display: block; width: 100%;
+  padding: var(--input-padding-y) var(--input-padding-x);
+  font-size: var(--input-font-size); font-weight: 400; line-height: 1.5;
+  color: var(--dark) !important; 
+  background-color: var(--bg) !important; 
+  background-clip: padding-box;
+  border: 1px solid var(--bd); appearance: none; border-radius: var(--radius);
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+input[type="file"] { padding: calc(var(--input-padding-y) - 3px) var(--input-padding-x); }
+input[type="file"]::file-selector-button { 
+  padding: var(--input-padding-y) var(--input-padding-x); 
+  margin: calc(-1 * var(--input-padding-y) + 1px) calc(-1 * var(--input-padding-x) + 1px) calc(-1 * var(--input-padding-y) + 1px) calc(-1 * var(--input-padding-x) + 1px); 
+  margin-right: var(--input-padding-x); 
+  background-color: var(--head); border: 0; border-right: 1px solid var(--bd); 
+  color: var(--dark); cursor: pointer; transition: background-color 0.15s ease-in-out; 
+  font-weight: 500;
+}
+input[type="file"]::file-selector-button:hover { background-color: #dde2e7; }
+input:focus, select:focus, textarea:focus { border-color: var(--pri); outline: 0; box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25); } 
+input[readonly] { background-color: var(--sec-light) !important; cursor: default; opacity: 0.8; }
+textarea { min-height: 120px; resize: vertical; }
+
+.chk { font-size: 0.95rem; color: var(--dark) !important; margin-bottom: 18px; display: flex; align-items: center; cursor: pointer; }
+.chk input[type="checkbox"] { width: auto; margin-right: 10px; margin-bottom: 0; transform: scale(1.2); cursor:pointer; accent-color: var(--pri); }
+.chk.no-margin { margin-bottom: 0; }
+
+.row { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 0; } 
+.row > div { flex: 1; min-width: 220px; } 
+
+.form-actions { margin-top: 25px; display: flex; gap: 12px; flex-wrap: wrap; }
+.form-actions button i { margin-right: 6px; }
+
+/* ========== TABLES ========== */
+.table-responsive { overflow-x: auto; margin-top: 18px; border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background-color: var(--bg) !important; }
+th, td { border: 1px solid var(--bd); padding: 13px 15px; text-align: left; vertical-align: middle; border-left: none; border-right:none; color: var(--dark) !important;}
+th { background: var(--head) !important; font-weight: 600; white-space: nowrap; color: var(--sec-dark) !important; border-top:none; border-bottom-width: 2px; }
+td { border-top: none; }
+tbody tr:nth-child(even) { background: var(--row-alt) !important; }
+tbody tr:hover { background-color: var(--pri-light) !important; }
+
+td input[type="text"], td input[type="number"], td input[type="date"], td select,
+.invoice-input-condensed { padding: 0.5rem 0.7rem; font-size: 0.9rem; margin-bottom: 0; border-radius: calc(var(--radius) - 2px); }
+td .custom-time-picker-container { margin-bottom: 0; }
+td .chk { margin-bottom: 0; padding: 5px 0; }
+td .delete-row-btn { padding: 6px 10px; font-size: 0.8rem; }
+
+.column-code, .column-rate-type { display: none; } /* Hidden by default, shown for print/PDF */
+.code-print-value, .rate-type-print-value, .description-print-value { display: none; } /* Spans for print/PDF content */
+
+/* ========== BUTTONS ========== */
+button, .button, .btn-primary, .btn-secondary, .btn-danger { 
+  padding: 10px 20px; border: 1px solid transparent; border-radius: var(--radius); 
+  font-size: 0.95rem; cursor: pointer; margin-right: 8px; margin-bottom: 8px; 
+  transition: all 0.15s ease-in-out; font-weight: 500; 
+  display: inline-flex; align-items: center; justify-content: center; 
+  text-decoration: none; line-height: 1.5; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+button i, .button i { margin-right: 8px; }
+
+.btn-primary { background: var(--pri) !important; color: var(--bg) !important; border-color: var(--pri) !important; }
+.btn-primary:hover { background: var(--pri-dark) !important; border-color: var(--pri-dark) !important; box-shadow: 0 3px 7px rgba(0,91,179,0.2); transform: translateY(-2px); }
+
+.btn-secondary { background: var(--sec) !important; color: var(--bg) !important; border-color: var(--sec) !important; }
+.btn-secondary:hover { background: var(--sec-dark) !important; border-color: var(--sec-dark) !important; box-shadow: 0 3px 7px rgba(84,91,98,0.2); transform: translateY(-2px); }
+
+.btn-danger { background: var(--danger) !important; color: var(--bg) !important; border-color: var(--danger) !important; }
+.btn-danger:hover { background: var(--danger-dark) !important; border-color: var(--danger-dark) !important; box-shadow: 0 3px 7px rgba(189,33,48,0.2); transform: translateY(-2px); }
+
+button:disabled, .button:disabled { background-color: #ccc !important; border-color: #ccc !important; cursor: not-allowed; opacity: 0.6; box-shadow: none; transform: none; }
+.btn-large { padding: 14px 28px; font-size: 1.05rem; font-weight: 600; }
+.btn-small { padding: 7px 12px; font-size: 0.8rem; }
+.btn-full-width { width: 100%; margin-right: 0; }
+
+.home-buttons-container { display: flex; flex-direction: column; align-items: stretch; gap: 18px; margin: 30px 0; }
+.welcome-message { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; color: var(--dark) !important;}
+
+.invoice-actions, .agreement-actions, .modal-actions { margin-top: 25px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; }
+.modal-actions { justify-content: flex-end; border-top: 1px solid var(--bd); padding-top: 20px; margin-top: 30px;}
+.modal-actions button { margin-right: 0; }
+.modal-actions button:not(:last-child) { margin-right: 12px; }
+
+/* ========== TOTALS & CHIPS ========== */
+.totals { text-align: right; margin-top: 30px; font-size: 1.05rem; padding-top: 20px; border-top: 1px solid var(--bd); color: var(--dark) !important;}
+.totals div { margin-bottom: 10px; font-weight: 500; }
+.totals b { font-weight: 700; color: var(--dark) !important; margin-left: 12px; }
+.chip { display: inline-block; padding: 8px 16px; border-radius: 25px; font-size: 0.8rem; font-weight: 600; line-height: 1; text-transform: uppercase; letter-spacing: 0.5px; }
+.chip.yellow { background: var(--warn); color: var(--warn-text) !important; border: 1px solid #ffc1074d;}
+.chip.green { background: var(--ok); color: var(--bg) !important; border: 1px solid #28a7454d;}
+
+/* ========== SIGNATURE & AGREEMENT ========== */
+.signWrap { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 25px; padding: 15px 0; justify-content: space-around; }
+.signWrap div { text-align: center; color: var(--dark) !important;}
+.signature-image { width: 250px; height: 85px; border: 1px dashed var(--bd); background: #fdfdfd; border-radius: var(--radius); object-fit: contain; padding: 5px;}
+.agreement-content { border: 1px solid var(--bd); padding: 25px; border-radius: var(--radius); background-color: #fdfdfd !important; min-height: 250px; margin-bottom: 25px; overflow-y: auto; max-height: 65vh; color: var(--dark) !important;}
+.agreement-content h3 { margin-top: 1.1em; margin-bottom: 0.5em; font-size: 1.2rem; color: var(--pri-dark) !important; }
+.agreement-content h4 { margin-top: 1em; margin-bottom: 0.4em; font-size: 1.05rem; color: var(--sec-dark) !important; }
+.agreement-content p, .agreement-content li { font-size: 0.95rem; line-height: 1.7; margin-bottom: 0.9em; }
+.agreement-content ul { padding-left: 25px; margin-bottom: 1em;}
+.agreement-content strong { font-weight: 600; }
+
+/* ========== MODALS (General overlay modals, not the auth screen) ========== */
+.modal { 
+  display: none; /* Hidden by default, JS will show */
+  position: fixed; 
+  inset: 0; 
+  background: rgba(30, 41, 59, 0.8); /* Dark overlay is fine */
+  align-items: center; 
+  justify-content: center; 
+  z-index: 2000; 
+  padding: 20px; 
+  overflow-y: auto; 
+  animation: fadeInBackdrop 0.3s ease-out; 
+}
+@keyframes fadeInBackdrop { from { opacity: 0; } to { opacity: 1; } }
+
+.modal .dlg { 
+  background: var(--bg) !important; /* Ensure white dialog background */
+  color: var(--dark) !important; /* Ensure dark text in dialog */
+  padding: 30px 35px; 
+  border-radius: var(--radius); 
+  width: 100%; 
+  max-width: 650px; 
+  text-align: left; 
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+  margin: 20px auto; 
+  animation: slideInModal 0.3s ease-out; 
+}
+@keyframes slideInModal { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+.modal .dlg h3 { margin-top: 0; margin-bottom: 25px; font-size: 1.6rem; color: var(--pri) !important; text-align: left; } 
+.modal .dlg h3 i { margin-right: 10px; }
+.modal .dlg canvas#signatureCanvas { /* Corrected ID from #pad to #signatureCanvas */
+  border: 1px dashed var(--bd); 
+  touch-action: none; 
+  width: 100%; /* Make canvas responsive within its container */
+  max-width: 300px; /* Max width as per HTML, but allow shrinking */
+  height: 100px; /* Fixed height as per HTML */
+  border-radius: var(--radius); 
+  margin-bottom: 18px; 
+  background-color: #fcfcfc !important; 
+  display: block; /* Helps with centering or layout if needed */
+  margin-left: auto; /* Example centering if parent is flex/grid or has text-align:center */
+  margin-right: auto;
+}
+
+.modal-list-container { max-height: 300px; overflow-y: auto; border: 1px solid var(--bd); padding: 10px; border-radius: var(--radius); margin-top: 10px; margin-bottom: 15px; background-color: var(--light) !important; }
+.modal-selectable-list { list-style-type: none; padding: 0; margin: 0; }
+.modal-selectable-list li { padding: 10px 12px; border-bottom: 1px solid var(--bd); cursor: pointer; border-radius: calc(var(--radius) - 2px); margin: 2px 0; transition: background-color 0.15s ease; color: var(--dark) !important;}
+.modal-selectable-list li:last-child { border-bottom: none; }
+.modal-selectable-list li:hover { background-color: var(--pri-light) !important; }
+.modal-selectable-list li.selected { background-color: var(--pri) !important; color: white !important; font-weight: 500; border-color: var(--pri-dark) !important; }
+
+
+/* ========== WIZARD STYLES ========== */
+.wizard-steps { display: flex; justify-content: center; margin-bottom: 30px; gap: 15px; }
+.wizard-step-indicator { width: 40px; height: 40px; border-radius: 50%; background-color: var(--bd) !important; color: var(--dark) !important; display: flex; align-items: center; justify-content: center; font-weight: 600; transition: all 0.3s; border: 2px solid transparent; position: relative;}
+.wizard-step-indicator:not(:last-child)::after { 
+  content: ''; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+  width: 20px;  height: 2px; background-color: var(--bd);
+  margin-left: 7px; 
+}
+.wizard-step-indicator.active { background-color: var(--pri) !important; color: white !important; border-color: var(--pri-dark) !important; transform: scale(1.1); box-shadow: 0 0 10px rgba(0,123,255,0.3); }
+.wizard-step-indicator.active::after { background-color: var(--pri) !important; }
+.wizard-step-indicator.completed { background-color: var(--ok) !important; color: white !important; }
+.wizard-step-indicator.completed::after { background-color: var(--ok) !important; }
+
+.files-list { margin-top: 12px; font-size: 0.9rem; color: var(--sec-dark) !important; max-height: 120px; overflow-y: auto; border: 1px solid var(--bd); padding: 12px; border-radius: var(--radius); background: var(--light) !important; }
+.files-list div, #profileFilesList li { padding: 8px 10px; background-color: var(--bg) !important; border: 1px solid var(--bd); border-radius: var(--radius); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; color: var(--dark) !important;}
+.files-list div:last-child, #profileFilesList li:last-child { margin-bottom: 0; }
+#profileFilesList { list-style-type: none; padding-left: 0; margin-top: 10px; }
+
+/* Admin Panel Specific Styles */
+.admin-nav-tabs { display: flex; border-bottom: 2px solid var(--bd); margin-bottom: 25px; flex-wrap: wrap; }
+.admin-tab-btn { background: none; border: none; padding: 13px 22px; cursor: pointer; font-size: 1rem; font-weight: 500; color: var(--sec-dark) !important; border-bottom: 3px solid transparent; margin-right: 6px; margin-bottom: -2px; border-radius: var(--radius) var(--radius) 0 0; white-space: nowrap; transition: color 0.2s, border-color 0.2s; }
+.admin-tab-btn i { margin-right: 8px; }
+.admin-tab-btn:hover { color: var(--pri) !important; background-color: var(--sec-light) !important; }
+.admin-tab-btn.active { color: var(--pri) !important; border-bottom-color: var(--pri) !important; font-weight: 600; background-color: var(--bg) !important; }
+.admin-content-panel { display: none; padding-top: 10px; animation: fadeInAdminPanel 0.3s ease-in-out; }
+.admin-content-panel.active { display: block; }
+
+@keyframes fadeInAdminPanel { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+
+.rate-inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; margin-bottom: 18px; }
+.invite-link-container { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+#invite { padding: 10px 12px; background-color: var(--head) !important; border-radius: var(--radius); border: 1px solid var(--bd); user-select: all; flex-grow: 1; font-family: monospace; font-size: 0.9rem; color: var(--dark) !important;}
+.travel-code-selection-container { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.travel-code-selection-container input[readonly] { flex-grow: 1; margin-bottom: 0; }
+.travel-code-selection-container button { margin-bottom: 0; }
+
+/* Admin Agreement Clause Editor */
+#adminAgreementClausesContainer .agreement-clause-editor {
+  border: 1px solid var(--sec-light);
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: var(--radius);
+  background-color: #fdfdfd !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+#adminAgreementClausesContainer .agreement-clause-editor label {
+  font-weight: 600;
+  color: var(--sec-dark) !important;
+  font-size: 0.95rem; 
+}
+#adminAgreementClausesContainer .agreement-clause-editor input[type="text"],
+#adminAgreementClausesContainer .agreement-clause-editor textarea {
+  margin-bottom: 12px;
+  font-size: 0.9rem; 
+}
+#adminAgreementClausesContainer .agreement-clause-editor .remove-clause-btn {
+  margin-top: 10px;
+  float: right; 
+}
+.agreement-preview-box {
+  border: 1px dashed var(--bd);
+  padding: 20px;
+  margin-top: 20px;
+  background-color: var(--light) !important;
+  border-radius: var(--radius);
+  min-height: 150px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--dark) !important;
+}
+.agreement-preview-box h2 { font-size: 1.5rem; color: var(--dark) !important; border-bottom: 1px solid var(--sec-light); padding-bottom: 8px; margin-bottom: 15px;}
+.agreement-preview-box h3 { font-size: 1.2rem; color: var(--pri-dark) !important; margin-top: 15px; margin-bottom: 8px; border-bottom: none; padding-bottom: 0;}
+.agreement-preview-box h4 { font-size: 1.05rem; color: var(--sec-dark) !important; margin-top: 10px; margin-bottom: 5px; border-bottom: none; padding-bottom: 0;}
+.agreement-preview-box p { margin-bottom: 10px; }
+.agreement-preview-box em { color: var(--sec) !important; font-style: italic;}
+
+
+/* ========== CUSTOM TIME PICKER ========== */
+.custom-time-picker-container { position: relative; }
+.custom-time-input { cursor: pointer; background-color: white !important; }
+.custom-time-picker-dropdown { display: flex; flex-direction: column; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white !important; border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1001; width: 330px; max-width: 90vw; padding: 20px; color: var(--dark) !important;}
+.custom-time-picker-dropdown.hide { display: none !important; }
+.time-picker-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; text-align: center; color: var(--pri) !important; }
+.time-picker-header #currentTimePickerStepLabel { font-size: 0.9rem; color: var(--sec-dark) !important; display: block; font-weight: 400; }
+.time-picker-step { margin-bottom: 18px; }
+.time-picker-step label { font-size: 0.9rem; font-weight: 500; margin-bottom: 10px; color: var(--dark) !important; }
+.time-options-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); gap: 10px; }
+.time-options-grid.time-options-grid-condensed { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
+.time-options-grid button { padding: 12px 10px; font-size: 0.9rem; background-color: var(--light) !important; color: var(--dark) !important; border: 1px solid var(--bd); border-radius: var(--radius); cursor: pointer; transition: all 0.2s ease; margin-right: 0; display: flex; align-items: center; justify-content: center; }
+.time-options-grid button:hover { background-color: var(--head) !important; border-color: var(--sec-dark) !important; }
+.time-options-grid button.selected { background-color: var(--pri) !important; color: white !important; border-color: var(--pri-dark) !important; font-weight: 500; transform: scale(1.05); }
+.time-picker-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; border-top: 1px solid var(--bd); padding-top: 15px;}
+.time-picker-actions button { min-width: 90px; flex-grow: 1; }
+.time-picker-actions button#setTimeButton { background-color: var(--ok) !important; border-color: var(--ok) !important; color: white !important;}
+.time-picker-actions button#setTimeButton:hover { background-color: var(--ok-dark) !important; border-color: var(--ok-dark) !important;}
+.time-picker-actions button#setTimeButton:disabled { background-color: #a0aec0 !important; border-color: #a0aec0 !important; }
+
+/* ========== UTILITIES ========== */
+.hide { display: none !important; }
+.text-center { text-align: center; }
+.tip { font-size: 0.85rem; color: var(--sec-dark) !important; margin-top: -8px; margin-bottom: 15px; display: block; font-style: italic; line-height: 1.45; background-color: #f0f3f5c9 !important; padding: 8px 12px; border-radius: calc(var(--radius) - 2px); border-left: 3px solid var(--pri-light); }
+
+/* ========== PROFILE SECTION ========== */
+#profileDetails p { margin-bottom: 15px; font-size: 1rem; color: var(--dark) !important;}
+#profileDetails strong { color: var(--sec-dark) !important; min-width: 180px; display: inline-block; font-weight: 500; }
+#profileDetails strong i { margin-right: 8px; width: 20px; }
+#profileFileUpload { margin-bottom: 12px; }
+#profileFilesDisplay { margin-bottom: 18px; }
+
+/* ========== RESPONSIVE DESIGN ========== */
+@media(max-width: 768px) {
+  nav#side { 
+    /* Hide side nav on small screens, bottom nav will be used */
+    display: none; 
+  }
+  nav#bottom { 
+    display: flex; 
+    position: fixed; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    background: var(--pri-dark); 
+    height: 60px; 
+    align-items: center; 
+    justify-content: space-around; 
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.15); 
+    z-index: 999; 
+  }
+  nav#bottom a.bLink { 
+    color: rgba(255,255,255,0.85); 
+    font-size: 1.6rem; 
+    text-decoration: none; 
+    padding: 10px; 
+    flex-grow: 1; 
+    text-align: center; 
+    transition: color 0.2s, transform 0.2s;
+  }
+  nav#bottom a.bLink.active { 
+    transform: scale(1.1); 
+    color: var(--warn); /* Highlight active icon */
+  }
   
-  <script type="module">
-    // This firebaseConfig will be used by script.js
-    // It's populated with values from your Firebase project.
-    // If __firebase_config is provided by the Canvas environment, it will override this.
-    window.firebaseConfigForApp = {
-        // SECURITY NOTE: Hardcoding API keys directly in client-side code can be a security risk.
-        // It's generally recommended to use environment variables or a backend service to handle API keys.
-        // The __firebase_config variable (if provided by the Canvas environment) is a safer way to inject this.
-        apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", // User's provided API key
-        authDomain: "ndis-portal-6ab1e.firebaseapp.com",
-        databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
-        projectId: "ndis-portal-6ab1e",
-        storageBucket: "ndis-portal-6ab1e.appspot.com", 
-        messagingSenderId: "663606000491",
-        appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
-    };
+  main { padding: 20px 15px 80px 15px; } /* Add padding-bottom for bottom nav */
+  .card { padding: 20px; }
+  h2 { font-size: 1.6rem; } h3 {font-size: 1.25rem;}
+  .row { flex-direction: column; gap: 0; } /* Stack row items */
+  .row > div { margin-bottom: 18px; min-width: unset; /* Allow shrinking */ } 
+  
+  #authScreen .dlg { width: 95%; padding: 25px; } 
+  #authScreen .dlg h3 { font-size: 1.5rem; }
 
-    // Prioritize __firebase_config if available from the Canvas environment
-    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-        try {
-            const parsedConfig = JSON.parse(__firebase_config);
-            // Ensure all necessary keys are present in parsedConfig and are not placeholders
-            if (parsedConfig && 
-                parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
-                parsedConfig.authDomain &&
-                // databaseURL is not strictly required for Firestore v9+ client SDK but good to have if RTDB is also used
-                (parsedConfig.databaseURL || parsedConfig.projectId) && // Check for projectId as a minimum for Firestore
-                parsedConfig.projectId &&
-                parsedConfig.storageBucket &&
-                parsedConfig.messagingSenderId &&
-                parsedConfig.appId && !parsedConfig.appId.startsWith("YOUR_")) {
-                 window.firebaseConfigForApp = parsedConfig;
-                 console.log("Using Firebase config from __firebase_config environment variable.");
-            } else {
-                console.warn("__firebase_config is incomplete, uses placeholders, or is missing essential keys. Falling back to manually set config in index.html. Ensure __firebase_config provides all required Firebase settings.");
-            }
-        } catch (e) {
-            console.error("Error parsing __firebase_config:", e, "Using manually set config in index.html.");
-        }
-    }
-  </script>
+  .modal .dlg { width: 95%; padding: 25px; } 
+  .modal .dlg h3 { font-size: 1.4rem; }
+  .modal .dlg canvas#signatureCanvas { max-width: 100%; /* Ensure canvas fits modal */ }
 
-</head>
-<body>
 
-<div id="authScreen">
-  <div class="dlg"> 
-      <h3><i class="fas fa-user-lock"></i> NDIS Portal Access</h3>
-      <p style="text-align: center; margin-bottom: 20px; font-size: 0.9rem; color: var(--sec-dark);">Please sign in or register to continue.</p>
-      <form id="authForm"> 
-        <div class="form-group">
-          <label for="authEmail">Email</label> 
-          <input type="email" id="authEmail" placeholder="email@example.com" />
-        </div>
-        <div class="form-group">
-          <label for="authPassword">Password</label> 
-          <input type="password" id="authPassword" placeholder="••••••••" />
-        </div>
-        <div class="form-actions" style="justify-content: space-between;">
-          <button type="button" id="loginBtn" class="btn-primary" style="flex-grow: 1;">Login</button>
-          <button type="button" id="registerBtn" class="btn-secondary" style="flex-grow: 1;">Register</button>
-        </div>
-      </form> 
-      <div id="authStatusMessage" style="margin-top: 15px; text-align: center; color: var(--danger); font-size: 0.9rem;"></div>
-    </div>
-</div>
+  .home-buttons-container { flex-direction: column; }
+  .custom-time-picker-dropdown { width: calc(100% - 30px); left: 15px; right: 15px; transform: translate(0, -50%); }
+  .time-options-grid { grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); }
+  .invoice-actions, .agreement-actions, .modal-actions { justify-content: center; }
+  .totals { text-align: center; }
+  .totals div { display: flex; justify-content: space-between; max-width: 300px; margin-left: auto; margin-right: auto;}
+  .rate-inputs-grid { grid-template-columns: 1fr; }
+  .admin-nav-tabs { flex-direction: column; border-bottom: none;}
+  .admin-tab-btn { width: 100%; margin-bottom: 5px; border-bottom: 2px solid var(--bd); text-align: left;}
+  .admin-tab-btn.active { border-bottom-color: var(--pri); }
+}
 
-<div id="portalApp">
-    <nav id="side">
-      <h1 id="portalTitleDisplay"><i class="fas fa-cogs"></i> NDIS Portal</h1>
-      <a href="#home"     class="link active"><i class="fas fa-home"></i> Home</a>
-      <a href="#profile"  class="link hide"><i class="fas fa-user-circle"></i> Profile</a>
-      <a href="#invoice"  class="link hide"><i class="fas fa-file-invoice-dollar"></i> Invoice</a>
-      <a href="#agreement"class="link hide"><i class="fas fa-file-signature"></i> Agreement</a>
-      <a href="#admin"    class="link hide" id="adminTab"><i class="fas fa-user-shield"></i> Admin</a>
-      <button id="logoutBtn" class="btn-secondary btn-small hide" style="margin-top: auto;"><i class="fas fa-sign-out-alt"></i> Logout</button>
-    </nav>
+/* ========== PRINT STYLES ========== */
+@media print {
+  body { display: block; font-size: 10pt; color: #000 !important; background: #fff !important; border: none !important; }
+  #authScreen, nav#side, nav#bottom, #adminTab, /* #home, #profile, */ /* Keep home/profile if they might be printed */
+  #rqModal, #sigModal, #wiz, #customTimePicker, #messageModal, #setInitialInvoiceModal, #adminSetupWizard, #travelCodeSelectionModal,
+  #invoice .invoice-actions button:not(.print-only-btn), #agreement .agreement-actions button:not(.print-only-btn),
+  #invoice table th.no-print, #invoice table td.no-print, .modal-actions button, #agreement #agrChip,
+  #admin, .home-buttons-container, #homeGuest, /* #homeUser h3, #rqTbl, */ /* Keep if relevant for print */
+  .invite-link-container, .admin-nav-tabs,
+  button i, #logoutBtn, #editProfileBtn, #uploadProfileDocumentsBtn, #addInvRowUserActionBtn, #saveDraftBtn, #signBtn, #participantSignBtn,
+  #adminAddAgreementClauseBtn, #saveAdminAgreementCustomizationsBtn, #saveAdminPortalSettingsBtn, #resetGlobalSettingsToDefaultsBtn,
+  #saveAdminServiceBtn, #clearAdminServiceFormBtn, #selectTravelCodeBtn, #saveWorkerAuthorizationsBtn, #copyLinkBtn,
+  #adminAgreementWorkerSelector button, #initialInvoiceNumberInput + .modal-actions button,
+  #saveRequestBtn, #closeRqModalBtn, #saveShiftFromModalToInvoiceBtn, #closeLogShiftModalBtn, #saveSigBtn, #closeSigModalBtn,
+  .wizard-steps + div button, /* Wizard buttons */
+  #closeMessageModalBtn, #confirmTravelCodeSelectionBtn, #closeTravelCodeSelectionModalBtn,
+  #logTodayShiftBtn, #rqBtn /* Home screen buttons */
+   { display: none !important; }
+  
+  #portalApp { display: block !important; } 
+  main { padding: 0; margin: 0; overflow: visible; }
+  .card { box-shadow: none; border: none; padding: 0; margin: 0 auto; max-width: 100%; background: #fff !important; color: #000 !important;}
+  /* Ensure the active section to be printed is displayed */
+  section.card.active { display: block !important; }
+  /* Specifically show invoice and agreement if they are the active ones being printed */
+  /* section#invoice.active, section#agreement.active { display: block !important; } */
 
-    <nav id="bottom">
-      <a href="#home"    class="bLink active" aria-label="Home"><i class="fas fa-home"></i></a>
-      <a href="#profile" class="bLink hide" aria-label="Profile"><i class="fas fa-user-circle"></i></a>
-      <a href="#invoice" class="bLink hide" aria-label="Invoice"><i class="fas fa-file-invoice-dollar"></i></a>
-      <a href="#agreement" class="bLink hide" aria-label="Agreement"><i class="fas fa-file-signature"></i></a>
-      </nav>
 
-    <main>
-      <div id="loadingOverlay" class="modal" style="display: none; background-color: rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index: 2000;">
-          <div style="color:white; font-size: 1.5rem; text-align:center;">
-              <i class="fas fa-spinner fa-spin fa-2x"></i>
-              <p>Loading...</p>
-          </div>
-      </div>
+  #agreementContentContainer { border: none; padding: 0; background-color: transparent !important; max-height: none; overflow: visible; color: #000 !important;}
+  #agreementDynamicTitle { text-align: center; font-size: 18pt; margin-bottom: 20px; color: #000 !important;}
+  #invoice h2 { text-align: center; font-size: 16pt; margin-bottom: 15px; color: #000 !important;}
+  #invoice .row { margin-bottom: 8px; }
+  #invoice .row div label { font-weight: bold; font-size: 9pt; color: #000 !important;}
+  #invoice #invNo, #invoice #invDate, #invoice #provName, #invoice #provAbn, #invoice #gstFlag { border: none; padding: 1px; background: transparent !important; font-size: 9pt; width: auto; margin-bottom: 0; color: #000 !important;}
+  #providerDetailsRow #gstFlagContainer { display: block !important; } /* Ensure GST flag is visible */
+  #invTbl { font-size: 9pt; margin-top: 10px; background: #fff !important; }
+  #invTbl th, #invTbl td { padding: 4px 6px; border: 1px solid #999 !important; color: #000 !important;}
+  #invTbl th { background-color: #f0f0f0 !important; }
+  #invTbl .column-code, #invTbl .column-rate-type, #invTbl .print-only-column { display: table-cell !important; }
+  /* Hide inputs in table cells, show print-specific spans */
+  #invTbl input, #invTbl select, #invTbl textarea, #invTbl .custom-time-input, #invTbl .chk { display: none !important; }
+  #invTbl .code-print-value, #invTbl .description-print-value, #invTbl .rate-type-print-value, 
+  #invTbl .date-print-value, #invTbl .start-time-print-value, #invTbl .end-time-print-value,
+  #invTbl .hours-km-print-value, #invTbl .total-print-value { display: inline !important; }
+  
+  .totals { text-align: right; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; color: #000 !important;}
+  .totals div { margin-bottom: 3px; }
+  #gstRow { display: block !important; } /* Ensure GST row is visible for print */
+  .signWrap { margin-top: 15px; page-break-inside: avoid; }
+  .signWrap img { width: 180px; height: 60px; border: 1px solid #ccc; } /* Add a light border for printed signatures */
+  .signature-image[src*="placehold.co"] { border: 1px dashed #999 !important; } /* Style placeholder for print */
 
-      <section id="home" class="card active">
-        <h2><i class="fas fa-door-open"></i> Welcome</h2>
-        <div id="authStatus" style="margin-bottom: 15px; font-style: italic;">
-            User ID: <span id="userIdDisplay">Not Logged In</span>
-        </div>
-
-        <div id="homeUser" class="hide"> 
-          <p class="welcome-message">Welcome back, <span id="userNameDisplay">User</span>!</p>
-          <div class="home-buttons-container">
-                <button id="rqBtn" class="btn-primary btn-large"><i class="fas fa-calendar-plus"></i> Request a Shift</button>
-                <button id="logTodayShiftBtn" class="btn-primary btn-large"><i class="fas fa-clipboard-list"></i> Log New Shift</button>
-          </div>
-          
-          <div id="shiftRequestsContainer" class="hide card-subsection" style="margin-top: 20px;">
-            <h3><i class="fas fa-tasks"></i> Shift Requests</h3>
-            <div class="table-responsive">
-              <table id="rqTbl"><thead>
-                <tr><th>Date</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="profile" class="card">
-        <h2><i class="fas fa-id-card"></i> Your Profile</h2>
-        <div id="profileDetails" class="card-subsection">
-          <p><strong><i class="fas fa-user-tag"></i> Name:</strong> <span id="profileName"></span></p>
-          <p><strong><i class="fas fa-briefcase"></i> ABN:</strong> <span id="profileAbn"></span></p>
-          <p><strong><i class="fas fa-percent"></i> GST Registered:</strong> <span id="profileGst"></span></p>
-          <p><strong><i class="fas fa-landmark"></i> BSB:</strong> <span id="profileBsb"></span></p>
-          <p><strong><i class="fas fa-credit-card"></i> Account Number:</strong> <span id="profileAcc"></span></p>
-        </div>
-        <button id="editProfileBtn" class="btn-secondary"><i class="fas fa-edit"></i> Edit Profile Details</button>
-        <hr>
-        <div class="card-subsection">
-            <h3><i class="fas fa-folder-open"></i> Supporting Documents</h3>
-            <div id="profileFilesDisplay">
-                <p><strong>Uploaded Files:</strong></p>
-                <ul id="profileFilesList"><li>None uploaded.</li></ul>
-            </div>
-            <div class="form-group">
-                <label for="profileFileUpload"><i class="fas fa-file-upload"></i> Upload New Document(s):</label>
-                <input type="file" id="profileFileUpload" multiple>
-            </div>
-            <button id="uploadProfileDocumentsBtn" class="btn-secondary"><i class="fas fa-plus-circle"></i> Add Document(s) to Profile</button>
-        </div>
-      </section>
-
-      <section id="invoice" class="card">
-        <div id="setInitialInvoiceModal" class="modal"> <div class="dlg">
-                <h3><i class="fas fa-file-invoice"></i> Set Starting Invoice Number</h3>
-                <p>Please set your starting invoice number. This will auto-increment for future invoices.</p>
-                <div class="form-group">
-                    <label for="initialInvoiceNumberInput">Starting Invoice Number:</label>
-                    <input type="number" id="initialInvoiceNumberInput" placeholder="e.g., 1001">
-                </div>
-                <div class="modal-actions">
-                    <button id="saveInitialInvoiceNumberBtn" class="btn-primary"><i class="fas fa-save"></i> Save and Continue</button>
-                </div>
-            </div>
-        </div>
-        <h2><i class="fas fa-calculator"></i> Invoice – Week <span id="wkLbl"></span></h2>
-
-        <div id="invoicePdfContent"> 
-            <div class="row">
-              <div class="form-group">
-                <label for="invNo">Invoice #</label>
-                <input id="invNo" readonly>
-              </div>
-              <div class="form-group"><label for="invDate">Date issued</label><input type="date" id="invDate"></div>
-            </div>
-
-            <div class="row" id="providerDetailsRow">
-              <div class="form-group"><label for="provName">Provider (your name)</label><input id="provName" readonly></div>
-              <div class="form-group"><label for="provAbn">ABN</label><input id="provAbn" readonly></div>
-              <div id="gstFlagContainer" class="form-group"><label for="gstFlag">GST Registered</label><input id="gstFlag" readonly></div>
-            </div>
-            <div class="table-responsive">
-              <table id="invTbl"><thead>
-                <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th class="column-code print-only pdf-show">Code</th> 
-                    <th>Description</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th class="column-rate-type print-only pdf-show">Rate type</th> 
-                    <th class="print-only-column pdf-show">Rate/Unit ($)</th> 
-                    <th>Hours / Km</th> 
-                    <th class="no-print pdf-hide">Travel Input (Km)</th> <th class="no-print pdf-hide">Claim Travel</th> 
-                    <th>Total ($)</th>
-                    <th class="no-print pdf-hide">Actions</th>
-                </tr>
-              </thead><tbody></tbody></table>
-            </div>
-            <div class="totals">
-              <div>Subtotal:  <b id="sub">$0.00</b></div>
-              <div id="gstRow" style="display:none">GST 10 %:  <b id="gst">$0.00</b></div>
-              <div>Total:  <b id="grand">$0.00</b></div>
-            </div>
-        </div> 
-        <div class="invoice-actions">
-            <button id="addInvRowUserActionBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Service Manually</button> 
-            <button id="saveDraftBtn" class="btn-secondary"><i class="fas fa-save"></i> Save Draft</button>
-            <button id="generateInvoicePdfBtn" class="btn-secondary"><i class="fas fa-file-pdf"></i> Download PDF</button> 
-        </div>
-      </section>
-
-      <section id="agreement" class="card">
-        <h2 id="agreementDynamicTitle"><i class="fas fa-handshake"></i> Service Agreement</h2> 
-
-        <div id="adminAgreementWorkerSelector" class="form-group card-subsection hide" style="margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: var(--radius); background-color: var(--sec-light);">
-            <h4><i class="fas fa-user-cog"></i> Admin: View Agreement for Specific Worker</h4>
-            <label for="adminSelectWorkerForAgreement">Select Support Worker:</label>
-            <select id="adminSelectWorkerForAgreement" class="invoice-input-condensed">
-                <option value="">-- Select a Worker --</option>
-            </select>
-            <button id="loadServiceAgreementForSelectedWorkerBtn" class="btn-secondary btn-small" style="margin-top:10px;"><i class="fas fa-eye"></i> Load Agreement</button>
-            <p class="tip">Participant details are taken from Global Settings. Worker details and authorized services are from the selected worker's profile.</p>
-        </div>
-
-        <div id="agrChip" class="chip yellow">Draft – waiting for signatures</div>
-
-        <div id="agreementContentWrapper"> 
-            <div id="agreementHeaderForPdf" style="display:none; text-align:center; margin-bottom:20px;">
-                </div>
-            <div id="agreementContentContainer" class="agreement-content">
-                </div>
-            <hr>
-            <div class="signWrap">
-              <div><b>Participant</b><br><img id="sigP" alt="Participant Signature Area" class="signature-image" src="https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area" onerror="this.src='https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area&txtsize=16'"><br>Date <span id="dP">___</span></div>
-              <div><b>Support Worker</b><br><img id="sigW" alt="Support Worker Signature Area" class="signature-image" src="https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area" onerror="this.src='https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area&txtsize=16'"><br>Date <span id="dW">___</span></div>
-            </div>
-        </div>
-        <div class="agreement-actions">
-            <button id="signBtn" class="btn-primary"><i class="fas fa-signature"></i> Sign agreement</button>
-            <button id="participantSignBtn" class="btn-primary hide"><i class="fas fa-user-edit"></i> Sign for Participant</button> 
-            <button id="pdfBtn" class="btn-secondary hide"><i class="fas fa-file-pdf"></i> Download PDF</button>
-        </div>
-      </section>
-
-      <section id="admin" class="card">
-        <h2><i class="fas fa-tools"></i> Admin Dashboard</h2>
-        <div class="admin-nav-tabs">
-            <button class="admin-tab-btn active" data-target="adminGlobalSettings"><i class="fas fa-globe-americas"></i> Global Settings</button>
-            <button class="admin-tab-btn" data-target="adminServiceManagement"><i class="fas fa-concierge-bell"></i> NDIS Services</button>
-            <button class="admin-tab-btn" data-target="adminAgreementCustomization"><i class="fas fa-file-alt"></i> Agreement Template</button>
-            <button class="admin-tab-btn" data-target="adminWorkerManagement"><i class="fas fa-users-cog"></i> Worker Management</button>
-        </div>
-
-        <div id="adminGlobalSettings" class="admin-content-panel active card-subsection">
-            <h3><i class="fas fa-cogs"></i> Portal Global Settings</h3>
-            <p>These settings affect the entire portal, including defaults for service agreements and invoices.</p>
-            <div id="editPortalSettingsContainer">
-                <div id="adminEditOrgDetailsSection" class="form-section">
-                    <h4><i class="fas fa-building"></i> Organization Details</h4>
-                    <div class="form-group"><label for="adminEditOrgName">Organization/Provider Name:</label><input id="adminEditOrgName" type="text"></div>
-                    <div class="form-group"><label for="adminEditOrgAbn">Organization ABN:</label><input id="adminEditOrgAbn" type="text"></div>
-                    <div class="form-group"><label for="adminEditOrgContactEmail">Primary Contact Email:</label><input id="adminEditOrgContactEmail" type="email"></div>
-                    <div class="form-group"><label for="adminEditOrgContactPhone">Primary Contact Phone:</label><input id="adminEditOrgContactPhone" type="text"></div>
-                </div>
-                <hr id="adminEditParticipantHr" /> 
-                <div id="adminEditParticipantDetailsSection" class="form-section">
-                    <h4 id="adminEditParticipantTitle"><i class="fas fa-child"></i> Default Participant & Plan Details</h4>
-                    <div class="form-group"><label for="adminEditParticipantName">Participant's Full Name:</label><input id="adminEditParticipantName" type="text"></div>
-                    <div class="form-group"><label for="adminEditParticipantNdisNo">Participant's NDIS Number:</label><input id="adminEditParticipantNdisNo" type="text"></div>
-                    <div class="form-group"><label for="adminEditPlanManagerName">Plan Manager Name:</label><input id="adminEditPlanManagerName" type="text"></div>
-                    <div class="form-group"><label for="adminEditPlanManagerEmail">Plan Manager Email:</label><input id="adminEditPlanManagerEmail" type="email"></div>
-                    <div class="form-group"><label for="adminEditPlanManagerPhone">Plan Manager Phone:</label><input id="adminEditPlanManagerPhone" type="text"></div>
-                    <div class="form-group"><label for="adminEditPlanEndDate">Current Plan End Date:</label><input id="adminEditPlanEndDate" type="date"></div>
-                </div>
-                <div class="form-actions" style="margin-top:20px;">
-                    <button id="saveAdminPortalSettingsBtn" class="btn-primary"><i class="fas fa-save"></i> Save All Portal Settings</button>
-                    <button id="resetGlobalSettingsToDefaultsBtn" class="btn-danger" title="Resets all portal settings to their original defaults."><i class="fas fa-undo"></i> Reset Portal to Defaults</button>
-                </div>
-            </div>
-             <hr>
-            <p>Invite link for new support workers:</p>
-            <div class="invite-link-container">
-              <code id="invite"></code>
-              <button id="copyLinkBtn" class="btn-secondary btn-small"><i class="fas fa-copy"></i> Copy Link</button>
-            </div>
-        </div>
-
-        <div id="adminServiceManagement" class="admin-content-panel card-subsection">
-            <h3><i class="fas fa-list-alt"></i> Manage NDIS Support Services</h3>
-            <p>Define NDIS support services. All services defined here are globally available for worker authorization via "Worker Management".</p>
-            <div id="adminServiceFormContainer" class="form-section">
-                <h4><i class="fas fa-plus-square"></i> Add/Edit Service</h4>
-                <input type="hidden" id="adminServiceId"> 
-                
-                <div class="form-group">
-                    <label for="adminServiceCode">NDIS Item Code:</label>
-                    <input type="text" id="adminServiceCode" placeholder="e.g., 01_011_0107_1_1">
-                </div>
-
-                <div class="form-group">
-                    <label for="adminServiceDescription">Description:</label>
-                    <input type="text" id="adminServiceDescription" placeholder="e.g., Assistance with Daily Life">
-                </div>
-
-                <div class="form-group">
-                    <label for="adminServiceCategoryType">Service Category Type:</label>
-                    <select id="adminServiceCategoryType">
-                        <option value="core_standard">Core - Standard (Weekday/Evening/Night/Weekend/PH Rates)</option>
-                        <option value="core_high_intensity">Core - High Intensity (Weekday/Evening/Night/Weekend/PH Rates)</option>
-                        <option value="capacity_therapy_std">Capacity Building - Therapy Standard Rate</option>
-                        <option value="capacity_specialist">Capacity Building - Specialist Rate (e.g., Specialist Behaviour Support)</option>
-                        <option value="travel_km">Travel - Per Kilometre</option>
-                        <option value="other_flat_rate">Other - Single Flat Rate (e.g. Consumables)</option>
-                    </select>
-                </div>
-                
-                <div id="adminServiceRateFieldsContainer">
-                    </div>
-
-                <div class="form-group">
-                    <label for="adminServiceTravelCodeDisplay">Associated Travel Item Code (for this service):</label>
-                    <div class="travel-code-selection-container">
-                        <input type="text" id="adminServiceTravelCodeDisplay" readonly placeholder="None selected">
-                        <button id="selectTravelCodeBtn" class="btn-secondary btn-small"><i class="fas fa-route"></i> Select/Change</button>
-                    </div>
-                    <input type="hidden" id="adminServiceTravelCode">
-                    <p class="tip">If this service can have travel claimed for it, select an existing NDIS Travel Item Code defined elsewhere in this list. The travel item should have its per-KM rate set.</p>
-                </div>
-
-                <div class="form-actions">
-                    <button id="saveAdminServiceBtn" class="btn-primary"><i class="fas fa-save"></i> Save Service</button>
-                    <button id="clearAdminServiceFormBtn" class="btn-secondary"><i class="fas fa-eraser"></i> Clear Form</button>
-                </div>
-            </div>
-            <hr>
-            <h4><i class="fas fa-stream"></i> Current Services</h4>
-            <div class="table-responsive">
-                <table id="adminServicesTable">
-                    <thead>
-                        <tr>
-                            <th>Item Code</th>
-                            <th>Description</th>
-                            <th>Category Type</th>
-                            <th>Primary Rate</th>
-                            <th>Travel Code</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="adminAgreementCustomization" class="admin-content-panel card-subsection">
-            <h3><i class="fas fa-edit"></i> Service Agreement Customization</h3>
-            <p>Structure your service agreement by adding and editing clauses. Use placeholders like <code>{{participantName}}</code>, <code>{{workerName}}</code>, <code>{{serviceList}}</code>, etc., within clause bodies. The <code>{{serviceList}}</code> placeholder will be replaced with the worker's authorized services.</p>
-            
-            <div class="form-group">
-                <label for="adminAgreementOverallTitle">Overall Agreement Title:</label>
-                <input type="text" id="adminAgreementOverallTitle" placeholder="e.g., NDIS Service Agreement">
-            </div>
-
-            <div id="adminAgreementClausesContainer">
-                </div>
-
-            <div class="form-actions" style="margin-top: 15px;">
-                <button id="adminAddAgreementClauseBtn" class="btn-secondary"><i class="fas fa-plus-circle"></i> Add New Clause</button>
-                <button id="saveAdminAgreementCustomizationsBtn" class="btn-primary"><i class="fas fa-save"></i> Save Agreement Structure</button>
-            </div>
-            <hr>
-            <h4><i class="fas fa-eye"></i> Example Agreement Preview:</h4>
-            <div id="adminAgreementPreview" class="agreement-preview-box">
-                <p><em>Save changes to see an updated preview. Placeholders will not be filled here.</em></p>
-            </div>
-        </div>
-        
-        <div id="adminWorkerManagement" class="admin-content-panel card-subsection">
-          <h3><i class="fas fa-id-badge"></i> Worker Management</h3>
-          <p>Manage support worker approvals and the NDIS services they are authorized to provide. Services must first be defined in the "NDIS Services" tab.</p>
-          
-          <div class="card-subsection" style="margin-top: 20px; background-color: var(--warn-light, #fff9e6); border-color: var(--warn, #ffc107); padding:15px; border-radius:var(--radius);">
-              <h4><i class="fas fa-user-clock"></i> Workers Awaiting Approval</h4>
-              <div id="pendingWorkersList" style="max-height: 300px; overflow-y:auto;">
-                 </div>
-              <p class="tip" id="noPendingWorkersMessage" style="display:none;">There are currently no workers awaiting approval.</p>
-          </div>
-
-          <hr> <h4><i class="fas fa-user-shield"></i> Service Authorizations for Approved Workers</h4>
-          <div class="row" style="margin-top: 10px;">
-              <div style="flex: 1; min-width: 280px; margin-right: 20px; max-height: 500px; overflow-y:auto; border: 1px solid var(--bd); padding:15px; border-radius:var(--radius);">
-                  <h5><i class="fas fa-users"></i> Approved Support Workers</h5>
-                  <ul id="workersListForAuth" class="modal-selectable-list">
-                    </ul>
-              </div>
-
-              <div style="flex: 2; min-width: 450px;">
-                  <h5 id="selectedWorkerNameForAuth" style="margin-bottom:15px;"><i class="fas fa-user-check"></i> Select an Approved Worker to Manage Services</h5>
-                  <div id="servicesForWorkerContainer" class="hide">
-                      <p>Check the services this worker is authorized for:</p>
-                      <ul id="servicesListCheckboxes" class="service-list-auth" style="max-height: 400px; overflow-y:auto; border: 1px solid var(--bd); padding:15px; border-radius:var(--radius); background-color: #fff; list-style-type: none;">
-                          </ul>
-                      <button id="saveWorkerAuthorizationsBtn" class="btn-primary" style="margin-top: 20px;"><i class="fas fa-save"></i> Save Authorizations for Worker</button>
-                  </div>
-              </div>
-          </div>
-        </div>
-      </section>
-    </main>
-</div> 
-
-<div id="rqModal" class="modal"><div class="dlg"><h3><i class="fas fa-calendar-check"></i> Request a shift</h3><div class="form-group"><label for="rqDate">Date</label><input type="date" id="rqDate"></div><div class="form-group"><label for="rqStart">Start Time</label><div class="custom-time-picker-container"><input type="text" id="rqStart" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><div class="form-group"><label for="rqEnd">End Time</label><div class="custom-time-picker-container"><input type="text" id="rqEnd" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><div class="form-group"><label for="rqReason">Reason (Optional)</label><textarea id="rqReason" rows="3" placeholder="Enter reason..."></textarea></div><div class="modal-actions">
-    <button id="saveRequestBtn" class="btn-primary"><i class="fas fa-paper-plane"></i> Submit</button>
-    <button id="closeRqModalBtn" class="btn-secondary"><i class="fas fa-times"></i> Cancel</button></div></div></div>
-
-<div id="logShiftModal" class="modal"><div class="dlg"><h3><i class="fas fa-user-clock"></i> Log New Shift</h3><div class="form-group"><label for="logShiftDate">Date</label><input type="date" id="logShiftDate"></div><div class="form-group"><label for="logShiftSupportType">Support Type</label><select id="logShiftSupportType"></select></div><div class="form-group"><label for="logShiftStartTime">Start Time</label><div class="custom-time-picker-container"><input type="text" id="logShiftStartTime" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><div class="form-group"><label for="logShiftEndTime">End Time</label><div class="custom-time-picker-container"><input type="text" id="logShiftEndTime" class="custom-time-input" readonly placeholder="Select Time" data-value24=""></div></div><label class="chk"><input type="checkbox" id="logShiftClaimTravelToggle"> Claim Travel?</label><div id="logShiftKmFieldsContainer" class="hide form-subsection"><div class="form-group"><label for="logShiftStartKm">Start Odometer (Km):</label><input type="number" id="logShiftStartKm" placeholder="e.g., 10000.0" step="0.1" min="0"></div><div class="form-group"><label for="logShiftEndKm">End Odometer (Km):</label><input type="number" id="logShiftEndKm" placeholder="e.g., 10020.5" step="0.1" min="0"></div><p style="margin-top: 5px;"><strong>Calculated Travel:</strong> <span id="logShiftCalculatedKm">0.0 Km</span></p></div><div class="modal-actions">
-    <button id="saveShiftFromModalToInvoiceBtn" class="btn-primary"><i class="fas fa-file-import"></i> Save to Invoice</button>
-    <button id="closeLogShiftModalBtn" class="btn-secondary"><i class="fas fa-times"></i> Cancel</button></div></div></div>
-
-<div id="sigModal" class="modal"><div class="dlg"><h3><i class="fas fa-pencil-alt"></i> Draw Signature</h3>
-    <canvas id="signatureCanvas" width="300" height="100"></canvas><br>
-    <div class="modal-actions">
-        <button id="saveSigBtn" class="btn-primary"><i class="fas fa-check-circle"></i> Save Signature</button>
-        <button id="closeSigModalBtn" class="btn-secondary"><i class="fas fa-times"></i> Cancel</button>
-    </div></div></div>
-
-<div id="wiz" class="modal"><div class="dlg"><h3 id="wHead">Setup Progress</h3><div class="wizard-steps"><span id="wizStepIndicator1" class="wizard-step-indicator active">1</span><span id="wizStepIndicator2" class="wizard-step-indicator">2</span><span id="wizStepIndicator3" class="wizard-step-indicator">3</span><span id="wizStepIndicator4" class="wizard-step-indicator">4</span></div><div id="wStep1" class="wizard-step-content"><h4>Step 1: Basic Info</h4><div class="form-group"><label for="wName">Full name</label><input id="wName" type="text"></div><div class="form-group"><label for="wAbn">ABN</label><input id="wAbn" type="text"></div><label class="chk"><input type="checkbox" id="wGst"> GST Registered</label><div class="modal-actions">
-    <button id="wizNextBtn1" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="wStep2" class="wizard-step-content hide"><h4>Step 2: Bank Details</h4><div class="form-group"><label for="wBsb">BSB</label><input id="wBsb" type="text"></div><div class="form-group"><label for="wAcc">Account number</label><input id="wAcc" type="text"></div><div class="modal-actions">
-    <button id="wizPrevBtn2" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="wizNextBtn2" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="wStep3" class="wizard-step-content hide"><h4>Step 3: Docs (Optional)</h4><div class="form-group"><label for="wFiles">Upload files</label><input type="file" id="wFiles" multiple></div><div id="wFilesList" class="files-list"></div><div class="modal-actions">
-    <button id="wizPrevBtn3" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="wizNextBtn3" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="wStep4" class="wizard-step-content hide"><h4>Step 4: All Done!</h4><p>Click Finish.</p><div class="modal-actions">
-    <button id="wizPrevBtn4" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="wizFinishBtn" class="btn-primary"><i class="fas fa-check"></i> Finish</button></div></div></div></div>
-
-<div id="adminSetupWizard" class="modal"><div class="dlg" style="max-width: 650px;"><h3 id="adminWizHead"><i class="fas fa-magic"></i> Portal Setup</h3><div class="wizard-steps"><span id="adminWizStepIndicator1" class="wizard-step-indicator active">1</span><span id="adminWizStepIndicator2" class="wizard-step-indicator">2</span><span id="adminWizStepIndicator3" class="wizard-step-indicator">3</span></div><div id="adminWizStep1" class="wizard-step-content"><h4>Step 1: Portal Type</h4><label class="chk"><input type="radio" name="adminWizPortalType" value="organization" checked> Organization</label><p class="tip">For service providers with multiple workers.</p><label class="chk"><input type="radio" name="adminWizPortalType" value="participant"> Self-Managed Participant</label><p class="tip">For individuals managing their own supports.</p><div class="modal-actions">
-    <button id="adminWizNextBtn1" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="adminWizStep2" class="wizard-step-content hide"><h4 id="adminWizStep2Title">Step 2: Details</h4><div id="adminWizOrgFields"><div class="form-group"><label for="adminWizOrgName">Org Name:</label><input id="adminWizOrgName" type="text"></div><div class="form-group"><label for="adminWizOrgAbn">Org ABN:</label><input id="adminWizOrgAbn" type="text"></div><div class="form-group"><label for="adminWizOrgContactEmail">Org Email:</label><input id="adminWizOrgContactEmail" type="email"></div><div class="form-group"><label for="adminWizOrgContactPhone">Org Phone:</label><input id="adminWizOrgContactPhone" type="text"></div></div><div id="adminWizUserFields" class="hide"><div class="form-group"><label for="adminWizUserName">Your Name:</label><input id="adminWizUserName" type="text"></div></div><div class="modal-actions">
-    <button id="adminWizPrevBtn2" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="adminWizNextBtn2" class="btn-primary">Next <i class="fas fa-arrow-right"></i></button></div></div><div id="adminWizStep3" class="wizard-step-content hide"><h4 id="adminWizStep3Title">Step 3: Participant Details</h4><div class="form-group"><label for="adminWizParticipantName">Participant Name:</label><input id="adminWizParticipantName" type="text"></div><div class="form-group"><label for="adminWizParticipantNdisNo">NDIS No.:</label><input id="adminWizParticipantNdisNo" type="text"></div><div class="form-group"><label for="adminWizPlanManagerName">Plan Manager:</label><input id="adminWizPlanManagerName" type="text"></div><div class="form-group"><label for="adminWizPlanManagerEmail">Plan Manager Email:</label><input id="adminWizPlanManagerEmail" type="email"></div><div class="form-group"><label for="adminWizPlanManagerPhone">Plan Manager Phone:</label><input id="adminWizPlanManagerPhone" type="text"></div><div class="form-group"><label for="adminWizPlanEndDate">Plan End Date:</label><input id="adminWizPlanEndDate" type="date"></div><div class="modal-actions">
-    <button id="adminWizPrevBtn3" class="btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
-    <button id="adminWizFinishBtn" class="btn-primary"><i class="fas fa-check"></i> Finish Setup</button></div></div></div></div>
-
-<div id="customTimePicker" class="custom-time-picker-dropdown hide"><div class="time-picker-header">Select Time <span id="currentTimePickerStepLabel"></span></div><div id="timePickerStepAmPm" class="time-picker-step"><label>Period:</label><div id="timePickerAmPmButtons" class="time-options-grid time-options-grid-condensed"></div></div><div id="timePickerStepHour" class="time-picker-step hide"><label>Hour (1-12):</label><div id="timePickerHours" class="time-options-grid"></div></div><div id="timePickerStepMinute" class="time-picker-step hide"><label>Minute:</label><div id="timePickerMinutes" class="time-options-grid time-options-grid-condensed"></div></div><div class="time-picker-actions"><button id="timePickerBackButton" class="btn-secondary btn-small hide"><i class="fas fa-chevron-left"></i> Back</button><button id="setTimeButton" class="btn-primary btn-small" disabled><i class="fas fa-clock"></i> Set Time</button><button id="cancelTimeButton" class="btn-secondary btn-small"><i class="fas fa-times-circle"></i> Cancel</button></div></div>
-
-<div id="messageModal" class="modal"><div class="dlg"><h3 id="messageModalTitle"><i class="fas fa-info-circle"></i> Alert</h3><p id="messageModalText"></p><div class="modal-actions">
-    <button id="closeMessageModalBtn" class="btn-primary">OK</button></div></div></div>
-
-<div id="travelCodeSelectionModal" class="modal">
-    <div class="dlg">
-        <h3><i class="fas fa-map-signs"></i> Select Associated Travel Item Code</h3>
-        <p>Choose an existing NDIS service item (must be of 'Travel - Per Kilometre' category) to associate as the travel code for the current service. Ensure the selected travel item has its per-KM rate defined.</p>
-        <div class="form-group">
-            <label for="travelCodeFilterInput">Filter services:</label>
-            <input type="text" id="travelCodeFilterInput" placeholder="Type to filter...">
-        </div>
-        <div id="travelCodeListContainer" class="modal-list-container">
-            </div>
-        <div class="modal-actions">
-            <button id="confirmTravelCodeSelectionBtn" class="btn-primary"><i class="fas fa-check-square"></i> Confirm Selection</button>
-            <button id="closeTravelCodeSelectionModalBtn" class="btn-secondary"><i class="fas fa-times-circle"></i> Cancel</button>
-        </div>
-    </div>
-</div>
-
-<script type="module" src="script.js" defer></script>
-
-</body>
-</html>
+  /* Show PDF specific elements */
+  .pdf-show { display: table-cell !important; /* or appropriate display type */ }
+  .pdf-hide { display: none !important; }
+}
