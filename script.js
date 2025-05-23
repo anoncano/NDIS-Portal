@@ -268,23 +268,25 @@ async function setupAuthListener() {
 
 async function handleExistingUserProfile(data) {
     userProfile = data;
-    console.log(`[Auth] handleExistingUserProfile for ${currentUserEmail}. isAdmin: ${userProfile.isAdmin}, Approved: ${userProfile.approved}, Portal Type: ${globalSettings.portalType}`);
+    console.log(`[Auth Debug] handleExistingUserProfile for ${currentUserEmail}. Profile Data:`, JSON.stringify(userProfile));
+    console.log(`[Auth Debug] Global Settings Portal Type: ${globalSettings.portalType}`);
     
-    if (userProfile.isAdmin) { 
-        console.log("[Auth] Admin user identified. Proceeding to admin setup/portal.");
+    if (userProfile.isAdmin === true) { // Explicit check for true
+        console.log("[Auth Debug] Admin user identified (isAdmin is true). Proceeding to admin setup/portal.");
         await loadAllDataForAdmin(); 
         enterPortal(true); 
         if (!globalSettings.adminSetupComplete && !globalSettings.setupComplete) {
              console.log("[AuthListener] Admin needs portal setup wizard.");
              openAdminSetupWizard();
         }
-        return false; 
+        return false; // Flow NOT interrupted
     }
     
     const isUnapprovedOrgUser = globalSettings.portalType === 'organization' && userProfile.approved !== true;
-    console.log(`[Auth] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
+    console.log(`[Auth Debug] IsUnapprovedOrgUser check for non-admin: ${isUnapprovedOrgUser}`);
 
     if (isUnapprovedOrgUser) {
+        console.log("[Auth Debug] Unapproved organization user. Showing approval modal.");
         if(authScreenElement) authScreenElement.style.display = "none"; 
         if(portalAppElement) portalAppElement.style.display = "none"; 
         showMessage(
@@ -293,16 +295,18 @@ async function handleExistingUserProfile(data) {
             "warning",
             { text: 'OK', action: portalSignOut } 
         );
-        return true; 
+        return true; // Flow IS interrupted
     }
     
+    // Approved non-admin user or participant portal user
+    console.log("[Auth Debug] Approved non-admin or participant portal user. Proceeding.");
     await loadAllDataForUser(); 
     enterPortal(false); 
     if (!userProfile.profileSetupComplete) {
         console.log("[AuthListener] Regular user needs profile setup wizard.");
         openUserSetupWizard();
     }
-    return false; 
+    return false; // Flow can proceed
 }
 
 async function handleNewAdminProfile() {
@@ -363,7 +367,7 @@ async function loadGlobalSettingsFromFirestore() {
         } else { 
             globalSettings = getDefaultGlobalSettings(); 
             console.log("[FirestoreLoad] No global settings doc, using defaults & saving.");
-            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile.uid || userProfile.isAdmin)) { // Check if it's likely the first admin, ensure userProfile.isAdmin is checked if profile is loaded
+            if (currentUserEmail && currentUserEmail.toLowerCase() === "admin@portal.com" && (!userProfile.uid || userProfile.isAdmin)) { 
                  await saveGlobalSettingsToFirestore(); 
             }
         }
@@ -802,12 +806,12 @@ function addAdminAgreementClauseEditor() { const newId = `custom_${generateUniqu
 function updateAdminAgreementPreview() { if (!adminAgreementPreviewElement) return; const temp = { overallTitle: adminAgreementOverallTitleInputElement.value, clauses: Array.from($$('.agreement-clause-editor')).map(ed => ({ id: ed.querySelector('.clause-heading-input').dataset.clauseId, heading: ed.querySelector('.clause-heading-input').value, body: ed.querySelector('.clause-body-input').value })) }; let html = `<h2>${temp.overallTitle || "Service Agreement"}</h2>`; temp.clauses.forEach(cl => { let body = cl.body.replace(/\n/g, '<br>').replace(/{{(.*?)}}/g, '<span style="color:var(--pri); font-style:italic;">[$1]</span>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>'); html += `<h3>${cl.heading}</h3><p>${body}</p>`; }); adminAgreementPreviewElement.innerHTML = html; }
 async function saveAdminAgreementCustomizationsToFirestore() { if (!userProfile.isAdmin) return; agreementCustomData.overallTitle = adminAgreementOverallTitleInputElement.value.trim(); agreementCustomData.clauses = Array.from($$('.agreement-clause-editor')).map(ed => ({ id: ed.querySelector('.clause-heading-input').dataset.clauseId, heading: ed.querySelector('.clause-heading-input').value.trim(), body: ed.querySelector('.clause-body-input').value.trim() })); const success = await saveGlobalSettingsToFirestore(); if (success) showMessage("Agreement Saved", "Template updated.", "success"); else showMessage("Save Error", "Could not save template.", "error"); }
 function renderAdminWorkerManagementTab() { if (!userProfile.isAdmin) return; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); }
-async function loadPendingApprovalWorkers() { if (!pendingWorkersListElement || !noPendingWorkersMessageElement) return; pendingWorkersListElement.innerHTML = '<p>Loading...</p>'; const pending = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === false); if (pending.length === 0) { noPendingWorkersMessageElement.style.display = 'block'; pendingWorkersListElement.innerHTML = ''; return; } noPendingWorkersMessageElement.style.display = 'none'; pendingWorkersListElement.innerHTML = ''; pending.forEach(w => { const div = document.createElement('div'); div.className = 'pending-worker-item'; div.innerHTML = `<span>${w.name || w.email} (${w.email})</span><div><button class="btn-primary btn-small" onclick="approveWorkerInFirestore('${w.uid}')"><i class="fas fa-check"></i> Approve</button><button class="btn-danger btn-small" onclick="denyWorkerInFirestore('${w.uid}')"><i class="fas fa-times"></i> Deny</button></div>`; pendingWorkersListElement.appendChild(div); }); }
-window.approveWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Approving..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: true, approvedAt: serverTimestamp(), approvedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = true; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); showMessage("Worker Approved", "Access granted.", "success"); } catch (e) { console.error("Approve Error:", e); logErrorToFirestore("approveWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
-window.denyWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Denying..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: 'denied', deniedAt: serverTimestamp(), deniedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = 'denied'; loadPendingApprovalWorkers(); showMessage("Worker Denied", "Access denied.", "info"); } catch (e) { console.error("Deny Error:", e); logErrorToFirestore("denyWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
-async function loadApprovedWorkersForAuthManagement() { if (!workersListForAuthElement) return; workersListForAuthElement.innerHTML = ''; const approved = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === true); if (approved.length === 0) { workersListForAuthElement.innerHTML = '<li>No approved workers.</li>'; return; } approved.forEach(w => { const li = document.createElement('li'); li.textContent = `${w.name || w.email} (${w.email})`; li.onclick = () => selectWorkerForAuth(w.uid, w.name || w.email); workersListForAuthElement.appendChild(li); }); }
+async function loadPendingApprovalWorkers() { if (!pendingWorkersListElement || !noPendingWorkersMessageElement) return; pendingWorkersListElement.innerHTML = '<p>Loading...</p>'; if (Object.keys(allUsersCache).length === 0) { pendingWorkersListElement.innerHTML = '<p>User data not loaded yet. Please wait or refresh.</p>'; noPendingWorkersMessageElement.style.display = 'none'; return; } const pending = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === false); if (pending.length === 0) { noPendingWorkersMessageElement.style.display = 'block'; pendingWorkersListElement.innerHTML = ''; return; } noPendingWorkersMessageElement.style.display = 'none'; pendingWorkersListElement.innerHTML = ''; pending.forEach(w => { const div = document.createElement('div'); div.className = 'pending-worker-item'; div.innerHTML = `<span>${w.name || w.email} (${w.email})</span><div><button class="btn-primary btn-small" onclick="approveWorkerInFirestore('${w.uid}')"><i class="fas fa-check"></i> Approve</button><button class="btn-danger btn-small" onclick="denyWorkerInFirestore('${w.uid}')"><i class="fas fa-times"></i> Deny</button></div>`; pendingWorkersListElement.appendChild(div); }); }
+window.approveWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Approving..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: true, approvedAt: serverTimestamp(), approvedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = true; if(allUsersCache[allUsersCache[uid].email]) allUsersCache[allUsersCache[uid].email].approved = true; loadPendingApprovalWorkers(); loadApprovedWorkersForAuthManagement(); showMessage("Worker Approved", "Access granted.", "success"); } catch (e) { console.error("Approve Error:", e); logErrorToFirestore("approveWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
+window.denyWorkerInFirestore = async (uid) => { if (!fsDb || !userProfile.isAdmin) return; showLoading("Denying..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", uid, "profile", "details"), { approved: 'denied', deniedAt: serverTimestamp(), deniedBy: currentUserId }); if (allUsersCache[uid]) allUsersCache[uid].approved = 'denied'; if(allUsersCache[allUsersCache[uid].email]) allUsersCache[allUsersCache[uid].email].approved = 'denied'; loadPendingApprovalWorkers(); showMessage("Worker Denied", "Access denied.", "info"); } catch (e) { console.error("Deny Error:", e); logErrorToFirestore("denyWorker", e.message, e); showMessage("Error", e.message, "error"); } finally { hideLoading(); } };
+async function loadApprovedWorkersForAuthManagement() { if (!workersListForAuthElement) return; workersListForAuthElement.innerHTML = ''; if (Object.keys(allUsersCache).length === 0) { workersListForAuthElement.innerHTML = '<li>User data not loaded yet.</li>'; return; } const approved = Object.values(allUsersCache).filter(u => u && !u.isAdmin && u.approved === true); if (approved.length === 0) { workersListForAuthElement.innerHTML = '<li>No approved workers.</li>'; return; } approved.forEach(w => { const li = document.createElement('li'); li.textContent = `${w.name || w.email} (${w.email})`; li.onclick = () => selectWorkerForAuth(w.uid, w.name || w.email); workersListForAuthElement.appendChild(li); }); }
 window.selectWorkerForAuth = (uid, name) => { selectedWorkerUIDForAuth = uid; if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.innerHTML = `<i class="fas fa-user-check"></i> Services for: ${name}`; if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.classList.remove('hide'); if(servicesListCheckboxesElement) servicesListCheckboxesElement.innerHTML = ''; const workerProfile = allUsersCache[uid]; const authorizedCodes = workerProfile?.authorizedServiceCodes || []; adminManagedServices.forEach(service => { const li = document.createElement('li'); li.innerHTML = `<label class="chk"><input type="checkbox" value="${service.code}" ${authorizedCodes.includes(service.code) ? 'checked' : ''}> ${service.description} (${service.code})</label>`; servicesListCheckboxesElement.appendChild(li); }); };
-async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", selectedWorkerUIDForAuth, "profile", "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
+async function saveWorkerAuthorizationsToFirestore() { if (!selectedWorkerUIDForAuth || !fsDb || !userProfile.isAdmin) { showMessage("Error", "No worker selected or DB error.", "error"); return; } const workerToUpdate = allUsersCache[selectedWorkerUIDForAuth]; if (!workerToUpdate) { showMessage("Error", "Worker profile not found in cache.", "error"); return; } const selectedServices = Array.from(servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); showLoading("Saving authorizations..."); try { await updateDoc(doc(fsDb, "artifacts", appId, "users", selectedWorkerUIDForAuth, "profile", "details"), { authorizedServiceCodes: selectedServices, authUpdatedAt: serverTimestamp(), authUpdatedBy: currentUserId }); if (allUsersCache[selectedWorkerUIDForAuth]) allUsersCache[selectedWorkerUIDForAuth].authorizedServiceCodes = selectedServices; if(allUsersCache[allUsersCache[selectedWorkerUIDForAuth].email]) allUsersCache[allUsersCache[selectedWorkerUIDForAuth].email].authorizedServiceCodes = selectedServices; showMessage("Authorizations Saved", "Worker service authorizations updated.", "success"); } catch (e) { console.error("Auth Save Error:", e); logErrorToFirestore("saveWorkerAuths", e.message, e); showMessage("Save Error", e.message, "error"); } finally { hideLoading(); } }
 
 /* ========== Modal & Wizard Functions ========== */
 function openUserSetupWizard() { currentUserWizardStep = 1; wizardFileUploads = null; navigateWizard('user', 1); if(userSetupWizardModalElement) openModal('wiz'); populateUserWizardFromProfile(); }
