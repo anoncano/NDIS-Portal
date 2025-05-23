@@ -715,13 +715,6 @@ window.modalLogin = async function () {
 };
 
 window.modalRegister = async function () {
-  const email    = $("#authEmail")?.value.trim();
-  const password = $("#authPassword")?.value.trim();
-  // …validation, loading UI, etc…
-  const { user } = await createUserWithEmailAndPassword(fbAuth, email, password);
-  const newUserId = user.uid;
-
-  const initialProfileData = {
   const initialProfileData = {
     name:  email.split('@')[0],
     email,               // shorthand for email: email
@@ -735,6 +728,8 @@ window.modalRegister = async function () {
     approved: !isOrgPortal,
     createdAt: serverTimestamp(),
     createdBy: newUserId
+
+
   };
 
   // …then setDoc(...) and the rest…
