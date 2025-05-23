@@ -39,7 +39,7 @@ body {
   font-size: 16px;
   line-height: 1.6; 
   /* DEBUG: Add a very obvious border to check if this CSS file is loading */
-  border: 10px solid red !important;  
+  /* border: 10px solid red !important;  
 }
 
 /* ========== AUTHENTICATION SCREEN ========== */
