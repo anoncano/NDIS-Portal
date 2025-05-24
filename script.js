@@ -77,7 +77,7 @@ const adminAgreementOverallTitleInputElement = $("#adminAgreementOverallTitle"),
 const pendingWorkersListElement = $("#pendingWorkersList"), noPendingWorkersMessageElement = $("#noPendingWorkersMessage"), workersListForAuthElement = $("#workersListForAuth"), selectedWorkerNameForAuthElement = $("#selectedWorkerNameForAuth"), servicesForWorkerContainerElement = $("#servicesForWorkerContainer"), servicesListCheckboxesElement = $("#servicesListCheckboxes"), saveWorkerAuthorizationsButtonElement = $("#saveWorkerAuthorizationsBtn");
 const requestShiftModalElement = $("#rqModal"), requestDateInputElement = $("#rqDate"), requestStartTimeInputElement = $("#rqStart"), requestEndTimeInputElement = $("#rqEnd"), requestReasonTextareaElement = $("#rqReason"), saveRequestButtonElement = $("#saveRequestBtn"), closeRequestModalButtonElement = $("#closeRqModalBtn");
 const logShiftModalElement = $("#logShiftModal"), logShiftDateInputElement = $("#logShiftDate"), logShiftSupportTypeSelectElement = $("#logShiftSupportType"), logShiftStartTimeInputElement = $("#logShiftStartTime"), logShiftEndTimeInputElement = $("#logShiftEndTime"), logShiftClaimTravelToggleElement = $("#logShiftClaimTravelToggle"), logShiftKmFieldsContainerElement = $("#logShiftKmFieldsContainer"), logShiftStartKmInputElement = $("#logShiftStartKm"), logShiftEndKmInputElement = $("#logShiftEndKm"), logShiftCalculatedKmElement = $("#logShiftCalculatedKm"), saveShiftToInvoiceButtonElement = $("#saveShiftFromModalToInvoiceBtn"), closeLogShiftModalButtonElement = $("#closeLogShiftModalBtn");
-const signatureModalElement = $("#sigModal"), signatureCanvasElement = $("#signatureCanvas"), saveSignatureButtonElement = $("#saveSigBtn"), clearSignatureButtonElement = $("#clearSigBtn"), closeSignatureModalButtonElement = $("#closeSigModalBtn");
+const signatureModalElement = $("#sigModal"), signatureCanvasElement = $("#signatureCanvas"), saveSignatureButtonElement = $("#saveSigBtn"), closeSignatureModalButtonElement = $("#closeSigModalBtn");
 const userSetupWizardModalElement = $("#wiz"), userWizardStepElements = $$("#wiz .wizard-step-content"), userWizardIndicatorElements = $$("#wiz .wizard-step-indicator");
 const wizardNameInputElement = $("#wName"), wizardAbnInputElement = $("#wAbn"), wizardGstCheckboxElement = $("#wGst"), wizardNextButton1Element = $("#wizNextBtn1");
 const wizardBsbInputElement = $("#wBsb"), wizardAccInputElement = $("#wAcc"), wizardPrevButton2Element = $("#wizPrevBtn2"), wizardNextButton2Element = $("#wizNextBtn2");
@@ -94,32 +94,12 @@ const messageModalElement = $("#messageModal"), messageModalTitleElement = $("#m
 const travelCodeSelectionModalElement = $("#travelCodeSelectionModal"), travelCodeFilterInputElement = $("#travelCodeFilterInput"), travelCodeListContainerElement = $("#travelCodeListContainer"), confirmTravelCodeSelectionButtonElement = $("#confirmTravelCodeSelectionBtn"), closeTravelCodeSelectionModalButtonElement = $("#closeTravelCodeSelectionModalBtn");
 
 /* ========== Local State Variables ========== */
-let userProfile = {
-    name: '', abn: '', gstRegistered: false, bsb: '', acc: '',
-    files: [], // { name: 'doc.pdf', url: '...', path: '...' }
-    nextInvoiceNumber: 1001,
-    profileSetupComplete: false,
-    isAdmin: false,
-    approved: false, // For organization portal type
-    authorizedServices: [], // Array of service IDs worker is authorized for
-    email: '',
-    uid: ''
-};
-let globalSettings = {}; // Loaded from Firestore or defaults
-let adminManagedServices = []; // Array of service objects {id, code, description, categoryType, rates: {}, travelCodeId}
-let userAuthorizedServices = []; // Subset of adminManagedServices, filtered by userProfile.authorizedServices
-let currentInvoiceData = {
-    id: null, // Firestore ID of the draft invoice
-    items: [], // {id, date, serviceId, description, startTime, endTime, hours, rate, total, isTravel, travelKm, travelServiceId}
-    invoiceNumber: "",
-    invoiceDate: "",
-    subtotal: 0,
-    gst: 0,
-    grandTotal: 0,
-    status: "draft" // "draft", "issued", "paid"
-};
-let agreementCustomData = {}; // Loaded from globalSettings.agreementTemplate
-let defaultAgreementCustomData = {
+let userProfile = {};
+let globalSettings = {};
+let adminManagedServices = [];
+let currentInvoiceData = { items: [], invoiceNumber: "", invoiceDate: "", subtotal: 0, gst: 0, grandTotal: 0 };
+let agreementCustomData = {}; // Will be loaded or set to default
+let defaultAgreementCustomData = { // Default structure
     overallTitle: "NDIS Service Agreement",
     clauses: [
         { id: "parties", heading: "1. Parties", body: "This Service Agreement is between:\n\n**The Participant:** {{participantName}} (NDIS No: {{participantNdisNo}}, Plan End Date: {{planEndDate}})\n\nand\n\n**The Provider (Support Worker):** {{workerName}} (ABN: {{workerAbn}})" },
@@ -133,28 +113,25 @@ let defaultAgreementCustomData = {
         { id: "term", heading: "9. Term", body: "Starts {{agreementStartDate}}, ends {{agreementEndDate}} or plan end. Reviewed annually." }
     ]
 };
-const RATE_CATEGORIES = ["weekday", "evening", "night", "saturday", "sunday", "public", "flat"]; // Added "flat" for single rate services
-const SERVICE_CATEGORY_TYPES = {
-    CORE_STANDARD: 'core_standard', CORE_HIGH_INTENSITY: 'core_high_intensity',
-    CAPACITY_THERAPY_STD: 'capacity_therapy_std', CAPACITY_SPECIALIST: 'capacity_specialist',
-    TRAVEL_KM: 'travel_km', OTHER_FLAT_RATE: 'other_flat_rate'
-};
-let sigCanvas, sigCtx, sigPen = false, sigPaths = [], currentSignatureFor = null; // currentSignatureFor: 'worker' or 'participant'
-let currentAgreementWorkerEmail = null; // For admin viewing/managing other workers' agreements
-let currentAgreementData = null; // Holds the specific agreement being viewed/signed {id, workerId, participantSignature, workerSignature, status, contentSnapshot, signedDates: {worker, participant}}
+const RATE_CATEGORIES = ["weekday", "evening", "night", "saturday", "sunday", "public"];
+const SERVICE_CATEGORY_TYPES = { CORE_STANDARD: 'core_standard', CORE_HIGH_INTENSITY: 'core_high_intensity', CAPACITY_THERAPY_STD: 'capacity_therapy_std', CAPACITY_SPECIALIST: 'capacity_specialist', TRAVEL_KM: 'travel_km', OTHER_FLAT_RATE: 'other_flat_rate' };
+let sigCanvas, sigCtx, sigPen = false, sigPaths = [];
+let currentAgreementWorkerEmail = null;
 let signingAs = 'worker';
 let isFirebaseInitialized = false, initialAuthComplete = false;
-let selectedWorkerEmailForAuth = null; // For admin authorizing services for a worker
-let currentAdminServiceEditingId = null; // ID of the service being edited in admin panel
+let selectedWorkerEmailForAuth = null;
+let currentAdminServiceEditingId = null;
 let currentTimePickerStep, selectedMinute, selectedHour12, selectedAmPm, activeTimeInput, timePickerCallback;
 let currentAdminWizardStep = 1, currentUserWizardStep = 1;
-let wizardFileUploads = []; // Array to hold File objects for wizard before final upload
-let allUsersCache = {}; // Cache for admin user lookups: { uid: {profileData}, ... }
+let wizardFileUploads = [];
+let allUsersCache = {}; // Cache for admin lookups
 
 /* ========== Error Logging ========== */
 async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
     if (!fsDb || !appId || appId === 'ndis-portal-app-local') { console.error("Firestore not init/local dev, no log:", location, errorMsg, errorDetails); return; }
     try {
+        // The path 'artifacts/{appId}/public/logs/errors' is 5 segments, which is correct for a collection
+        // where addDoc will create a new document with an auto-generated ID.
         await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/logs/errors`), {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
@@ -169,99 +146,63 @@ async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
 function showLoading(message = "Loading...") { if (loadingOverlayElement) { loadingOverlayElement.querySelector('p').textContent = message; loadingOverlayElement.style.display = "flex"; } }
 function hideLoading() { if (loadingOverlayElement) loadingOverlayElement.style.display = "none"; }
 function showAuthStatusMessage(message, isError = true) { if (authStatusMessageElement) { authStatusMessageElement.textContent = message; authStatusMessageElement.style.color = isError ? 'var(--danger)' : 'var(--ok)'; authStatusMessageElement.style.display = message ? 'block' : 'none'; } }
-function showMessage(title, text, type = 'info', duration = 3000) {
+function showMessage(title, text, type = 'info') {
     const iconClass = type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle';
     if (messageModalTitleElement) messageModalTitleElement.innerHTML = `<i class="fas ${iconClass}"></i> ${title}`;
     if (messageModalTextElement) messageModalTextElement.innerHTML = text;
-    if (messageModalElement) {
-        messageModalElement.className = `modal ${type}`; // Add type class for styling
-        messageModalElement.style.display = "flex";
-        if (duration > 0 && closeMessageModalButtonElement) { // Ensure button exists before setting timeout
-           const timer = setTimeout(() => closeModal('messageModal'), duration);
-           // Clear timeout if modal is closed manually
-           closeMessageModalButtonElement.onclick = () => { clearTimeout(timer); closeModal('messageModal'); };
-        } else if (closeMessageModalButtonElement) {
-            closeMessageModalButtonElement.onclick = () => closeModal('messageModal');
-        }
-    }
+    if (messageModalElement) messageModalElement.style.display = "flex";
 }
 function openModal(modalId) { const modal = $(`#${modalId}`); if (modal) modal.style.display = 'flex'; }
 function closeModal(modalId) { const modal = $(`#${modalId}`); if (modal) modal.style.display = 'none'; }
 
+// Added function to update portal title
+function updatePortalTitle() {
+    const title = globalSettings.portalTitle || "NDIS Support Portal";
+    if (portalTitleDisplayElement) {
+        portalTitleDisplayElement.textContent = title;
+    }
+    document.title = title; // Optional: Update browser tab title
+    console.log(`[UI] Portal title updated to: ${title}`);
+}
+
+
 /* ========== Utilities ========== */
 function validateEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase()); }
-function formatDateForDisplay(d) { if (!d) return ""; try { const date = d.toDate ? d.toDate() : new Date(d); return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return "Invalid Date"; } }
+function formatDateForDisplay(d) { if (!d) return ""; try { const date = d.toDate ? d.toDate() : new Date(d); return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return "Invalid"; } }
 function formatDateForInput(d) { if (!d) return ""; try { const date = d.toDate ? d.toDate() : new Date(d); const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, '0'), day = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; } catch (e) { return ""; } }
 function timeToMinutes(t) { if (!t || !t.includes(':')) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function calculateHours(s, e) { if (!s || !e) return 0; const diff = timeToMinutes(e) - timeToMinutes(s); return diff > 0 ? parseFloat((diff / 60).toFixed(2)) : 0; }
-function determineRateType(dStr, sTime) {
-    if (!dStr || !sTime) return "weekday";
-    try {
-        const d = new Date(`${dStr}T${sTime}:00`);
-        const day = d.getDay(); // Sunday - Saturday : 0 - 6
-        const hr = d.getHours();
-
-        // TODO: Implement public holiday check. This would require a list of public holidays.
-        // For now, it's manual or based on a "public" rate category if chosen.
-
-        if (day === 0) return "sunday";
-        if (day === 6) return "saturday";
-        // NDIS standard hours can vary, common is before 8pm for evening
-        if (hr >= 20 || hr < 6) return "night"; // Typically 8 PM to 6 AM
-        if (hr >= 18 && hr < 20) return "evening"; // Example: 6 PM to 8 PM
-        return "weekday";
-    } catch (error) {
-        console.warn("Error determining rate type for date:", dStr, "time:", sTime, error);
-        return "weekday"; // Default fallback
-    }
-}
+function determineRateType(dStr, sTime) { if (!dStr || !sTime) return "weekday"; const d = new Date(`${dStr}T${sTime}:00`); const day = d.getDay(), hr = d.getHours(); if (day === 0) return "sunday"; if (day === 6) return "saturday"; if (hr >= 20 || hr < 6) return "night"; return "weekday"; }
 function formatTime12Hour(t24) { if (!t24 || !t24.includes(':')) return ""; const [h, m] = t24.split(':'); const hr = parseInt(h, 10); const ap = hr >= 12 ? 'PM' : 'AM'; let hr12 = hr % 12; hr12 = hr12 ? hr12 : 12; return `${String(hr12).padStart(2, '0')}:${m} ${ap}`; }
 function formatCurrency(n) { return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n || 0); }
-function generateUniqueId(prefix = 'id_') { return prefix + Date.now().toString(36) + Math.random().toString(36).substring(2, 9); }
-function getWeekNumber(d) {
-    const date = new Date(d.valueOf());
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-}
-function simpleMarkdownToHtml(text) {
-    if (!text) return '';
-    return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italics
-        .replace(/\{\{(.*?)\}\}/g, '<span class="placeholder">Preview: $1</span>') // Show placeholders clearly
-        .replace(/\n/g, '<br>');                 // Newlines
-}
+function generateUniqueId() { return Date.now().toString(36) + Math.random().toString(36).substring(2); }
+function getWeekNumber(d) { d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); const yS = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yS) / 86400000) + 1) / 7); }
 
 /* ========== Firebase Initialization & Auth ========== */
 async function initializeFirebaseApp() {
     console.log("[FirebaseInit] Initializing...");
-    let firebaseConfig = window.firebaseConfigForApp; // From HTML
+    // Ensure firebaseConfigForApp is globally available or passed correctly
+    const config = typeof firebaseConfigForApp !== 'undefined' ? firebaseConfigForApp : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
 
-    // Override with __firebase_config if provided by Canvas environment
-    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-        try {
-            const parsedConfig = JSON.parse(__firebase_config);
-            if (parsedConfig && parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_")) {
-                firebaseConfig = parsedConfig;
-                console.log("[FirebaseInit] Using Firebase config from __firebase_config.");
-            } else {
-                console.warn("[FirebaseInit] __firebase_config is incomplete or uses placeholders. Falling back to config in HTML.");
-            }
-        } catch (e) {
-            console.error("[FirebaseInit] Error parsing __firebase_config:", e, "Using config in HTML.");
-        }
-    }
-
-    if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR_")) {
-        showAuthStatusMessage("System Error: Portal configuration is invalid or missing."); hideLoading(); return;
+    if (!config || !config.apiKey || config.apiKey.startsWith("YOUR_")) {
+        showAuthStatusMessage("System Error: Portal configuration invalid. Missing Firebase config."); hideLoading();
+        logErrorToFirestore("initializeFirebaseApp", "Firebase config missing or invalid", { apiKey: config ? config.apiKey : 'undefined' });
+        return;
     }
     try {
-        fbApp = initializeApp(firebaseConfig, appId); // Use appId as the app name
-        fbAuth = getAuth(fbApp); fsDb = getFirestore(fbApp); fbStorage = getStorage(fbApp);
-        isFirebaseInitialized = true; console.log("[FirebaseInit] Success.");
+        fbApp = initializeApp(config, appId); // Use appId for named app instance
+        fbAuth = getAuth(fbApp);
+        fsDb = getFirestore(fbApp);
+        fbStorage = getStorage(fbApp);
+        isFirebaseInitialized = true;
+        console.log("[FirebaseInit] Success.");
         await setupAuthListener();
-    } catch (error) { console.error("[FirebaseInit] Error:", error); logErrorToFirestore("initializeFirebaseApp", error.message, error); showAuthStatusMessage("System Error: " + error.message); hideLoading(); }
+    } catch (error) {
+        console.error("[FirebaseInit] Error:", error);
+        logErrorToFirestore("initializeFirebaseApp", error.message, error);
+        showAuthStatusMessage("System Error: " + error.message);
+        hideLoading();
+    }
 }
 
 async function setupAuthListener() {
@@ -275,55 +216,61 @@ async function setupAuthListener() {
                     if(userIdDisplayElement) userIdDisplayElement.textContent = currentUserEmail || currentUserId;
                     if(logoutButtonElement) logoutButtonElement.classList.remove('hide');
                     if(authScreenElement) authScreenElement.style.display = "none";
-                    if(portalAppElement) portalAppElement.style.display = "flex"; // Changed from flex to block for main layout
-                    
-                    await loadGlobalSettingsFromFirestore(); // Load global settings first
+                    if(portalAppElement) portalAppElement.style.display = "flex";
+
+                    await loadGlobalSettingsFromFirestore(); // Load settings first
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
-                    let signedOut = false;
+                    let signedOut = false; // Flag to track if user flow results in sign out
 
                     if (profileData) {
                         signedOut = await handleExistingUserProfile(profileData);
-                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === (globalSettings.adminEmail || "admin@portal.com")) { // Check against configured admin email
+                    } else if (currentUserEmail && currentUserEmail.toLowerCase() === (globalSettings.adminEmail || "admin@portal.com").toLowerCase()) { // Check against configured admin email
                         signedOut = await handleNewAdminProfile();
                     } else if (currentUserId) {
                         signedOut = await handleNewRegularUserProfile();
                     } else {
-                        // This case should ideally not be reached if user object is present
-                        console.warn("[AuthListener] User object present but no identifiable role. Signing out.");
+                        // This case should ideally not be reached if 'user' is truthy
+                        console.warn("[AuthListener] User object present but no identifiable path. Signing out.");
                         await fbSignOut(fbAuth);
                         signedOut = true;
                     }
 
                     if (signedOut) {
-                        console.log("[AuthListener] User flow led to sign out.");
-                        // UI reset will be handled by the 'else' block of this onAuthStateChanged
+                        console.log("[AuthListener] User flow led to sign out. Navigating to home.");
+                        // State will be handled by the 'else' block of onAuthStateChanged
                     }
                 } else {
                     console.log("[AuthListener] User signed out or no user.");
-                    currentUserId = null; currentUserEmail = null; userProfile = {}; globalSettings = {}; adminManagedServices = []; userAuthorizedServices = [];
+                    currentUserId = null; currentUserEmail = null; userProfile = {}; globalSettings = getDefaultGlobalSettings(); // Reset global settings on sign out
                     if(userIdDisplayElement) userIdDisplayElement.textContent = "Not Logged In";
                     if(logoutButtonElement) logoutButtonElement.classList.add('hide');
                     if(authScreenElement) authScreenElement.style.display = "flex";
                     if(portalAppElement) portalAppElement.style.display = "none";
-                    updateNavigation(false); navigateToSection("home"); // Default to home on logout
+                    updateNavigation(false);
+                    navigateToSection("home"); // Navigate to home, which will call renderUserHomePage if not admin
+                    updatePortalTitle(); // Update title to default
                 }
             } catch (error) {
                 console.error("[AuthListener] Error:", error);
                 logErrorToFirestore("onAuthStateChanged", error.message, error);
-                if (fbAuth) await fbSignOut(fbAuth).catch(e => console.error("Error during forced signout:", e));
+                if (fbAuth) await fbSignOut(fbAuth).catch(e => console.error("Sign out error during auth error handling:", e));
+            } finally {
+                hideLoading();
+                if (!initialAuthComplete) {
+                    initialAuthComplete = true;
+                    resolve();
+                }
             }
-            finally { hideLoading(); if (!initialAuthComplete) { initialAuthComplete = true; resolve(); } }
         });
 
-        // Attempt to sign in with custom token if available
+        // Handle custom token sign-in if available
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            console.log("[AuthListener] Attempting sign-in with __initial_auth_token.");
+            console.log("[AuthListener] Attempting sign-in with custom token.");
             signInWithCustomToken(fbAuth, __initial_auth_token)
-                .then(() => console.log("[AuthListener] Successfully signed in with custom token."))
                 .catch(e => {
-                    console.error("[AuthListener] Custom token sign-in error:", e);
+                    console.error("Custom token sign-in error:", e);
                     logErrorToFirestore("signInWithCustomToken", e.message, e);
-                    // If token fails, the onAuthStateChanged will eventually report no user.
+                    // Potentially trigger anonymous sign-in or show error
                 });
         } else {
             console.log("[AuthListener] No __initial_auth_token found. Waiting for standard auth state change or login action.");
@@ -331,13 +278,15 @@ async function setupAuthListener() {
     });
 }
 
+
 async function handleExistingUserProfile(data) {
-    userProfile = { ...userProfile, ...data, uid: currentUserId, email: currentUserEmail }; // Ensure uid and email are current
-    console.log(`[Auth] Existing profile. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}, SetupComplete: ${userProfile.profileSetupComplete}`);
+    userProfile = data;
+    console.log(`[Auth] Existing profile loaded. Approved: ${userProfile.approved}, Admin: ${userProfile.isAdmin}, Setup Complete: ${userProfile.profileSetupComplete}`);
 
     if (!userProfile.isAdmin && globalSettings.portalType === 'organization' && !userProfile.approved) {
-        showMessage("Approval Required", "Your account is registered but awaits administrator approval. You will be logged out.", "warning", 0); // 0 duration = manual close
-        await fbSignOut(fbAuth); return true; // true indicates sign out occurred
+        showMessage("Approval Required", "Your account is pending approval from the administrator. You will be logged out.", "warning");
+        await fbSignOut(fbAuth);
+        return true; // Indicates sign out occurred
     }
 
     if (userProfile.isAdmin) {
@@ -347,45 +296,45 @@ async function handleExistingUserProfile(data) {
             openAdminSetupWizard();
         }
     } else {
-        await loadUserAuthorizedServices(); // Load services user is allowed to use
         await loadAllDataForUser();
         enterPortal(false);
-        if (!userProfile.profileSetupComplete) {
-            openUserSetupWizard();
-        } else if (!userProfile.nextInvoiceNumber) {
-            openModal('setInitialInvoiceModal');
+        if (!userProfile.profileSetupComplete && globalSettings.portalType !== 'individual_participant') { // Only show wizard if not participant direct
+             openUserSetupWizard();
         }
     }
-    return false; // false indicates no sign out occurred here
+    return false; // Indicates no sign out occurred
 }
 
 async function handleNewAdminProfile() {
     console.log("[Auth] New admin login detected for:", currentUserEmail);
     userProfile = {
-        name: "Administrator", email: currentUserEmail, uid: currentUserId,
-        isAdmin: true, approved: true, profileSetupComplete: true, // Admins are auto-approved and setup
-        nextInvoiceNumber: 1001, createdAt: serverTimestamp(), files: []
+        isAdmin: true,
+        name: "Administrator",
+        email: currentUserEmail,
+        uid: currentUserId,
+        approved: true, // Admins are auto-approved
+        createdAt: serverTimestamp(),
+        profileSetupComplete: true, // Admins might have a different setup or skip user wizard
+        nextInvoiceNumber: 1001 // Default for new admin
     };
     try {
         await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
         console.log("[Auth] New admin profile created in Firestore.");
-        // Ensure global settings are at least default if they don't exist, especially adminEmail
-        if (!globalSettings.adminEmail) {
-             globalSettings.adminEmail = currentUserEmail; // Set this admin as the primary if not set
-             await saveGlobalSettingsToFirestore(true); // Save silently
-        }
         await loadAllDataForAdmin();
         enterPortal(true);
+        // Check if global settings setup is complete, if not, trigger admin setup wizard
         if (!globalSettings.setupComplete) {
+            console.log("[Auth] Global settings not complete, opening admin setup wizard.");
             openAdminSetupWizard();
         }
     } catch (error) {
         console.error("[Auth] Error creating new admin profile:", error);
-        logErrorToFirestore("handleNewAdminProfile.setDoc", error.message, error);
-        showMessage("Admin Setup Error", "Could not create admin profile. Please try again or contact support.", "error", 0);
-        await fbSignOut(fbAuth); return true;
+        logErrorToFirestore("handleNewAdminProfile", error.message, error);
+        showMessage("Setup Error", "Could not initialize admin account. Please try again or contact support.", "error");
+        await fbSignOut(fbAuth);
+        return true; // Indicates sign out occurred
     }
-    return false;
+    return false; // Indicates no sign out occurred
 }
 
 async function handleNewRegularUserProfile() {
@@ -393,188 +342,204 @@ async function handleNewRegularUserProfile() {
     const isOrgPortal = globalSettings.portalType === 'organization';
     userProfile = {
         name: currentUserEmail.split('@')[0], // Default name from email
-        email: currentUserEmail, uid: currentUserId, isAdmin: false,
-        approved: !isOrgPortal, // Auto-approve if not an organization portal
-        profileSetupComplete: false,
-        nextInvoiceNumber: 1001, // Default starting invoice number
+        email: currentUserEmail,
+        uid: currentUserId,
+        isAdmin: false,
+        approved: !isOrgPortal, // Auto-approve if not an organization portal, otherwise requires admin approval
+        profileSetupComplete: false, // New users need to complete setup
+        nextInvoiceNumber: 1001, // Default for new user
         createdAt: serverTimestamp(),
-        files: [], authorizedServices: []
+        authorizedServices: [] // Initialize for organization portals
     };
+
     try {
         await setDoc(doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details"), userProfile);
         console.log("[Auth] New regular user profile created in Firestore.");
 
         if (isOrgPortal && !userProfile.approved) {
-            showMessage("Registration Complete", "Your account has been registered and is awaiting administrator approval. You will be logged out.", "info", 0);
-            await fbSignOut(fbAuth); return true;
+            showMessage("Registration Complete", "Your account has been created and is awaiting approval from the administrator. You will be logged out.", "info");
+            await fbSignOut(fbAuth);
+            return true; // Indicates sign out occurred
         }
-        await loadUserAuthorizedServices();
+
         await loadAllDataForUser();
         enterPortal(false);
-        if (!userProfile.profileSetupComplete) {
+        // Trigger user setup wizard if their profile setup is not complete
+        if (!userProfile.profileSetupComplete && globalSettings.portalType !== 'individual_participant') {
+            console.log("[Auth] User profile setup not complete, opening user setup wizard.");
             openUserSetupWizard();
         }
     } catch (error) {
         console.error("[Auth] Error creating new regular user profile:", error);
-        logErrorToFirestore("handleNewRegularUserProfile.setDoc", error.message, error);
-        showMessage("Registration Error", "Could not create your profile. Please try again or contact support.", "error", 0);
-        await fbSignOut(fbAuth); return true;
+        logErrorToFirestore("handleNewRegularUserProfile", error.message, error);
+        showMessage("Registration Error", "Could not complete your registration. Please try again or contact support.", "error");
+        await fbSignOut(fbAuth);
+        return true; // Indicates sign out occurred
     }
-    return false;
+    return false; // Indicates no sign out occurred
 }
 
 
 /* ========== Data Loading & Saving ========== */
 async function loadUserProfileFromFirestore(uid) {
-    if (!fsDb || !uid) { console.warn("Firestore or UID not available for profile load."); return null; }
+    if (!fsDb || !uid) {
+        console.error("Profile Load Error: Firestore DB not initialized or UID missing.");
+        return null;
+    }
     try {
-        const profileDocRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
-        const snap = await getDoc(profileDocRef);
+        const userProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
+        const snap = await getDoc(userProfileRef);
         if (snap.exists()) {
             console.log("[DataLoad] User profile loaded from Firestore for UID:", uid);
             return snap.data();
         } else {
-            console.log("[DataLoad] No profile document found for UID:", uid);
+            console.log("[DataLoad] No user profile found in Firestore for UID:", uid);
             return null;
         }
     }
-    catch (e) { console.error("Profile Load Error:", e); logErrorToFirestore("loadUserProfileFromFirestore", e.message, e); return null; }
+    catch (e) {
+        console.error("Profile Load Error:", e);
+        logErrorToFirestore("loadUserProfileFromFirestore", e.message, e);
+        return null;
+    }
 }
 
 function getDefaultGlobalSettings() {
-    const nextYear = new Date();
-    nextYear.setFullYear(nextYear.getFullYear() + 1);
     return {
         portalTitle: "NDIS Support Portal",
-        organizationName: "My NDIS Org",
-        organizationAbn: "Not Set",
+        organizationName: "Your Organization Name",
+        organizationAbn: "Your ABN",
         organizationContactEmail: "contact@example.com",
         organizationContactPhone: "000-000-000",
-        defaultParticipantName: "Valued Participant",
+        adminEmail: "admin@portal.com", // Added adminEmail for easier admin identification
+        defaultParticipantName: "Participant Name",
         defaultParticipantNdisNo: "000000000",
-        defaultPlanManagerName: "Plan Manager Co.",
+        defaultPlanManagerName: "Plan Manager Name",
         defaultPlanManagerEmail: "pm@example.com",
         defaultPlanManagerPhone: "111-111-111",
-        defaultPlanEndDate: formatDateForInput(nextYear),
-        setupComplete: false, // Indicates if admin setup wizard has been completed
-        portalType: "organization", // "organization" or "participant" (for self-managed)
-        adminEmail: "admin@portal.com", // Default admin email, can be changed
-        agreementTemplate: JSON.parse(JSON.stringify(defaultAgreementCustomData)) // Deep copy
+        defaultPlanEndDate: formatDateForInput(new Date(new Date().setFullYear(new Date().getFullYear() + 1))),
+        setupComplete: false, // Indicates if the admin setup wizard has been completed
+        portalType: "organization", // "organization", "individual_support_worker", "individual_participant"
+        agreementTemplate: JSON.parse(JSON.stringify(defaultAgreementCustomData)), // Deep copy
+        requireDocumentUploads: true,
+        defaultCurrency: "AUD"
     };
 }
 
 async function loadGlobalSettingsFromFirestore() {
-    if (!fsDb) { console.warn("Firestore not available for global settings load."); globalSettings = getDefaultGlobalSettings(); return; }
+    if (!fsDb) {
+        console.error("Global Settings Load Error: Firestore DB not initialized.");
+        globalSettings = getDefaultGlobalSettings();
+        updatePortalTitle(); // Update with default title
+        return;
+    }
     try {
-        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings/global`)
+        // Corrected path: collection 'artifacts/{appId}/public', document 'settings'
+        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public`, "settings");
         const snap = await getDoc(settingsDocRef);
+
         if (snap.exists()) {
-            globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() }; // Merge with defaults to ensure all keys exist
+            globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() };
             console.log("[DataLoad] Global settings loaded from Firestore.");
         }
         else {
-            console.log("[DataLoad] No global settings found in Firestore. Using defaults and attempting to save.");
+            console.log("[DataLoad] No global settings found in Firestore. Using defaults and saving.");
             globalSettings = getDefaultGlobalSettings();
-            await saveGlobalSettingsToFirestore(true); // Save defaults silently
+            // Attempt to save the default settings if an admin is effectively logged in or during initial setup
+            // This might be better handled by an explicit setup step by an admin.
+            // For now, we'll save it if we can (e.g., if this is part of an admin's first login flow)
+            // but be mindful of permissions.
+            if (userProfile && userProfile.isAdmin) { // Check if an admin is available to save
+                 await saveGlobalSettingsToFirestore();
+            } else {
+                console.warn("[DataLoad] Cannot save default global settings without admin privileges currently.")
+            }
         }
     } catch (e) {
         console.error("Global Settings Load Error:", e);
         logErrorToFirestore("loadGlobalSettingsFromFirestore", e.message, e);
         globalSettings = getDefaultGlobalSettings(); // Fallback to defaults on error
     }
-    // Ensure agreementCustomData is populated
+    // Ensure agreementCustomData is initialized correctly
     agreementCustomData = globalSettings.agreementTemplate ? JSON.parse(JSON.stringify(globalSettings.agreementTemplate)) : JSON.parse(JSON.stringify(defaultAgreementCustomData));
-    updatePortalTitle();
+    updatePortalTitle(); // Update portal title based on loaded/default settings
 }
 
-async function saveGlobalSettingsToFirestore(isSilent = false) {
-    if (!fsDb) { console.warn("Firestore not available for saving global settings."); return false; }
-    if (!userProfile?.isAdmin && !isSilent) { console.warn("Attempt to save global settings by non-admin."); return false; }
-
-    globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Ensure latest agreement template is saved
+async function saveGlobalSettingsToFirestore() {
+    if (!fsDb || !(userProfile && userProfile.isAdmin)) { // Check for admin privileges
+        console.error("Global Settings Save Error: Firestore DB not initialized or no admin privileges.");
+        logErrorToFirestore("saveGlobalSettingsToFirestore", "Attempted to save global settings without admin privileges or DB not init.", { isAdmin: userProfile ? userProfile.isAdmin : 'unknown' });
+        return false;
+    }
+    // Ensure agreement template is part of the global settings being saved
+    globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Deep copy
     try {
-        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings/global`)
-        await setDoc(settingsDocRef, globalSettings, { merge: true }); // Use merge to avoid overwriting fields unintentionally
-        if (!isSilent) {
-            showMessage("Settings Saved", "Global portal settings have been updated.", "success");
-        }
+        // Corrected path: collection 'artifacts/{appId}/public', document 'settings'
+        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public`, "settings");
+        await setDoc(settingsDocRef, globalSettings, { merge: true });
         console.log("[DataSave] Global settings saved to Firestore.");
-        updatePortalTitle(); // Update UI if title changed
+        updatePortalTitle(); // Reflect any title changes immediately
         return true;
     }
     catch (e) {
         console.error("Global Settings Save Error:", e);
         logErrorToFirestore("saveGlobalSettingsToFirestore", e.message, e);
-        if (!isSilent) {
-            showMessage("Save Error", "Could not save global settings: " + e.message, "error");
-        }
         return false;
     }
 }
 
+
 async function loadAdminServicesFromFirestore() {
-    if (!fsDb) { console.warn("Firestore not available for admin services load."); adminManagedServices = []; return; }
     adminManagedServices = [];
+    if (!fsDb) { console.error("Services Load Error: Firestore DB not initialized."); return; }
     try {
+        // Path: collection 'artifacts/{appId}/public/services' (5 segments - correct for collection)
         const servicesCollectionRef = collection(fsDb, `artifacts/${appId}/public/services`);
         const querySnapshot = await getDocs(servicesCollectionRef);
-        querySnapshot.forEach(doc => {
-            adminManagedServices.push({ id: doc.id, ...doc.data() });
-        });
-        adminManagedServices.sort((a, b) => (a.code || "").localeCompare(b.code || "")); // Sort by code
-        console.log("[DataLoad] Admin managed services loaded:", adminManagedServices.length);
+        querySnapshot.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
+        console.log("[DataLoad] Admin services loaded:", adminManagedServices.length);
     } catch (e) {
-        console.error("Admin Services Load Error:", e);
+        console.error("Services Load Error:", e);
         logErrorToFirestore("loadAdminServicesFromFirestore", e.message, e);
     }
-    // These functions should be called after data is loaded, typically in the section rendering function
-    // renderAdminServicesTable();
-    // populateServiceTypeDropdowns(); // For invoice and log shift modals
+    renderAdminServicesTable();
+    populateServiceTypeDropdowns();
 }
-
-async function loadUserAuthorizedServices() {
-    if (!userProfile || userProfile.isAdmin || !userProfile.authorizedServices || userProfile.authorizedServices.length === 0) {
-        userAuthorizedServices = userProfile.isAdmin ? [...adminManagedServices] : []; // Admins can use all services
-        console.log("[DataLoad] User authorized services set (admin or none). Count:", userAuthorizedServices.length);
-        return;
-    }
-    // Ensure adminManagedServices are loaded before trying to filter
-    if (adminManagedServices.length === 0) {
-        await loadAdminServicesFromFirestore();
-    }
-    userAuthorizedServices = adminManagedServices.filter(service => userProfile.authorizedServices.includes(service.id));
-    console.log("[DataLoad] User authorized services filtered. Count:", userAuthorizedServices.length);
-}
-
 
 async function loadAllUsersForAdmin() {
     allUsersCache = {};
-    if (!userProfile.isAdmin || !fsDb) return;
-    console.log("[DataLoad] Loading all user profiles for admin...");
+    if (!userProfile.isAdmin || !fsDb) {
+        console.warn("Cannot load all users: Not admin or Firestore not initialized.");
+        return;
+    }
     try {
+        // Path to users collection: 'artifacts/{appId}/users' (3 segments - correct for collection)
         const usersCollectionRef = collection(fsDb, `artifacts/${appId}/users`);
         const usersSnapshot = await getDocs(usersCollectionRef);
         const profilePromises = [];
 
         usersSnapshot.forEach(userDoc => {
             const uid = userDoc.id;
-            // Avoid loading the admin's own detailed profile again if it's already in userProfile
-            // or to prevent potential loops if admin structure is complex.
-            // However, for a simple list, it's fine.
+            // Path to each user's profile document: 'artifacts/{appId}/users/{uid}/profile/details' (6 segments - correct for document)
             const profileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
-            profilePromises.push(getDoc(profileRef).then(snap => ({ uid, snap })));
+            profilePromises.push(getDoc(profileRef).catch(e => {
+                console.warn(`Failed to get profile for user ${uid}:`, e); // Log individual failures
+                return null; // Return null for failed promises to not break Promise.all
+            }));
         });
 
-        const results = await Promise.all(profilePromises);
-        results.forEach(({ uid, snap }) => {
-            if (snap.exists()) {
-                const profile = snap.data();
-                allUsersCache[uid] = { ...profile, uid: uid }; // Ensure UID is part of the cached object
-            } else {
-                console.warn(`[DataLoad] No profile document found for user ID: ${uid} during admin load.`);
+        const profileSnapshots = await Promise.all(profilePromises);
+        profileSnapshots.forEach(profileSnap => {
+            if (profileSnap && profileSnap.exists()) { // Check if profileSnap is not null
+                const profile = profileSnap.data();
+                if (profile.email) {
+                    allUsersCache[profile.email] = profile;
+                } else if (profile.uid) { // Fallback to UID if no email (should be rare)
+                    allUsersCache[profile.uid] = profile;
+                }
             }
         });
-        console.log("[DataLoad] All user profiles cached for admin. Count:", Object.keys(allUsersCache).length);
+        console.log("[DataLoad] All user profiles cached for admin:", Object.keys(allUsersCache).length);
     } catch (error) {
         console.error("Error loading all users for admin:", error);
         logErrorToFirestore("loadAllUsersForAdmin", error.message, error);
@@ -584,336 +549,471 @@ async function loadAllUsersForAdmin() {
 
 async function loadAllDataForUser() {
     showLoading("Loading your data...");
-    await loadUserInvoiceDraft(); // Load existing invoice draft if any
-    await loadUserShiftRequests(); // Load user's shift requests
-    // Potentially load other user-specific data like past invoices, agreements etc.
+    // Example: Load user-specific shift requests or other data
+    // await loadUserShiftRequests();
+    // await loadUserInvoiceDraft();
+    // await loadUserAgreementState();
+    console.log("[DataLoad] Placeholder for loading all user-specific data.");
     hideLoading();
 }
 async function loadAllDataForAdmin() {
     showLoading("Loading admin data...");
-    // Services are loaded by loadGlobalSettings or loadUserAuthorizedServices if needed earlier
-    // await loadAdminServicesFromFirestore(); // Already called if needed or will be by specific tabs
     await loadAllUsersForAdmin();
-    // Specific admin tab data is loaded when the tab is rendered
-    // await loadPendingApprovalWorkers();
-    // await loadApprovedWorkersForAuthManagement();
-    // renderAdminAgreementCustomizationTab(); // This populates the form from globalSettings.agreementTemplate
+    await loadAdminServicesFromFirestore();
+    await loadPendingApprovalWorkers();
+    await loadApprovedWorkersForAuthManagement();
+    renderAdminAgreementCustomizationTab(); // This might also need data loading
+    console.log("[DataLoad] All admin data loading sequence complete.");
     hideLoading();
 }
 
 /* ========== Portal Entry & Navigation ========== */
 function enterPortal(isAdmin) {
-    console.log(`Entering portal. Admin: ${isAdmin}`);
-    if (portalAppElement) portalAppElement.style.display = "flex"; // Ensure it's flex for side nav layout
-    if (authScreenElement) authScreenElement.style.display = "none";
-    
+    console.log(`Entering portal. User: ${currentUserEmail}, Admin: ${isAdmin}`);
+    if(portalAppElement) portalAppElement.style.display = "flex";
+    if(authScreenElement) authScreenElement.style.display = "none";
+
     updateNavigation(isAdmin);
-    updateProfileDisplay(); // Update general profile display elements if any outside profile tab
+    updateProfileDisplay(); // Update profile display elements if they exist
+    updatePortalTitle();    // Ensure portal title is set based on loaded settings
 
     if (isAdmin) {
         navigateToSection("admin"); // Default to admin dashboard
-        renderAdminDashboard(); // Initial render of the active admin tab
+        renderAdminDashboard();     // Render the specific content for the admin dashboard
     } else {
-        navigateToSection("home");
-        renderUserHomePage();
-        if (userProfile && !userProfile.nextInvoiceNumber && initialInvoiceNumberInputElement) { // Check userProfile directly
+        navigateToSection("home");  // Default to user home page
+        renderUserHomePage();       // Render the specific content for the user home page
+        if (!userProfile.nextInvoiceNumber && globalSettings.portalType !== 'individual_participant') { // Only prompt for invoice if not participant
             openModal('setInitialInvoiceModal');
-            initialInvoiceNumberInputElement.value = "1001"; // Default placeholder
         }
     }
-    updatePortalTitle();
 }
+
 
 function updateNavigation(isAdmin) {
     const linksToShow = ["#home", "#profile", "#invoice", "#agreement"];
-    if (isAdmin && adminTabElement) {
+    if (isAdmin) {
         linksToShow.push("#admin");
-        adminTabElement.classList.remove('hide');
-    } else if (adminTabElement) {
-        adminTabElement.classList.add('hide');
+        if(adminTabElement) adminTabElement.classList.remove('hide');
+    } else {
+        if(adminTabElement) adminTabElement.classList.add('hide');
     }
 
     $$("nav#side a.link, nav#bottom a.bLink").forEach(a => {
-        const sectionId = a.hash.substring(1);
-        a.classList.toggle('hide', !linksToShow.includes(a.hash));
-        // Special handling for admin tab on bottom nav if it exists
-        if (a.closest('nav#bottom') && sectionId === 'admin') {
-             a.classList.toggle('hide', !isAdmin);
+        if (a && a.hash) { // Ensure 'a' and 'a.hash' are defined
+            a.classList.toggle('hide', !linksToShow.includes(a.hash));
         }
     });
+    console.log("[UI] Navigation updated. Admin status:", isAdmin);
 }
 
+
 function navigateToSection(sectionId) {
-    if (!sectionId) sectionId = "home"; // Default to home if no sectionId
+    if (!sectionId) {
+        console.warn("[Navigate] No sectionId provided, defaulting to 'home'.");
+        sectionId = 'home';
+    }
     $$("main section.card").forEach(s => s.classList.remove("active"));
     const targetSection = $(`#${sectionId}`);
     if (targetSection) {
         targetSection.classList.add("active");
     } else {
-        console.warn(`NavigateToSection: Section with ID "${sectionId}" not found. Defaulting to home.`);
-        $(`#home`)?.classList.add("active");
-        sectionId = "home"; // Correct sectionId if fallback occurs
+        console.warn(`[Navigate] Target section '#${sectionId}' not found. Defaulting to home.`);
+        $(`#home`)?.classList.add("active"); // Fallback to home if target not found
+        sectionId = 'home'; // Update sectionId to actual navigated section
     }
 
     $$("nav a").forEach(a => a.classList.remove("active"));
     $$(`nav a[href="#${sectionId}"]`).forEach(a => a.classList.add("active"));
 
-    const mainElement = $("main");
-    if(mainElement) mainElement.scrollTop = 0; // Scroll to top of new section
+    const mainContentArea = $("main");
+    if(mainContentArea) mainContentArea.scrollTop = 0; // Scroll to top of new section
 
-    // Call render functions when navigating
+    // Call render functions for the specific section being navigated to
+    // This ensures content is fresh if it depends on dynamic data
+    console.log(`[Navigate] Navigating to section: #${sectionId}`);
     switch (sectionId) {
-        case "home": renderUserHomePage(); break;
-        case "profile": renderProfileSection(); break;
-        case "invoice": renderInvoiceSection(); break;
-        case "agreement": renderAgreementSection(); break;
-        case "admin": if (userProfile.isAdmin) renderAdminDashboard(); break;
-        default: console.warn("Navigation to unknown section:", sectionId);
+        case "home":
+            // renderUserHomePage is called by enterPortal or auth state change for non-admins
+            // If admin lands on home (not typical), you might need a renderAdminHomePage or similar
+            if (userProfile && !userProfile.isAdmin) renderUserHomePage();
+            break;
+        case "profile":
+            renderProfileSection();
+            break;
+        case "invoice":
+            renderInvoiceSection();
+            break;
+        case "agreement":
+            renderAgreementSection();
+            break;
+        case "admin":
+            if (userProfile && userProfile.isAdmin) renderAdminDashboard();
+            else navigateToSection("home"); // Non-admins should not access admin section
+            break;
+        default:
+            console.warn(`[Navigate] No specific render function for section: #${sectionId}`);
+            // Optionally navigate to a default/error page or home
+            if (!$(`#${sectionId}`)?.classList.contains('active')) { // If navigation failed
+                 $(`#home`)?.classList.add("active");
+                 $$(`nav a[href="#home"]`).forEach(a => a.classList.add("active"));
+            }
     }
-    console.log(`Navigated to #${sectionId}`);
-    window.location.hash = sectionId; // Ensure URL hash is updated
 }
+
 
 /* ========== Auth Functions ========== */
 async function modalLogin() {
-    if (!authEmailInputElement || !authPasswordInputElement) return;
-    const e = authEmailInputElement.value.trim(), p = authPasswordInputElement.value;
-    if (!validateEmail(e) || !p) { showAuthStatusMessage("Invalid email or password format."); return; }
+    const email = authEmailInputElement.value.trim();
+    const password = authPasswordInputElement.value;
+    if (!validateEmail(email) || !password) { showAuthStatusMessage("Invalid email or password format."); return; }
+
     showLoading("Logging in..."); showAuthStatusMessage("", false);
-    try { await signInWithEmailAndPassword(fbAuth, e, p); }
-    catch (err) { console.error("Login Error:", err); logErrorToFirestore("modalLogin", err.message, err); showAuthStatusMessage(err.message); }
+    try {
+        await signInWithEmailAndPassword(fbAuth, email, password);
+        // onAuthStateChanged will handle UI updates and navigation
+        console.log("[Auth] Login successful for:", email);
+    }
+    catch (err) {
+        console.error("Login Error:", err);
+        logErrorToFirestore("modalLogin", err.message, { code: err.code, emailAttempted: email });
+        let userMessage = "Login failed. Please check your credentials.";
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            userMessage = "Invalid email or password.";
+        } else if (err.code === 'auth/too-many-requests') {
+            userMessage = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
+        }
+        showAuthStatusMessage(userMessage);
+    }
     finally { hideLoading(); }
 }
+
 async function modalRegister() {
-    if (!authEmailInputElement || !authPasswordInputElement) return;
-    const e = authEmailInputElement.value.trim(), p = authPasswordInputElement.value;
-    if (!validateEmail(e) || p.length < 6) { showAuthStatusMessage("Invalid email or password (min 6 chars for password)."); return; }
+    const email = authEmailInputElement.value.trim();
+    const password = authPasswordInputElement.value;
+    if (!validateEmail(email)) { showAuthStatusMessage("Please enter a valid email address."); return; }
+    if (password.length < 6) { showAuthStatusMessage("Password must be at least 6 characters long."); return; }
+
     showLoading("Registering..."); showAuthStatusMessage("", false);
-    try { await createUserWithEmailAndPassword(fbAuth, e, p); } // onAuthStateChanged will handle profile creation
-    catch (err) { console.error("Register Error:", err); logErrorToFirestore("modalRegister", err.message, err); showAuthStatusMessage(err.message); }
+    try {
+        await createUserWithEmailAndPassword(fbAuth, email, password);
+        // onAuthStateChanged will handle the new user, create profile, and navigate.
+        console.log("[Auth] Registration successful for:", email);
+        // Potentially show a success message before onAuthStateChanged takes over if desired.
+        // showAuthStatusMessage("Registration successful! Please wait...", false);
+    }
+    catch (err) {
+        console.error("Register Error:", err);
+        logErrorToFirestore("modalRegister", err.message, { code: err.code, emailAttempted: email });
+        let userMessage = "Registration failed. Please try again.";
+        if (err.code === 'auth/email-already-in-use') {
+            userMessage = "This email address is already registered. Please try logging in.";
+        } else if (err.code === 'auth/weak-password') {
+            userMessage = "The password is too weak. Please choose a stronger password.";
+        }
+        showAuthStatusMessage(userMessage);
+    }
     finally { hideLoading(); }
 }
+
 async function portalSignOut() {
     showLoading("Logging out...");
     try {
-        if (fbAuth) await fbSignOut(fbAuth);
-        // onAuthStateChanged will handle UI reset
+        await fbSignOut(fbAuth);
+        console.log("[Auth] User signed out successfully.");
+        // onAuthStateChanged will clear user state and navigate to authScreen/home.
     } catch (e) {
         console.error("Sign Out Error:", e);
         logErrorToFirestore("portalSignOut", e.message, e);
-        showMessage("Logout Error", "An error occurred while signing out.", "error");
+        showMessage("Logout Error", "An error occurred while signing out. Please try again.", "error");
     } finally {
         hideLoading();
     }
 }
 
-/* ========== Profile Functions ========== */
-function renderProfileSection() {
-    if (!userProfile || !currentUserId || !profileNameElement) return;
-    updateProfileDisplay();
-    renderProfileFilesList();
+/* ========== Home Page Functions ========== */
+// Added function to render user home page content
+function renderUserHomePage() {
+    if (!userProfile || !currentUserId || userProfile.isAdmin) {
+        // This function is for non-admin users.
+        // If an admin somehow lands here, or no user profile, hide the user-specific home content.
+        if(homeUserDivElement) homeUserDivElement.style.display = 'none';
+        console.log("[Home] renderUserHomePage called but user is admin or profile not loaded. Hiding user home div.");
+        return;
+    }
+
+    console.log("[Home] Rendering user home page for:", userProfile.name);
+    if(homeUserDivElement) homeUserDivElement.style.display = 'block'; // Show the main div for user home
+
+    // Update User Name Display
+    if(userNameDisplayElement) {
+        userNameDisplayElement.textContent = userProfile.name || 'Valued User';
+    }
+
+    // Example: Display a welcome message or quick actions
+    // const welcomeMessageElement = $("#userWelcomeMessage"); // Assuming you add such an element
+    // if(welcomeMessageElement) welcomeMessageElement.textContent = `Welcome back, ${userProfile.name}!`;
+
+    // Placeholder for loading and displaying user-specific data like shift requests
+    // loadUserShiftRequests(); // You would define this function to fetch and render requests
+    if(shiftRequestsTableBodyElement) {
+        // Example: Clear old requests and show a loading message or "no requests"
+        shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Loading shift requests...</td></tr>';
+        // Call a function to actually load and render them, e.g.,
+        // displayUserShiftRequests();
+    }
+
+    // Ensure buttons are visible if they are part of the user home
+    if(requestShiftButtonElement) requestShiftButtonElement.style.display = 'inline-block';
+    if(logTodayShiftButtonElement) logTodayShiftButtonElement.style.display = 'inline-block';
 }
 
-function updateProfileDisplay() {
-    if (!userProfile) return;
-    if (profileNameElement) profileNameElement.textContent = userProfile.name || 'N/A';
-    if (profileAbnElement) profileAbnElement.textContent = userProfile.abn || 'N/A';
-    if (profileGstElement) profileGstElement.textContent = userProfile.gstRegistered ? 'Yes' : 'No';
-    if (profileBsbElement) profileBsbElement.textContent = userProfile.bsb || 'N/A';
-    if (profileAccElement) profileAccElement.textContent = userProfile.acc || 'N/A';
-
-    // Also update home page name display if it exists
-    if (userNameDisplayElement) userNameDisplayElement.textContent = userProfile.name || "User";
-}
-
-function renderProfileFilesList() {
-    if (!profileFilesListElement) return;
-    profileFilesListElement.innerHTML = ''; // Clear existing list
-    if (userProfile.files && userProfile.files.length > 0) {
-        userProfile.files.forEach(file => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <i class="fas fa-file-alt"></i> ${file.name}
-                <span>
-                    <a href="${file.url}" target="_blank" class="btn-secondary btn-small" title="Download/View File"><i class="fas fa-download"></i> View</a>
-                    <button class="btn-danger btn-small delete-file-btn" data-path="${file.path}" data-name="${file.name}" title="Delete File"><i class="fas fa-trash-alt"></i> Delete</button>
-                </span>`;
-            profileFilesListElement.appendChild(li);
-        });
-        // Add event listeners for new delete buttons
-        $$('#profileFilesList .delete-file-btn').forEach(btn => {
-            btn.addEventListener('click', () => confirmDeleteProfileDocument(btn.dataset.name, btn.dataset.path));
-        });
-    } else {
-        profileFilesListElement.innerHTML = '<li>No documents uploaded yet.</li>';
+// Example: function to load and display shift requests (you'd need to implement this)
+async function displayUserShiftRequests() {
+    if (!shiftRequestsTableBodyElement || !currentUserId) return;
+    // showLoading("Loading your shift requests...");
+    try {
+        // const requests = await fetchUserShiftRequestsFromFirestore(currentUserId); // Implement this fetch function
+        const requests = []; // Placeholder
+        if (requests.length === 0) {
+            shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">You have no pending shift requests.</td></tr>';
+        } else {
+            shiftRequestsTableBodyElement.innerHTML = ''; // Clear loading/previous
+            requests.forEach(req => {
+                const row = shiftRequestsTableBodyElement.insertRow();
+                row.innerHTML = `
+                    <td>${formatDateForDisplay(req.date)}</td>
+                    <td>${formatTime12Hour(req.startTime)}</td>
+                    <td>${formatTime12Hour(req.endTime)}</td>
+                    <td>${req.reason || 'N/A'}</td>
+                    <td><span class="status-${(req.status || 'pending').toLowerCase()}">${req.status || 'Pending'}</span></td>
+                `;
+            });
+        }
+    } catch (error) {
+        console.error("Error displaying shift requests:", error);
+        logErrorToFirestore("displayUserShiftRequests", error.message, error);
+        shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Could not load shift requests.</td></tr>';
+    } finally {
+        // hideLoading();
     }
 }
 
-async function saveProfileDetails(updates, isWizardFinish = false) {
-    if (!currentUserId || !fsDb) {
-        showMessage("Error", "Not logged in or database not available.", "error");
+
+/* ========== Profile Functions ========== */
+function renderProfileSection() {
+    if (!userProfile || !currentUserId) {
+        console.warn("[Profile] Cannot render profile: User profile not loaded or no current user.");
+        // Optionally, redirect or show a message
+        // navigateToSection('home'); // Or show a placeholder
+        if(profileNameElement) profileNameElement.textContent = 'N/A';
+        // Clear other fields too
+        return;
+    }
+    console.log("[Profile] Rendering profile section for:", userProfile.name);
+    updateProfileDisplay();
+}
+
+function updateProfileDisplay() {
+    if (!userProfile) return; // Guard clause
+
+    if(profileNameElement) profileNameElement.textContent = userProfile.name || 'N/A';
+    if(profileAbnElement) profileAbnElement.textContent = userProfile.abn || 'N/A';
+    if(profileGstElement) profileGstElement.textContent = userProfile.gstRegistered ? 'Yes' : 'No';
+    if(profileBsbElement) profileBsbElement.textContent = userProfile.bsb || 'N/A';
+    if(profileAccElement) profileAccElement.textContent = userProfile.acc || 'N/A';
+
+    renderProfileFilesList(); // This function needs implementation
+}
+function renderProfileFilesList() {
+    if (!profileFilesListElement) return;
+    profileFilesListElement.innerHTML = ''; // Clear existing
+    const files = userProfile.uploadedFiles || [];
+    if (files.length === 0) {
+        profileFilesListElement.innerHTML = '<li>No documents uploaded yet.</li>';
+        return;
+    }
+    files.forEach(file => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.name}</a>
+            (Uploaded: ${formatDateForDisplay(file.uploadedAt)})
+            <button class="btn btn-danger btn-sm" onclick="window.confirmDeleteProfileDocument('${file.name}', '${file.path}')">Delete</button>
+        `;
+        profileFilesListElement.appendChild(li);
+    });
+}
+async function saveProfileDetails(updates) {
+    if (!fsDb || !currentUserId || !userProfile) {
+        console.error("Save Profile Error: Firestore DB not initialized, no user ID, or profile not loaded.");
+        showMessage("Error", "Could not save profile. Please try again.", "error");
         return false;
     }
     showLoading("Saving profile...");
     try {
-        const profileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        const dataToSave = { ...updates, updatedAt: serverTimestamp() };
-        if (isWizardFinish) { // Only set profileSetupComplete on wizard finish
-            dataToSave.profileSetupComplete = true;
-        }
-
-        await updateDoc(profileDocRef, dataToSave);
-        userProfile = { ...userProfile, ...dataToSave }; // Update local profile state
-        
-        updateProfileDisplay(); // Refresh displayed profile info
-        if (!isWizardFinish) { // Don't show this if wizard is finishing (wizard has its own message)
-            showMessage("Profile Saved", "Your profile details have been updated.", "success");
-        }
-        console.log("[DataSave] Profile details updated in Firestore.");
+        const profileRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+        await updateDoc(profileRef, { ...updates, updatedAt: serverTimestamp() });
+        // Update local profile object
+        userProfile = { ...userProfile, ...updates };
+        console.log("[Profile] Profile details updated in Firestore and locally.");
+        updateProfileDisplay(); // Refresh UI
+        showMessage("Profile Saved", "Your profile details have been updated.", "success");
         return true;
-    } catch (e) {
-        console.error("Profile Save Error:", e);
-        logErrorToFirestore("saveProfileDetails", e.message, e);
-        showMessage("Save Error", "Could not save profile details: " + e.message, "error");
+    } catch (error) {
+        console.error("Error saving profile details:", error);
+        logErrorToFirestore("saveProfileDetails", error.message, error);
+        showMessage("Save Error", "Could not save your profile. " + error.message, "error");
         return false;
     } finally {
         hideLoading();
     }
 }
-
 async function uploadProfileDocuments() {
-    if (!profileFileUploadElement || !profileFileUploadElement.files || profileFileUploadElement.files.length === 0) {
-        showMessage("No Files", "Please select one or more files to upload.", "info");
+    if (!fbStorage || !currentUserId || !profileFileUploadElement || !profileFileUploadElement.files || profileFileUploadElement.files.length === 0) {
+        showMessage("Upload Error", "Please select a file to upload.", "warning");
         return;
     }
-    if (!currentUserId || !fbStorage || !fsDb) {
-        showMessage("Error", "Cannot upload: Not logged in or storage/database not available.", "error");
-        return;
-    }
-
     const filesToUpload = Array.from(profileFileUploadElement.files);
     showLoading(`Uploading ${filesToUpload.length} file(s)...`);
 
-    const uploadPromises = filesToUpload.map(async (file) => {
-        const filePath = `artifacts/${appId}/users/${currentUserId}/profileDocuments/${Date.now()}_${file.name}`;
-        const fileRef = ref(fbStorage, filePath);
-        try {
-            const snapshot = await uploadBytes(fileRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            return { name: file.name, url: downloadURL, path: filePath, uploadedAt: serverTimestamp() };
-        } catch (e) {
-            console.error(`Error uploading ${file.name}:`, e);
-            logErrorToFirestore("uploadProfileDocuments.singleUpload", `Failed to upload ${file.name}: ${e.message}`, e);
-            throw e; // Re-throw to be caught by Promise.all
-        }
-    });
-
     try {
-        const uploadedFileObjects = await Promise.all(uploadPromises);
-        if (!userProfile.files) userProfile.files = [];
-        userProfile.files.push(...uploadedFileObjects);
-
-        // Update Firestore with new file metadata
-        const profileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        await updateDoc(profileDocRef, {
-            files: arrayUnion(...uploadedFileObjects) // Add new files to the array
+        const uploadPromises = filesToUpload.map(async (file) => {
+            const filePath = `artifacts/${appId}/users/${currentUserId}/profileDocuments/${Date.now()}_${file.name}`;
+            const fileRef = ref(fbStorage, filePath);
+            await uploadBytes(fileRef, file);
+            const downloadURL = await getDownloadURL(fileRef);
+            return { name: file.name, url: downloadURL, path: filePath, uploadedAt: serverTimestamp() };
         });
 
+        const uploadedFileMetadatas = await Promise.all(uploadPromises);
+
+        // Update Firestore with new file metadata
+        const profileRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+        await updateDoc(profileRef, {
+            uploadedFiles: arrayUnion(...uploadedFileMetadatas),
+            updatedAt: serverTimestamp()
+        });
+
+        // Update local profile
+        if (!userProfile.uploadedFiles) userProfile.uploadedFiles = [];
+        // Convert serverTimestamp to a client-side recognizable format or handle it appropriately on read
+        const clientReadyFiles = uploadedFileMetadatas.map(f => ({...f, uploadedAt: new Date()})); // Approximate for immediate UI
+        userProfile.uploadedFiles.push(...clientReadyFiles);
+
+
         renderProfileFilesList(); // Refresh the list
-        showMessage("Upload Successful", `${uploadedFileObjects.length} file(s) uploaded and profile updated.`, "success");
-        profileFileUploadElement.value = ""; // Clear file input
-    } catch (e) {
-        showMessage("Upload Failed", "One or more files could not be uploaded. Please check console for details.", "error");
+        showMessage("Upload Successful", `${filesToUpload.length} file(s) uploaded successfully.`, "success");
+        profileFileUploadElement.value = ''; // Clear file input
+
+    } catch (error) {
+        console.error("Error uploading profile documents:", error);
+        logErrorToFirestore("uploadProfileDocuments", error.message, error);
+        showMessage("Upload Failed", "Could not upload files. " + error.message, "error");
     } finally {
         hideLoading();
     }
 }
-// Make confirmDeleteProfileDocument globally accessible if called from HTML, or attach via event listener
 window.confirmDeleteProfileDocument = (fileName, filePath) => {
-    // Replace with a custom modal confirmation if available
-    if (confirm(`Are you sure you want to delete the file "${fileName}"? This action cannot be undone.`)) {
+    // Replace with a proper modal confirmation
+    if (confirm(`Are you sure you want to delete the document "${fileName}"? This cannot be undone.`)) {
         executeDeleteProfileDocument(fileName, filePath);
     }
 };
-
-async function executeDeleteProfileDocument(fileName, filePath) {
-    if (!currentUserId || !fbStorage || !fsDb) {
-        showMessage("Error", "Cannot delete: Not logged in or storage/database not available.", "error");
+window.executeDeleteProfileDocument = async (fileName, filePath) => {
+    if (!fbStorage || !fsDb || !currentUserId || !filePath) {
+        showMessage("Delete Error", "Could not delete file. System error.", "error");
         return;
     }
     showLoading(`Deleting ${fileName}...`);
     try {
-        // 1. Delete from Firebase Storage
+        // Delete from Storage
         const fileRef = ref(fbStorage, filePath);
         await deleteObject(fileRef);
-        console.log(`[FileDelete] Deleted from Storage: ${filePath}`);
+        console.log("[Profile] File deleted from Storage:", filePath);
 
-        // 2. Remove from Firestore profile.files array
-        const profileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        // Find the file object to remove. Firestore needs the exact object or a query.
-        // It's often easier to fetch, filter, and set, but arrayRemove can work if you have the exact object.
-        // For simplicity, let's find the object in the local userProfile.files
-        const fileToRemove = userProfile.files.find(f => f.path === filePath);
+        // Remove from Firestore
+        const profileRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
+        // Find the specific file object to remove using arrayRemove. This requires fetching the current state or knowing the exact object.
+        // A simpler way if objects are complex is to fetch, filter, and set. But for simple structures, arrayRemove with the known object works.
+        // We need the exact object that was stored, including its serverTimestamp if that was part of it.
+        // For simplicity, let's assume we refetch and update. Or, if we stored simple objects:
+        const fileToRemove = (userProfile.uploadedFiles || []).find(f => f.path === filePath);
         if (fileToRemove) {
-            await updateDoc(profileDocRef, {
-                files: arrayRemove(fileToRemove)
+            await updateDoc(profileRef, {
+                uploadedFiles: arrayRemove(fileToRemove), // This requires fileToRemove to be the exact object stored
+                updatedAt: serverTimestamp()
             });
-            console.log(`[FileDelete] Removed from Firestore profile: ${fileName}`);
-            // Update local state
-            userProfile.files = userProfile.files.filter(f => f.path !== filePath);
+
+            // Update local profile
+            userProfile.uploadedFiles = (userProfile.uploadedFiles || []).filter(f => f.path !== filePath);
+            renderProfileFilesList(); // Refresh list
+            showMessage("File Deleted", `"${fileName}" has been deleted.`, "success");
         } else {
-            console.warn(`[FileDelete] File object not found in local profile for path: ${filePath}. May need to refresh profile data.`);
-            // As a fallback, fetch and update if local state is out of sync
-            const currentProfileSnap = await getDoc(profileDocRef);
-            if (currentProfileSnap.exists()) {
-                const currentFiles = currentProfileSnap.data().files || [];
-                const updatedFiles = currentFiles.filter(f => f.path !== filePath);
-                await updateDoc(profileDocRef, { files: updatedFiles });
-                userProfile.files = updatedFiles;
-            }
+             console.warn("[Profile] Could not find file metadata in local profile to remove from Firestore array:", filePath);
+             // Fallback: Fetch profile, filter, and update. This is safer.
+             const currentProfileSnap = await getDoc(profileRef);
+             if (currentProfileSnap.exists()) {
+                 const currentProfileData = currentProfileSnap.data();
+                 const updatedFiles = (currentProfileData.uploadedFiles || []).filter(f => f.path !== filePath);
+                 await updateDoc(profileRef, { uploadedFiles: updatedFiles, updatedAt: serverTimestamp() });
+                 userProfile.uploadedFiles = updatedFiles;
+                 renderProfileFilesList();
+                 showMessage("File Deleted", `"${fileName}" has been deleted.`, "success");
+             } else {
+                throw new Error("Profile document not found during delete operation.");
+             }
         }
-        renderProfileFilesList(); // Refresh the list
-        showMessage("File Deleted", `"${fileName}" has been successfully deleted.`, "success");
-    } catch (e) {
-        console.error(`Error deleting ${fileName}:`, e);
-        logErrorToFirestore("executeDeleteProfileDocument", `Failed to delete ${fileName}: ${e.message}`, e);
-        showMessage("Delete Failed", `Could not delete "${fileName}". Error: ${e.message}`, "error");
+    } catch (error) {
+        console.error("Error deleting profile document:", error);
+        logErrorToFirestore("executeDeleteProfileDocument", error.message, {fileName, filePath});
+        showMessage("Delete Failed", `Could not delete "${fileName}". ${error.message}`, "error");
     } finally {
         hideLoading();
     }
-}
-
+};
 
 /* ========== Invoice Functions ========== */
 function renderInvoiceSection() {
-    if (!currentUserId || !userProfile) return;
-    populateInvoiceHeader();
-    renderInvoiceTable(); // This will use currentInvoiceData.items
-    updateInvoiceTotals();
-    // Load draft if not already loaded or if navigating back to invoice section
-    if (!currentInvoiceData.id && userProfile.uid) { // Check if a draft exists and hasn't been loaded
-        loadUserInvoiceDraft(); // This will populate currentInvoiceData and re-render
+    if (!userProfile || !currentUserId) {
+        console.warn("[Invoice] Cannot render invoice section: User profile not loaded.");
+        // navigateToSection('home');
+        return;
     }
+    console.log("[Invoice] Rendering invoice section.");
+    populateInvoiceHeader();
+    loadUserInvoiceDraft(); // Load existing draft or start new
 }
 
 function populateInvoiceHeader() {
-    if (!invoiceNumberInputElement || !invoiceDateInputElement || !providerNameInputElement || !providerAbnInputElement || !gstFlagInputElement || !userProfile) return;
+    if (!userProfile) return;
 
-    invoiceNumberInputElement.value = currentInvoiceData.invoiceNumber || userProfile.nextInvoiceNumber || 'N/A';
-    invoiceDateInputElement.value = currentInvoiceData.invoiceDate || formatDateForInput(new Date());
-    if (invoiceWeekLabelElement && invoiceDateInputElement.value) {
-        invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value));
-    }
+    if(invoiceDateInputElement) invoiceDateInputElement.value = formatDateForInput(new Date());
+    if(invoiceWeekLabelElement && invoiceDateInputElement) invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value));
+    if(invoiceNumberInputElement) invoiceNumberInputElement.value = userProfile.nextInvoiceNumber || '1001'; // Use from profile or default
 
-    providerNameInputElement.value = userProfile.name || '';
-    providerAbnInputElement.value = userProfile.abn || '';
-    gstFlagInputElement.value = userProfile.gstRegistered ? 'Yes' : 'No';
+    if(providerNameInputElement) providerNameInputElement.value = userProfile.name || '';
+    if(providerAbnInputElement) providerAbnInputElement.value = userProfile.abn || '';
+    if(gstFlagInputElement) gstFlagInputElement.checked = userProfile.gstRegistered || false;
 
-    if (userProfile.gstRegistered) {
-        if (gstRowElement) gstRowElement.style.display = 'block'; // Or appropriate display style
-    } else {
-        if (gstRowElement) gstRowElement.style.display = 'none';
-    }
+    // Set participant and plan manager details from global settings (or user-specific if applicable)
+    // These might be editable per invoice or fixed depending on portal type
+    // For now, assume they come from global settings as defaults
+    const participantNameInput = $("#invParticipantName"); // Assuming IDs like this
+    const participantNdisInput = $("#invParticipantNdisNo");
+    const planManagerNameInput = $("#invPlanManagerName");
+    const planManagerEmailInput = $("#invPlanManagerEmail");
+
+    if(participantNameInput) participantNameInput.value = globalSettings.defaultParticipantName || '';
+    if(participantNdisInput) participantNdisInput.value = globalSettings.defaultParticipantNdisNo || '';
+    if(planManagerNameInput) planManagerNameInput.value = globalSettings.defaultPlanManagerName || '';
+    if(planManagerEmailInput) planManagerEmailInput.value = globalSettings.defaultPlanManagerEmail || '';
+
+    // Handle GST display based on flag
+    if(gstRowElement) gstRowElement.style.display = gstFlagInputElement.checked ? '' : 'none';
+    gstFlagInputElement.addEventListener('change', () => {
+        if(gstRowElement) gstRowElement.style.display = gstFlagInputElement.checked ? '' : 'none';
+        updateInvoiceTotals();
+    });
 }
 
 function renderInvoiceTable() {
@@ -922,280 +1022,216 @@ function renderInvoiceTable() {
     currentInvoiceData.items.forEach((item, index) => {
         addInvoiceRowToTable(item, index);
     });
+    if (currentInvoiceData.items.length === 0) {
+        addInvRowUserAction(); // Add one empty row if no items
+    }
     updateInvoiceTotals();
 }
 
 function addInvoiceRowToTable(item = {}, index = -1) {
     if (!invoiceTableBodyElement) return;
-    const newRow = invoiceTableBodyElement.insertRow(index); // index -1 appends
-    newRow.dataset.itemId = item.id || generateUniqueId('item_'); // Assign a unique ID to the item/row
-
-    // Populate cells (ensure order matches HTML thead)
+    const newRow = invoiceTableBodyElement.insertRow(index);
+    newRow.classList.add('invoice-item-row');
     newRow.innerHTML = `
-        <td>${invoiceTableBodyElement.rows.length}</td>
-        <td><input type="date" class="invoice-input-condensed item-date" value="${item.date || formatDateForInput(new Date())}"></td>
-        <td class="column-code print-only pdf-show">
-            <span class="code-print-value">${item.serviceCode || ''}</span>
-        </td>
+        <td><input type="date" class="form-input inv-item-date" value="${item.date ? formatDateForInput(item.date) : formatDateForInput(new Date())}"></td>
+        <td><input type="text" class="form-input inv-item-desc" placeholder="Service Description" value="${item.description || ''}"></td>
         <td>
-            <select class="invoice-input-condensed item-description-select">
-                <option value="">-- Select Service --</option>
-                ${(userProfile.isAdmin ? adminManagedServices : userAuthorizedServices).map(s => `<option value="${s.id}" data-code="${s.code || ''}" ${item.serviceId === s.id ? 'selected' : ''}>${s.description} (${s.code || 'No Code'})</option>`).join('')}
+            <select class="form-input inv-item-service-code">
+                <option value="">Select Service</option>
+                ${adminManagedServices.map(s => `<option value="${s.id}" ${item.serviceId === s.id ? 'selected' : ''} data-rate="${s.rates ? s.rates.weekday : '0'}" data-travel-code="${s.travelCode || ''}">${s.description} (${s.serviceCode})</option>`).join('')}
             </select>
-            <span class="description-print-value pdf-show" style="display:none;">${item.description || ''}</span>
         </td>
-        <td><div class="custom-time-picker-container"><input type="text" class="custom-time-input item-start-time" readonly placeholder="Select Time" value="${item.startTime ? formatTime12Hour(item.startTime) : ''}" data-value24="${item.startTime || ''}"></div></td>
-        <td><div class="custom-time-picker-container"><input type="text" class="custom-time-input item-end-time" readonly placeholder="Select Time" value="${item.endTime ? formatTime12Hour(item.endTime) : ''}" data-value24="${item.endTime || ''}"></div></td>
-        <td class="column-rate-type print-only pdf-show">
-            <span class="rate-type-print-value">${item.rateType || ''}</span>
-        </td>
-        <td class="print-only-column pdf-show">
-            <span class="rate-print-value">${item.rate ? formatCurrency(item.rate) : ''}</span>
-        </td>
-        <td><input type="number" class="invoice-input-condensed item-hours" value="${item.hours || 0}" readonly></td>
-        <td class="no-print pdf-hide"><input type="number" step="0.1" class="invoice-input-condensed item-travel-km" value="${item.travelKm || 0}" ${item.isTravel ? '' : 'disabled'}></td>
-        <td class="no-print pdf-hide"><label class="chk no-margin"><input type="checkbox" class="item-claim-travel" ${item.isTravel ? 'checked' : ''}></label></td>
-        <td><input type="text" class="invoice-input-condensed item-total" value="${formatCurrency(item.total)}" readonly></td>
-        <td class="no-print pdf-hide"><button class="btn-danger btn-small delete-row-btn"><i class="fas fa-trash-alt"></i></button></td>
+        <td><input type="time" class="form-input inv-item-start" value="${item.startTime || '09:00'}"></td>
+        <td><input type="time" class="form-input inv-item-end" value="${item.endTime || '10:00'}"></td>
+        <td><input type="number" class="form-input inv-item-hours" value="${item.hours || '1.00'}" step="0.01" readonly></td>
+        <td><input type="number" class="form-input inv-item-rate" value="${item.rate || '0.00'}" step="0.01"></td>
+        <td><input type="number" class="form-input inv-item-total" value="${item.total || '0.00'}" step="0.01" readonly></td>
+        <td><button class="btn btn-danger btn-sm" onclick="window.deleteInvoiceRow(this)"><i class="fas fa-trash"></i></button></td>
     `;
-
-    // Add event listeners for new row elements
-    const serviceSelect = newRow.querySelector('.item-description-select');
-    const startTimeInput = newRow.querySelector('.item-start-time');
-    const endTimeInput = newRow.querySelector('.item-end-time');
-    const dateInput = newRow.querySelector('.item-date');
-    const claimTravelToggle = newRow.querySelector('.item-claim-travel');
-    const travelKmInput = newRow.querySelector('.item-travel-km');
-
-    serviceSelect?.addEventListener('change', () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1));
-    dateInput?.addEventListener('change', () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1));
-    startTimeInput?.addEventListener('click', () => openCustomTimePicker(startTimeInput, () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1)));
-    endTimeInput?.addEventListener('click', () => openCustomTimePicker(endTimeInput, () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1)));
-    claimTravelToggle?.addEventListener('change', () => {
-        travelKmInput.disabled = !claimTravelToggle.checked;
-        if (!claimTravelToggle.checked) travelKmInput.value = 0;
-        updateInvoiceItemFromRow(newRow, newRow.rowIndex -1);
+    // Add event listeners to new row inputs for dynamic calculation
+    newRow.querySelectorAll('.inv-item-start, .inv-item-end, .inv-item-rate, .inv-item-service-code, .inv-item-date').forEach(input => {
+        input.addEventListener('change', () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1));
     });
-    travelKmInput?.addEventListener('input', () => updateInvoiceItemFromRow(newRow, newRow.rowIndex -1));
-
-
-    newRow.querySelector('.delete-row-btn')?.addEventListener('click', (e) => {
-        const rowIndex = e.target.closest('tr').rowIndex - 1; // -1 for header
-        currentInvoiceData.items.splice(rowIndex, 1);
-        renderInvoiceTable(); // Re-render to update row numbers and totals
-    });
-
-    // Trigger initial update if item has data (e.g. when loading draft)
-    if (item.serviceId) {
-        updateInvoiceItemFromRow(newRow, newRow.rowIndex -1);
-    }
+    // Trigger initial calculation for the row
+    updateInvoiceItemFromRow(newRow, newRow.rowIndex -1);
 }
 
 function addInvRowUserAction() {
-    const newItem = {
-        id: generateUniqueId('item_'), // Generate a unique ID for the new item
-        date: invoiceDateInputElement.value || formatDateForInput(new Date()), // Default to invoice date
-        serviceId: '',
-        description: '',
-        startTime: '',
-        endTime: '',
-        hours: 0,
-        rate: 0,
-        total: 0,
-        isTravel: false,
-        travelKm: 0,
-        travelServiceId: null,
-        serviceCode: '',
-        rateType: ''
-    };
-    currentInvoiceData.items.push(newItem);
-    addInvoiceRowToTable(newItem); // Add to table UI
+    addInvoiceRowToTable({}, currentInvoiceData.items.length); // Add to end
+    currentInvoiceData.items.push({}); // Add placeholder to data model
     updateInvoiceTotals();
 }
+
 
 function updateInvoiceItemFromRow(row, index) {
-    if (index < 0 || index >= currentInvoiceData.items.length) return;
+    if (!row || index < 0 || index >= currentInvoiceData.items.length) return;
+
+    const dateInput = row.querySelector('.inv-item-date');
+    const descInput = row.querySelector('.inv-item-desc');
+    const serviceCodeSelect = row.querySelector('.inv-item-service-code');
+    const startInput = row.querySelector('.inv-item-start');
+    const endInput = row.querySelector('.inv-item-end');
+    const hoursInput = row.querySelector('.inv-item-hours');
+    const rateInput = row.querySelector('.inv-item-rate');
+    const totalInput = row.querySelector('.inv-item-total');
 
     const item = currentInvoiceData.items[index];
-    if (!item) return;
-
-    const dateInput = row.querySelector('.item-date');
-    const serviceSelect = row.querySelector('.item-description-select');
-    const startTimeInput = row.querySelector('.item-start-time');
-    const endTimeInput = row.querySelector('.item-end-time');
-    const hoursInput = row.querySelector('.item-hours');
-    const totalInput = row.querySelector('.item-total');
-    const claimTravelToggle = row.querySelector('.item-claim-travel');
-    const travelKmInput = row.querySelector('.item-travel-km');
-
-    // For PDF printing spans
-    const codePrintSpan = row.querySelector('.code-print-value');
-    const descriptionPrintSpan = row.querySelector('.description-print-value');
-    const rateTypePrintSpan = row.querySelector('.rate-type-print-value');
-    const ratePrintSpan = row.querySelector('.rate-print-value');
-
 
     item.date = dateInput.value;
-    item.serviceId = serviceSelect.value;
-    const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
-    item.description = selectedOption ? selectedOption.text.split(' (')[0] : ''; // Get text before code
-    item.serviceCode = selectedOption ? selectedOption.dataset.code : '';
+    item.description = descInput.value;
+    item.startTime = startInput.value;
+    item.endTime = endInput.value;
 
-    item.startTime = startTimeInput.dataset.value24;
-    item.endTime = endTimeInput.dataset.value24;
-    item.hours = calculateHours(item.startTime, item.endTime);
+    const selectedServiceOption = serviceCodeSelect.options[serviceCodeSelect.selectedIndex];
+    item.serviceId = selectedServiceOption.value;
 
-    const serviceDetails = (userProfile.isAdmin ? adminManagedServices : userAuthorizedServices).find(s => s.id === item.serviceId);
-    let rate = 0;
-    item.rateType = '';
-
-    if (serviceDetails) {
-        item.rateType = determineRateType(item.date, item.startTime);
-        if (serviceDetails.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || serviceDetails.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-            rate = parseFloat(serviceDetails.rates?.flat || 0);
-            item.rateType = "flat"; // Override for these types
-        } else if (serviceDetails.rates && serviceDetails.rates[item.rateType]) {
-            rate = parseFloat(serviceDetails.rates[item.rateType] || 0);
-        } else if (serviceDetails.rates?.weekday) { // Fallback to weekday if specific rate type not found
-            rate = parseFloat(serviceDetails.rates.weekday || 0);
-            item.rateType = "weekday"; // Correct rate type if falling back
-             console.warn(`Rate for type ${item.rateType} not found for service ${item.serviceId}, falling back to weekday.`);
-        } else {
-            console.warn(`No rates defined for service ${item.serviceId}`);
+    // Auto-populate description and rate if a service is selected and description is empty
+    if (item.serviceId) {
+        const service = adminManagedServices.find(s => s.id === item.serviceId);
+        if (service) {
+            if (!item.description) { // Only if description is empty
+                descInput.value = service.description;
+                item.description = service.description;
+            }
+            // Determine rate based on date and time
+            const rateType = determineRateType(item.date, item.startTime); // e.g., 'weekday', 'saturday'
+            const serviceRate = service.rates && service.rates[rateType] ? service.rates[rateType] : (service.rates ? service.rates.weekday || 0 : 0); // Fallback to weekday or 0
+            rateInput.value = parseFloat(serviceRate).toFixed(2);
         }
     }
-    item.rate = rate;
+    item.rate = parseFloat(rateInput.value) || 0;
 
-    // Handle travel separately
-    item.isTravel = claimTravelToggle.checked;
-    item.travelKm = item.isTravel ? parseFloat(travelKmInput.value || 0) : 0;
-    let travelTotal = 0;
-    if (item.isTravel && item.travelKm > 0 && serviceDetails && serviceDetails.travelCodeId) {
-        const travelServiceDetails = adminManagedServices.find(s => s.id === serviceDetails.travelCodeId);
-        if (travelServiceDetails && travelServiceDetails.rates?.flat) {
-            travelTotal = item.travelKm * parseFloat(travelServiceDetails.rates.flat);
-            // Note: The invoice line item itself is for the primary service.
-            // Travel is often a separate line item or calculated into the primary service's cost.
-            // For this structure, we'll add travelTotal to the item's total.
-            // A more robust system might add a separate line item for travel.
-        } else {
-            console.warn("Associated travel service or its rate not found for service:", serviceDetails.description);
-        }
-    }
-    
-    item.total = (item.hours * item.rate) + travelTotal;
 
-    // Update UI fields in the row
-    hoursInput.value = item.hours.toFixed(2);
-    totalInput.value = formatCurrency(item.total);
-    if (travelKmInput) travelKmInput.disabled = !item.isTravel;
+    const hours = calculateHours(item.startTime, item.endTime);
+    hoursInput.value = hours.toFixed(2);
+    item.hours = hours;
 
-    if(codePrintSpan) codePrintSpan.textContent = item.serviceCode;
-    if(descriptionPrintSpan) descriptionPrintSpan.textContent = item.description;
-    if(rateTypePrintSpan) rateTypePrintSpan.textContent = item.rateType;
-    if(ratePrintSpan) ratePrintSpan.textContent = formatCurrency(item.rate);
-
+    const total = item.hours * item.rate;
+    totalInput.value = total.toFixed(2);
+    item.total = total;
 
     updateInvoiceTotals();
 }
 
-
-window.deleteInvoiceRow = (btn) => { // Make it global if called from HTML
+window.deleteInvoiceRow = (btn) => {
     const row = btn.closest('tr');
     if (!row || !invoiceTableBodyElement) return;
-    const rowIndex = Array.from(invoiceTableBodyElement.children).indexOf(row); // Get actual index in current items
-    if (rowIndex > -1 && rowIndex < currentInvoiceData.items.length) {
-        currentInvoiceData.items.splice(rowIndex, 1);
-        renderInvoiceTable(); // Re-render to update row numbers and totals
-    } else {
-        console.warn("Could not delete row, index out of bounds or row not found in data.");
-        row.remove(); // Fallback to just removing from UI
+    const idx = Array.from(invoiceTableBodyElement.children).indexOf(row); // More robust index finding
+
+    if (idx > -1 && idx < currentInvoiceData.items.length) {
+        currentInvoiceData.items.splice(idx, 1);
+        row.remove();
         updateInvoiceTotals();
+        console.log("[Invoice] Row deleted at index:", idx);
+    } else {
+        console.warn("[Invoice] Could not delete row, index out of bounds or row not found in table body.");
     }
 };
 
 function updateInvoiceTotals() {
-    let sub = 0;
+    let subtotal = 0;
     currentInvoiceData.items.forEach(item => {
-        sub += (item.total || 0);
+        subtotal += item.total || 0;
     });
-    currentInvoiceData.subtotal = sub;
+    currentInvoiceData.subtotal = subtotal;
 
-    if (userProfile.gstRegistered) {
-        currentInvoiceData.gst = sub * 0.10;
-        if (gstRowElement) gstRowElement.style.display = 'block'; // Or appropriate display style for table row
-    } else {
-        currentInvoiceData.gst = 0;
-        if (gstRowElement) gstRowElement.style.display = 'none';
+    let gstAmount = 0;
+    if (gstFlagInputElement && gstFlagInputElement.checked) {
+        gstAmount = subtotal * 0.10; // 10% GST
     }
-    currentInvoiceData.grandTotal = currentInvoiceData.subtotal + currentInvoiceData.gst;
+    currentInvoiceData.gst = gstAmount;
 
-    if (subtotalElement) subtotalElement.textContent = formatCurrency(currentInvoiceData.subtotal);
-    if (gstAmountElement) gstAmountElement.textContent = formatCurrency(currentInvoiceData.gst);
-    if (grandTotalElement) grandTotalElement.textContent = formatCurrency(currentInvoiceData.grandTotal);
+    const grandTotal = subtotal + gstAmount;
+    currentInvoiceData.grandTotal = grandTotal;
+
+    if(subtotalElement) subtotalElement.textContent = formatCurrency(subtotal);
+    if(gstAmountElement) gstAmountElement.textContent = formatCurrency(gstAmount);
+    if(grandTotalElement) grandTotalElement.textContent = formatCurrency(grandTotal);
+
+    console.log("[Invoice] Totals updated:", currentInvoiceData);
 }
 
 async function saveInvoiceDraft() {
-    if (!currentUserId || !fsDb) {
-        showMessage("Error", "Not logged in or database not available.", "error");
+    if (!fsDb || !currentUserId || !userProfile) {
+        showMessage("Error", "Cannot save draft. User not logged in or system error.", "error");
         return;
     }
-    if (currentInvoiceData.items.length === 0) {
-        showMessage("Empty Invoice", "Cannot save an empty invoice draft. Add some items first.", "info");
-        return;
-    }
-
-    showLoading("Saving draft...");
+    // Collect all header data
     currentInvoiceData.invoiceNumber = invoiceNumberInputElement.value;
     currentInvoiceData.invoiceDate = invoiceDateInputElement.value;
-    currentInvoiceData.status = "draft"; // Explicitly set status
-    currentInvoiceData.updatedAt = serverTimestamp();
+    currentInvoiceData.providerName = providerNameInputElement.value;
+    currentInvoiceData.providerAbn = providerAbnInputElement.value;
+    currentInvoiceData.gstRegistered = gstFlagInputElement.checked;
 
+    // Collect participant and plan manager details from inputs
+    currentInvoiceData.participantName = $("#invParticipantName")?.value || globalSettings.defaultParticipantName;
+    currentInvoiceData.participantNdisNo = $("#invParticipantNdisNo")?.value || globalSettings.defaultParticipantNdisNo;
+    currentInvoiceData.planManagerName = $("#invPlanManagerName")?.value || globalSettings.defaultPlanManagerName;
+    currentInvoiceData.planManagerEmail = $("#invPlanManagerEmail")?.value || globalSettings.defaultPlanManagerEmail;
+
+
+    showLoading("Saving draft...");
     try {
-        const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, "draft"); // Always save to 'draft' doc
-        await setDoc(draftDocRef, currentInvoiceData); // Overwrite existing draft
-        currentInvoiceData.id = "draft"; // Set ID locally after successful save
+        const draftRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, "draft");
+        await setDoc(draftRef, { ...currentInvoiceData, lastSaved: serverTimestamp() });
         showMessage("Draft Saved", "Your invoice draft has been saved.", "success");
-        console.log("[DataSave] Invoice draft saved to Firestore.");
-
-        // Update next invoice number if this draft's number is higher or equal
-        const newNextInvoiceNumber = parseInt(currentInvoiceData.invoiceNumber, 10) + 1;
-        if (userProfile.nextInvoiceNumber <= parseInt(currentInvoiceData.invoiceNumber, 10)) {
-            await saveProfileDetails({ nextInvoiceNumber: newNextInvoiceNumber }, false); // Don't treat as wizard finish
-        }
-
-    } catch (e) {
-        console.error("Invoice Draft Save Error:", e);
-        logErrorToFirestore("saveInvoiceDraft", e.message, e);
-        showMessage("Save Error", "Could not save invoice draft: " + e.message, "error");
+        console.log("[Invoice] Draft saved to Firestore.");
+    } catch (error) {
+        console.error("Error saving invoice draft:", error);
+        logErrorToFirestore("saveInvoiceDraft", error.message, error);
+        showMessage("Save Failed", "Could not save draft. " + error.message, "error");
     } finally {
         hideLoading();
     }
 }
 
 async function loadUserInvoiceDraft() {
-    if (!currentUserId || !fsDb) return;
-    showLoading("Loading invoice draft...");
+    if (!fsDb || !currentUserId) {
+        // Initialize with a new empty draft if no user or DB
+        currentInvoiceData = { items: [], invoiceNumber: userProfile.nextInvoiceNumber || "1001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 };
+        renderInvoiceTable();
+        return;
+    }
+    showLoading("Loading draft...");
     try {
-        const draftDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, "draft");
-        const snap = await getDoc(draftDocRef);
+        const draftRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/invoices`, "draft");
+        const snap = await getDoc(draftRef);
         if (snap.exists()) {
-            currentInvoiceData = { ...currentInvoiceData, ...snap.data(), id: snap.id }; // Merge with defaults, ensure ID is set
-            console.log("[DataLoad] Invoice draft loaded from Firestore.");
-            // Repopulate UI
-            populateInvoiceHeader();
-            renderInvoiceTable(); // This will use the loaded items
+            currentInvoiceData = snap.data();
+            // Convert Firestore Timestamps in items back to string dates if necessary
+            currentInvoiceData.items = currentInvoiceData.items.map(item => ({
+                ...item,
+                date: item.date ? (item.date.toDate ? formatDateForInput(item.date.toDate()) : formatDateForInput(new Date(item.date))) : formatDateForInput(new Date())
+            }));
+            console.log("[Invoice] Draft loaded from Firestore.");
         } else {
-            console.log("[DataLoad] No existing invoice draft found.");
-            // Reset to default empty state if no draft
-            currentInvoiceData = { id: null, items: [], invoiceNumber: userProfile.nextInvoiceNumber?.toString() || "1001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0, status: "draft" };
-            populateInvoiceHeader();
-            renderInvoiceTable();
+            console.log("[Invoice] No existing draft found. Starting new.");
+            currentInvoiceData = { items: [], invoiceNumber: userProfile.nextInvoiceNumber || "1001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 };
         }
-    } catch (e) {
-        console.error("Invoice Draft Load Error:", e);
-        logErrorToFirestore("loadUserInvoiceDraft", e.message, e);
-        showMessage("Load Error", "Could not load invoice draft.", "error");
+        // Populate header fields from loaded/new draft data
+        if(invoiceNumberInputElement) invoiceNumberInputElement.value = currentInvoiceData.invoiceNumber;
+        if(invoiceDateInputElement) invoiceDateInputElement.value = currentInvoiceData.invoiceDate ? formatDateForInput(new Date(currentInvoiceData.invoiceDate)) : formatDateForInput(new Date());
+        if(providerNameInputElement && currentInvoiceData.providerName) providerNameInputElement.value = currentInvoiceData.providerName;
+        if(providerAbnInputElement && currentInvoiceData.providerAbn) providerAbnInputElement.value = currentInvoiceData.providerAbn;
+        if(gstFlagInputElement && typeof currentInvoiceData.gstRegistered === 'boolean') gstFlagInputElement.checked = currentInvoiceData.gstRegistered;
+
+        $("#invParticipantName").value = currentInvoiceData.participantName || globalSettings.defaultParticipantName;
+        $("#invParticipantNdisNo").value = currentInvoiceData.participantNdisNo || globalSettings.defaultParticipantNdisNo;
+        $("#invPlanManagerName").value = currentInvoiceData.planManagerName || globalSettings.defaultPlanManagerName;
+        $("#invPlanManagerEmail").value = currentInvoiceData.planManagerEmail || globalSettings.defaultPlanManagerEmail;
+
+
+        if(invoiceWeekLabelElement && invoiceDateInputElement.value) invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value));
+        if(gstRowElement) gstRowElement.style.display = gstFlagInputElement.checked ? '' : 'none';
+
+
+        renderInvoiceTable(); // This will also call updateInvoiceTotals
+    } catch (error) {
+        console.error("Error loading invoice draft:", error);
+        logErrorToFirestore("loadUserInvoiceDraft", error.message, error);
+        showMessage("Load Failed", "Could not load draft. " + error.message, "error");
+        currentInvoiceData = { items: [], invoiceNumber: userProfile.nextInvoiceNumber || "1001", invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 };
+        renderInvoiceTable();
     } finally {
         hideLoading();
     }
@@ -1203,375 +1239,373 @@ async function loadUserInvoiceDraft() {
 
 async function saveInitialInvoiceNumber() {
     if (!initialInvoiceNumberInputElement) return;
-    const n = parseInt(initialInvoiceNumberInputElement.value, 10);
-    if (isNaN(n) || n <= 0) { showMessage("Invalid Number", "Please enter a positive whole number for the starting invoice.", "warning"); return; }
-
-    const success = await saveProfileDetails({ nextInvoiceNumber: n });
-    if (success) {
-        closeModal('setInitialInvoiceModal');
-        if (invoiceNumberInputElement) invoiceNumberInputElement.value = n; // Update current invoice form
-        showMessage("Invoice Number Set", `Your next invoice will start from #${n}.`, "success");
+    const numStr = initialInvoiceNumberInputElement.value;
+    const n = parseInt(numStr, 10);
+    if (isNaN(n) || n <= 0) {
+        showMessage("Invalid Number", "Please enter a positive whole number for the initial invoice.", "warning");
+        return;
+    }
+    if (userProfile) { // Ensure userProfile is loaded
+        userProfile.nextInvoiceNumber = n;
+        const success = await saveProfileDetails({ nextInvoiceNumber: n });
+        if (success) {
+            closeModal('setInitialInvoiceModal');
+            if(invoiceNumberInputElement) invoiceNumberInputElement.value = n; // Update current invoice form
+            showMessage("Invoice Number Set", `Your next invoice number will start from ${n}.`, "success");
+        } else {
+            showMessage("Error", "Could not save initial invoice number.", "error");
+        }
+    } else {
+        showMessage("Error", "User profile not loaded. Cannot save setting.", "error");
     }
 }
 
 function generateInvoicePdf() {
-    if (!invoicePdfContentElement) {
-        showMessage("Error", "Invoice content area not found for PDF generation.", "error");
+    if (!currentInvoiceData || !invoicePdfContentElement) {
+        showMessage("Error", "No invoice data to generate PDF.", "error");
         return;
     }
-    if (currentInvoiceData.items.length === 0) {
-        showMessage("Empty Invoice", "Cannot generate PDF for an empty invoice.", "info");
+    if (typeof html2pdf === 'undefined') {
+        showMessage("Error", "PDF generation library not loaded.", "error");
+        logErrorToFirestore("generateInvoicePdf", "html2pdf library not found");
         return;
     }
 
     showLoading("Generating PDF...");
 
-    // Temporarily show print-only columns for PDF generation
-    const printOnlyElements = $$('.print-only, .pdf-show');
-    const noPrintElements = $$('.no-print, .pdf-hide');
-    printOnlyElements.forEach(el => el.style.display = ''); // Show, or use a class to make them visible
-    noPrintElements.forEach(el => el.style.display = 'none'); // Hide
+    // Populate the hidden PDF content div
+    // Header
+    $("#pdfInvoiceTitle").textContent = userProfile.isAdmin ? "TAX INVOICE (Copy)" : "TAX INVOICE";
+    $("#pdfProviderName").textContent = currentInvoiceData.providerName || userProfile.name;
+    $("#pdfProviderAbn").textContent = `ABN: ${currentInvoiceData.providerAbn || userProfile.abn}`;
+    $("#pdfProviderContact").textContent = userProfile.email; // Or a dedicated contact if available
 
-    // Ensure input values are reflected in spans for printing
-    invoiceTableBodyElement.querySelectorAll('tr').forEach(row => {
-        const serviceSelect = row.querySelector('.item-description-select');
-        const startTimeInput = row.querySelector('.item-start-time');
-        const endTimeInput = row.querySelector('.item-end-time');
+    $("#pdfInvoiceNumber").textContent = currentInvoiceData.invoiceNumber;
+    $("#pdfInvoiceDate").textContent = formatDateForDisplay(new Date(currentInvoiceData.invoiceDate));
+    $("#pdfInvoiceTo").textContent = currentInvoiceData.planManagerName || globalSettings.defaultPlanManagerName; // Bill to Plan Manager
+    $("#pdfParticipantName").textContent = currentInvoiceData.participantName || globalSettings.defaultParticipantName;
+    $("#pdfParticipantNdisNo").textContent = currentInvoiceData.participantNdisNo || globalSettings.defaultParticipantNdisNo;
 
-        if (serviceSelect) {
-            const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
-            row.querySelector('.code-print-value').textContent = selectedOption ? selectedOption.dataset.code : '';
-            row.querySelector('.description-print-value').textContent = selectedOption ? selectedOption.text.split(' (')[0] : '';
-        }
-        // Rate type and rate are already updated by updateInvoiceItemFromRow
 
-        // For start/end times, if you want the 24h format in PDF:
-        // row.querySelector('.start-time-print-value').textContent = startTimeInput.dataset.value24;
-        // row.querySelector('.end-time-print-value').textContent = endTimeInput.dataset.value24;
+    // Items Table
+    const pdfTableBody = $("#pdfInvoiceTableBody");
+    pdfTableBody.innerHTML = ''; // Clear previous
+    currentInvoiceData.items.forEach(item => {
+        const row = pdfTableBody.insertRow();
+        row.innerHTML = `
+            <td>${formatDateForDisplay(new Date(item.date))}</td>
+            <td>${item.description}</td>
+            <td>${item.hours.toFixed(2)}</td>
+            <td>${formatCurrency(item.rate)}</td>
+            <td>${formatCurrency(item.total)}</td>
+        `;
     });
 
+    // Totals
+    $("#pdfSubtotal").textContent = formatCurrency(currentInvoiceData.subtotal);
+    const pdfGstRow = $("#pdfGstRow");
+    if (currentInvoiceData.gstRegistered && currentInvoiceData.gst > 0) {
+        $("#pdfGstAmount").textContent = formatCurrency(currentInvoiceData.gst);
+        pdfGstRow.style.display = '';
+    } else {
+        pdfGstRow.style.display = 'none';
+    }
+    $("#pdfGrandTotal").textContent = formatCurrency(currentInvoiceData.grandTotal);
 
-    const filename = `Invoice-${invoiceNumberInputElement.value}-${invoiceDateInputElement.value}.pdf`;
+    // Bank Details
+    $("#pdfBankName").textContent = userProfile.bankName || globalSettings.defaultBankName || "Your Bank Name"; // Add these to profile/settings
+    $("#pdfBankBsb").textContent = userProfile.bsb || "000-000";
+    $("#pdfBankAcc").textContent = userProfile.acc || "00000000";
+    $("#pdfBankAccName").textContent = userProfile.accountName || userProfile.name || "Your Account Name";
+
+
     const opt = {
-        margin:       [10, 10, 10, 10], // top, left, bottom, right in mm
-        filename:     filename,
+        margin:       0.5,
+        filename:     `Invoice-${currentInvoiceData.invoiceNumber}-${currentInvoiceData.participantName}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
 
     html2pdf().from(invoicePdfContentElement).set(opt).save()
         .then(() => {
             hideLoading();
-            showMessage("PDF Generated", `Invoice ${filename} downloaded.`, "success");
+            showMessage("PDF Generated", "Invoice PDF has been downloaded.", "success");
+            // Optionally, increment invoice number if this is considered "finalizing"
+            if (!userProfile.isAdmin) { // Don't auto-increment for admin copies
+                const nextInvNum = parseInt(currentInvoiceData.invoiceNumber, 10) + 1;
+                if (userProfile) {
+                    userProfile.nextInvoiceNumber = nextInvNum;
+                    saveProfileDetails({ nextInvoiceNumber: nextInvNum }); // Save silently or with confirmation
+                    if(invoiceNumberInputElement) invoiceNumberInputElement.value = nextInvNum; // Update UI for next invoice
+                }
+                // Clear current draft for next invoice
+                currentInvoiceData = { items: [], invoiceNumber: String(nextInvNum), invoiceDate: formatDateForInput(new Date()), subtotal: 0, gst: 0, grandTotal: 0 };
+                renderInvoiceTable();
+            }
         })
         .catch(err => {
             hideLoading();
             console.error("PDF Generation Error:", err);
             logErrorToFirestore("generateInvoicePdf", err.message, err);
-            showMessage("PDF Error", "Could not generate PDF: " + err.message, "error");
-        })
-        .finally(() => {
-            // Revert visibility of print/no-print columns
-            printOnlyElements.forEach(el => el.style.display = 'none'); // Hide them back
-            noPrintElements.forEach(el => el.style.display = '');
+            showMessage("PDF Error", "Could not generate PDF. " + err.message, "error");
         });
 }
 
 
 /* ========== Agreement Functions ========== */
 function renderAgreementSection() {
-    if (!currentUserId || !userProfile) return;
-
-    if (userProfile.isAdmin && adminAgreementWorkerSelectorElement && adminSelectWorkerForAgreementElement) {
-        adminAgreementWorkerSelectorElement.classList.remove('hide');
-        populateAdminWorkerSelectorForAgreement();
-        // Admin needs to select a worker to load an agreement
-        // Clear current agreement if admin is viewing this tab initially
-        if (agreementContentContainerElement) agreementContentContainerElement.innerHTML = '<p>Select a worker to view or manage their service agreement.</p>';
-        if (agreementChipElement) agreementChipElement.classList.add('hide');
-        if (signAgreementButtonElement) signAgreementButtonElement.classList.add('hide');
-        if (participantSignButtonElement) participantSignButtonElement.classList.add('hide');
-        if (downloadAgreementPdfButtonElement) downloadAgreementPdfButtonElement.classList.add('hide');
-
-    } else if (!userProfile.isAdmin) {
-        if (adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.add('hide');
-        currentAgreementWorkerEmail = currentUserEmail; // For regular users, it's their own agreement
-        loadAndRenderServiceAgreement(); // Load current user's agreement
+    if (!userProfile || !currentUserId) {
+        console.warn("[Agreement] Cannot render agreement: User profile not loaded.");
+        // navigateToSection('home');
+        return;
     }
-}
+    console.log("[Agreement] Rendering agreement section.");
 
-function populateAdminWorkerSelectorForAgreement() {
-    if (!adminSelectWorkerForAgreementElement || !allUsersCache) return;
-    adminSelectWorkerForAgreementElement.innerHTML = '<option value="">-- Select a Support Worker --</option>';
-    Object.values(allUsersCache).forEach(worker => {
-        if (!worker.isAdmin && worker.approved) { // Only show approved, non-admin workers
+    if (userProfile.isAdmin) {
+        if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.style.display = 'block';
+        if(adminSelectWorkerForAgreementElement) adminSelectWorkerForAgreementElement.innerHTML = '<option value="">Select Worker for Agreement</option>'; // Clear and add default
+        Object.values(allUsersCache).filter(u => !u.isAdmin).forEach(worker => {
             const option = document.createElement('option');
             option.value = worker.email;
             option.textContent = `${worker.name} (${worker.email})`;
-            adminSelectWorkerForAgreementElement.appendChild(option);
-        }
-    });
+            if(adminSelectWorkerForAgreementElement) adminSelectWorkerForAgreementElement.appendChild(option);
+        });
+        // Initially load for admin self, or prompt to select worker
+        currentAgreementWorkerEmail = currentUserEmail; // Default to admin's own details if they are also a provider
+        loadAndRenderServiceAgreement(currentAgreementWorkerEmail); // Or pass null to show a placeholder
+    } else {
+        // For regular users, load their own agreement
+        if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.style.display = 'none';
+        currentAgreementWorkerEmail = currentUserEmail;
+        loadAndRenderServiceAgreement(currentAgreementWorkerEmail);
+    }
 }
 
-async function loadAndRenderServiceAgreement(workerEmailToLoad = null) {
-    // If workerEmailToLoad is null, it implies the current logged-in user (non-admin)
-    // If workerEmailToLoad is provided, it's an admin loading a specific worker's agreement
-    const targetWorkerEmail = workerEmailToLoad || currentUserEmail;
-    if (!targetWorkerEmail) {
-        showMessage("Error", "No worker specified for agreement.", "error");
+async function loadAndRenderServiceAgreement(workerEmail = null) {
+    if (!fsDb || !workerEmail) {
+        if(agreementContentContainerElement) agreementContentContainerElement.innerHTML = "<p>Please select a worker to view their service agreement or complete your profile.</p>";
+        updateAgreementChip(null);
         return;
     }
-
-    let targetWorkerProfile = null;
-    if (targetWorkerEmail === currentUserEmail) {
-        targetWorkerProfile = userProfile;
-    } else if (userProfile.isAdmin && allUsersCache) {
-        targetWorkerProfile = Object.values(allUsersCache).find(u => u.email === targetWorkerEmail);
-    }
-
-    if (!targetWorkerProfile || !targetWorkerProfile.uid) {
-        showMessage("Error", `Could not find profile for worker: ${targetWorkerEmail}`, "error");
-        if (agreementContentContainerElement) agreementContentContainerElement.innerHTML = `<p>Could not load agreement. Worker profile not found for ${targetWorkerEmail}.</p>`;
-        return;
-    }
-    
-    const targetWorkerUid = targetWorkerProfile.uid;
-    currentAgreementWorkerEmail = targetWorkerEmail; // Store whose agreement is being loaded/managed
-
-    showLoading("Loading service agreement...");
+    showLoading("Loading agreement...");
     try {
-        const agreementDocRef = doc(fsDb, `artifacts/${appId}/users/${targetWorkerUid}/agreements`, "serviceAgreement_v1");
-        const agreementSnap = await getDoc(agreementDocRef);
+        // Path to agreement: artifacts/{appId}/users/{workerEmail (as ID)}/agreement/details (6 segments)
+        // Note: Using email as document ID for worker-specific data under 'users' collection might be problematic if emails change.
+        // It's generally better to use UID. Assuming workerEmail is a stand-in for worker's UID here or a lookup happens.
+        // For this example, let's assume we have the worker's UID. If workerEmail is indeed an email, we need to find the UID first.
 
-        if (agreementSnap.exists()) {
-            currentAgreementData = { id: agreementSnap.id, ...agreementSnap.data() };
-            console.log("[DataLoad] Existing service agreement loaded for worker:", targetWorkerEmail);
-        } else {
-            // Create a new draft agreement structure if one doesn't exist
-            console.log("[DataLoad] No existing agreement. Creating new draft structure for worker:", targetWorkerEmail);
-            const newAgreementContent = renderAgreementClauses(targetWorkerProfile, globalSettings, null, true); // Get content string
-            currentAgreementData = {
-                workerId: targetWorkerUid,
-                workerEmail: targetWorkerEmail,
-                participantSignature: null,
-                participantSignatureDate: null,
-                workerSignature: null,
-                workerSignatureDate: null,
-                status: "draft", // "draft", "signed_by_worker", "signed_by_participant", "active" (fully signed)
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                contentSnapshot: newAgreementContent, // Store the initial rendered content
-                globalSettingsSnapshot: { // Snapshot relevant global settings at time of creation/last update
-                    participantName: globalSettings.defaultParticipantName,
-                    participantNdisNo: globalSettings.defaultParticipantNdisNo,
-                    planEndDate: globalSettings.defaultPlanEndDate,
-                    planManagerName: globalSettings.defaultPlanManagerName,
-                    planManagerEmail: globalSettings.defaultPlanManagerEmail,
-                    organizationName: globalSettings.organizationName,
-                },
-                agreementTemplateUsed: JSON.parse(JSON.stringify(agreementCustomData)) // Snapshot of the template used
-            };
-            // Save this new draft structure to Firestore
-            await setDoc(agreementDocRef, currentAgreementData);
-            console.log("[DataSave] New draft agreement structure saved for worker:", targetWorkerEmail);
+        let targetWorkerUid = null;
+        let workerProfileToUse = null;
+
+        if (workerEmail === currentUserEmail) { // Current user is the worker
+            targetWorkerUid = currentUserId;
+            workerProfileToUse = userProfile;
+        } else if (userProfile.isAdmin && allUsersCache[workerEmail]) { // Admin looking up another worker
+            workerProfileToUse = allUsersCache[workerEmail];
+            targetWorkerUid = workerProfileToUse.uid;
+        } else if (userProfile.isAdmin) { // Admin looking up, but worker not in cache (should be rare if cache is up to date)
+            const worker = Object.values(allUsersCache).find(u => u.email === workerEmail);
+            if (worker) {
+                workerProfileToUse = worker;
+                targetWorkerUid = worker.uid;
+            }
         }
 
-        // Render the agreement content (either from snapshot or freshly generated if logic demands)
-        const agreementHtml = currentAgreementData.contentSnapshot || renderAgreementClauses(targetWorkerProfile, globalSettings, currentAgreementData, false);
-        if (agreementContentContainerElement) agreementContentContainerElement.innerHTML = agreementHtml;
-        
-        updateAgreementChip(currentAgreementData.status);
-        updateSignatureDisplays(currentAgreementData);
-        updateAgreementActionButtons(targetWorkerProfile); // Pass the worker profile for whom agreement is loaded
 
-    } catch (e) {
-        console.error("Service Agreement Load/Create Error:", e);
-        logErrorToFirestore("loadAndRenderServiceAgreement", e.message, e);
-        showMessage("Agreement Error", "Could not load or create service agreement: " + e.message, "error");
-        if (agreementContentContainerElement) agreementContentContainerElement.innerHTML = `<p>Error loading agreement: ${e.message}</p>`;
+        if (!targetWorkerUid || !workerProfileToUse) {
+            throw new Error(`Worker profile not found for ${workerEmail}`);
+        }
+
+
+        const agreementRef = doc(fsDb, `artifacts/${appId}/users/${targetWorkerUid}/agreement`, "details");
+        const agreementSnap = await getDoc(agreementRef);
+        let agreementData;
+
+        if (agreementSnap.exists()) {
+            agreementData = agreementSnap.data();
+            console.log("[Agreement] Loaded existing agreement for:", workerEmail);
+        } else {
+            console.log("[Agreement] No existing agreement found for:", workerEmail, ". Creating new from template.");
+            // Create a new agreement structure if it doesn't exist
+            agreementData = {
+                workerUid: targetWorkerUid,
+                workerEmail: workerProfileToUse.email, // Store email for reference
+                participantSignature: null, participantSignatureDate: null,
+                workerSignature: null, workerSignatureDate: null,
+                createdAt: serverTimestamp(),
+                // Other fields like agreement version, specific clauses if they differ from global template
+            };
+            // No need to save it here yet, render first. Save happens on signing.
+        }
+
+        // Store current agreement data globally for signing functions
+        window.currentLoadedAgreement = agreementData;
+        window.currentLoadedAgreementWorkerUid = targetWorkerUid; // Store UID for saving
+
+        renderAgreementClauses(workerProfileToUse, globalSettings, agreementData);
+        updateAgreementChip(agreementData);
+
+    } catch (error) {
+        console.error("Error loading/rendering service agreement:", error);
+        logErrorToFirestore("loadAndRenderServiceAgreement", error.message, { workerEmail });
+        if(agreementContentContainerElement) agreementContentContainerElement.innerHTML = `<p class="text-danger">Could not load service agreement: ${error.message}</p>`;
+        updateAgreementChip(null);
     } finally {
         hideLoading();
     }
 }
 
-function renderAgreementClauses(workerProfile, settings, agreementState, returnAsString = false) {
-    if (!workerProfile || !settings || !agreementCustomData || !agreementCustomData.clauses) {
-        return returnAsString ? "<p>Error: Missing data for agreement generation.</p>" : (agreementContentContainerElement.innerHTML = "<p>Error: Missing data for agreement generation.</p>");
+function renderAgreementClauses(worker, settings, agreementState) {
+    if (!agreementContentContainerElement || !worker || !settings || !agreementCustomData) {
+        console.error("Cannot render agreement clauses: Missing elements or data.");
+        if(agreementContentContainerElement) agreementContentContainerElement.innerHTML = "<p>Error: Missing data to render agreement.</p>";
+        return;
     }
+    agreementContentContainerElement.innerHTML = ''; // Clear previous
 
-    let html = `<h2>${agreementCustomData.overallTitle || defaultAgreementCustomData.overallTitle}</h2>`;
-    if (agreementDynamicTitleElement) agreementDynamicTitleElement.innerHTML = `<i class="fas fa-handshake"></i> ${agreementCustomData.overallTitle || defaultAgreementCustomData.overallTitle}`;
-
-
-    // Prepare service list for the worker
-    // Ensure adminManagedServices is loaded to get full details
-    let workerServiceListHtml = "<ul>";
-    const servicesToDisplay = adminManagedServices.filter(s => workerProfile.authorizedServices?.includes(s.id));
-
-    if (servicesToDisplay.length > 0) {
-        servicesToDisplay.forEach(service => {
-            workerServiceListHtml += `<li><strong>${service.code || 'N/A'}:</strong> ${service.description}</li>`;
-        });
-    } else {
-        workerServiceListHtml += "<li>No specific services currently authorized. General support will be provided as agreed.</li>";
-    }
-    workerServiceListHtml += "</ul>";
+    // Use the overall title from the customized template
+    if(agreementDynamicTitleElement) agreementDynamicTitleElement.textContent = agreementCustomData.overallTitle || defaultAgreementCustomData.overallTitle;
 
 
-    agreementCustomData.clauses.forEach(clause => {
+    // Placeholder replacements
+    const replacements = {
+        '{{participantName}}': settings.defaultParticipantName || "The Participant",
+        '{{participantNdisNo}}': settings.defaultParticipantNdisNo || "N/A",
+        '{{planEndDate}}': formatDateForDisplay(settings.defaultPlanEndDate) || "N/A",
+        '{{workerName}}': worker.name || "The Provider",
+        '{{workerAbn}}': worker.abn || "N/A",
+        '{{serviceList}}': (worker.authorizedServices && worker.authorizedServices.length > 0)
+            ? `<ul>${worker.authorizedServices.map(sId => {
+                    const service = adminManagedServices.find(as => as.id === sId);
+                    return service ? `<li>${service.description} (${service.serviceCode})</li>` : `<li>Unknown Service ID: ${sId}</li>`;
+                  }).join('')}</ul>`
+            : "No specific services authorized/listed. General support services as agreed.",
+        '{{planManagerName}}': settings.defaultPlanManagerName || "The Plan Manager",
+        '{{planManagerEmail}}': settings.defaultPlanManagerEmail || "N/A",
+        '{{agreementStartDate}}': formatDateForDisplay(agreementState.createdAt) || formatDateForDisplay(new Date()), // Use agreement creation or today
+        '{{agreementEndDate}}': formatDateForDisplay(settings.defaultPlanEndDate) || "Plan End Date" // Typically tied to plan
+    };
+
+    // Render clauses from the customized template
+    (agreementCustomData.clauses || defaultAgreementCustomData.clauses).forEach(clause => {
+        const clauseDiv = document.createElement('div');
+        clauseDiv.classList.add('agreement-clause');
         let clauseBody = clause.body;
-        // Replace placeholders
-        clauseBody = clauseBody.replace(/\{\{participantName\}\}/g, settings.defaultParticipantName || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{participantNdisNo\}\}/g, settings.defaultParticipantNdisNo || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{planEndDate\}\}/g, formatDateForDisplay(settings.defaultPlanEndDate) || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{workerName\}\}/g, workerProfile.name || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{workerAbn\}\}/g, workerProfile.abn || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{planManagerName\}\}/g, settings.defaultPlanManagerName || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{planManagerEmail\}\}/g, settings.defaultPlanManagerEmail || 'N/A');
-        clauseBody = clauseBody.replace(/\{\{serviceList\}\}/g, workerServiceListHtml);
-        // Dates might come from agreementState if it's already signed or has specific dates
-        clauseBody = clauseBody.replace(/\{\{agreementStartDate\}\}/g, agreementState?.startDate ? formatDateForDisplay(agreementState.startDate) : formatDateForDisplay(new Date()));
-        clauseBody = clauseBody.replace(/\{\{agreementEndDate\}\}/g, agreementState?.endDate ? formatDateForDisplay(agreementState.endDate) : formatDateForDisplay(settings.defaultPlanEndDate)); // Default to plan end date
+        for (const key in replacements) {
+            clauseBody = clauseBody.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacements[key]);
+        }
+        // Basic Markdown-like replacements for **bold** and \n to <br>
+        clauseBody = clauseBody.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
 
-        html += `<h3>${clause.heading}</h3>`;
-        html += `<div class="clause-body">${simpleMarkdownToHtml(clauseBody)}</div>`;
+        clauseDiv.innerHTML = `<h3>${clause.heading}</h3><p>${clauseBody}</p>`;
+        agreementContentContainerElement.appendChild(clauseDiv);
     });
 
-    if (returnAsString) {
-        return html;
+    // Signatures display
+    if (agreementState.participantSignature && participantSignatureImageElement) {
+        participantSignatureImageElement.src = agreementState.participantSignature;
+        participantSignatureImageElement.style.display = 'block';
+        if(participantSignatureDateElement) participantSignatureDateElement.textContent = `Signed: ${formatDateForDisplay(agreementState.participantSignatureDate)}`;
     } else {
-        if (agreementContentContainerElement) agreementContentContainerElement.innerHTML = html;
+        if(participantSignatureImageElement) participantSignatureImageElement.style.display = 'none';
+        if(participantSignatureDateElement) participantSignatureDateElement.textContent = 'Not signed by participant.';
     }
+
+    if (agreementState.workerSignature && workerSignatureImageElement) {
+        workerSignatureImageElement.src = agreementState.workerSignature;
+        workerSignatureImageElement.style.display = 'block';
+        if(workerSignatureDateElement) workerSignatureDateElement.textContent = `Signed: ${formatDateForDisplay(agreementState.workerSignatureDate)}`;
+    } else {
+        if(workerSignatureImageElement) workerSignatureImageElement.style.display = 'none';
+        if(workerSignatureDateElement) workerSignatureDateElement.textContent = 'Not signed by worker.';
+    }
+
+    // Control button visibility based on who is viewing and signature state
+    const isCurrentUserTheWorker = currentUserId === worker.uid;
+    const isAdminViewing = userProfile.isAdmin && !isCurrentUserTheWorker;
+
+    if(signAgreementButtonElement) signAgreementButtonElement.style.display = (isCurrentUserTheWorker && !agreementState.workerSignature) ? 'inline-block' : 'none';
+    if(participantSignButtonElement) participantSignButtonElement.style.display = (isAdminViewing && !agreementState.participantSignature) ? 'inline-block' : 'none'; // Admin signs as participant proxy
+
+    console.log("[Agreement] Clauses rendered.");
 }
 
-function updateSignatureDisplays(agreementData) {
-    if (!agreementData) return;
-    if (participantSignatureImageElement) {
-        participantSignatureImageElement.src = agreementData.participantSignature || 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area&txtsize=16';
-    }
-    if (participantSignatureDateElement) {
-        participantSignatureDateElement.textContent = agreementData.participantSignatureDate ? formatDateForDisplay(agreementData.participantSignatureDate) : '___';
-    }
-    if (workerSignatureImageElement) {
-        workerSignatureImageElement.src = agreementData.workerSignature || 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area&txtsize=16';
-    }
-    if (workerSignatureDateElement) {
-        workerSignatureDateElement.textContent = agreementData.workerSignatureDate ? formatDateForDisplay(agreementData.workerSignatureDate) : '___';
-    }
-}
 
-
-function updateAgreementChip(status) {
+function updateAgreementChip(agreementState) {
     if (!agreementChipElement) return;
-    agreementChipElement.classList.remove('hide', 'yellow', 'green', 'blue'); // Blue for partially signed
-    let text = '';
-    switch (status) {
-        case 'draft':
-            agreementChipElement.classList.add('yellow');
-            text = 'Draft – Awaiting Signatures';
-            break;
-        case 'signed_by_worker':
-            agreementChipElement.classList.add('blue'); // Custom class or use existing
-            text = 'Signed by Worker – Awaiting Participant';
-            break;
-        case 'signed_by_participant':
-            agreementChipElement.classList.add('blue');
-            text = 'Signed by Participant – Awaiting Worker';
-            break;
-        case 'active':
-            agreementChipElement.classList.add('green');
-            text = 'Active – Fully Signed';
-            break;
-        default:
-            agreementChipElement.classList.add('hide'); // Hide if unknown status
-            return;
-    }
-    agreementChipElement.textContent = text;
-    agreementChipElement.classList.remove('hide');
-}
-
-function updateAgreementActionButtons(targetWorkerProfile) {
-    if (!currentAgreementData || !signAgreementButtonElement || !participantSignButtonElement || !downloadAgreementPdfButtonElement) return;
-
-    const isCurrentUserWorker = currentUserId === targetWorkerProfile.uid;
-    const isAdmin = userProfile.isAdmin;
-    const status = currentAgreementData.status;
-
-    // Worker's own "Sign" button
-    signAgreementButtonElement.classList.add('hide');
-    if (isCurrentUserWorker && !currentAgreementData.workerSignature && (status === 'draft' || status === 'signed_by_participant')) {
-        signAgreementButtonElement.classList.remove('hide');
-        signAgreementButtonElement.textContent = "Sign as Support Worker";
-        currentSignatureFor = 'worker'; // Set context for signature pad
-    }
-
-    // Admin's "Sign for Participant" button
-    participantSignButtonElement.classList.add('hide');
-    if (isAdmin && !currentAgreementData.participantSignature && (status === 'draft' || status === 'signed_by_worker')) {
-        participantSignButtonElement.classList.remove('hide');
-        participantSignButtonElement.textContent = "Sign for Participant (Admin)";
-        // currentSignatureFor will be set on click
-    }
-    
-    // PDF Download button - show if agreement exists (draft or signed)
-    if (currentAgreementData && currentAgreementData.contentSnapshot) {
-         downloadAgreementPdfButtonElement.classList.remove('hide');
+    if (!agreementState || (!agreementState.workerSignature && !agreementState.participantSignature)) {
+        agreementChipElement.textContent = "Unsigned";
+        agreementChipElement.className = 'chip chip-red';
+    } else if (agreementState.workerSignature && agreementState.participantSignature) {
+        agreementChipElement.textContent = "Fully Signed";
+        agreementChipElement.className = 'chip chip-green';
     } else {
-         downloadAgreementPdfButtonElement.classList.add('hide');
+        agreementChipElement.textContent = "Partially Signed";
+        agreementChipElement.className = 'chip chip-orange';
     }
 }
 
-
-function openSignatureModal(who) { // who = 'worker' or 'participant'
-    signingAs = who; // Set who is currently intended to sign
-    currentSignatureFor = who; // Also set context for saveSignature
-    if (signatureModalElement) {
-        signatureModalElement.querySelector('h3').innerHTML = `<i class="fas fa-pencil-alt"></i> Draw Signature for ${signingAs === 'worker' ? 'Support Worker' : 'Participant'}`;
-        openModal('sigModal');
-        initializeSignaturePad();
-    }
+function openSignatureModal(whoIsSigning) { // 'worker' or 'participant'
+    signingAs = whoIsSigning; // Set who is currently signing
+    openModal('sigModal');
+    initializeSignaturePad();
 }
 
 function initializeSignaturePad() {
     if (!signatureCanvasElement) return;
     sigCanvas = signatureCanvasElement;
     sigCtx = sigCanvas.getContext('2d');
+
+    // Set canvas size (consider display density for crispness)
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    sigCanvas.width = sigCanvas.offsetWidth * ratio;
+    sigCanvas.height = sigCanvas.offsetHeight * ratio;
+    sigCtx.scale(ratio, ratio);
+
     sigCtx.strokeStyle = "#000000"; // Black ink
     sigCtx.lineWidth = 2;
     sigCtx.lineCap = "round";
     sigCtx.lineJoin = "round";
+
     clearSignaturePad(); // Clear any previous drawing
 
-    // Mouse events
-    sigCanvas.addEventListener('mousedown', sigStart);
-    sigCanvas.addEventListener('mousemove', sigDraw);
-    sigCanvas.addEventListener('mouseup', sigEnd);
-    sigCanvas.addEventListener('mouseout', sigEnd); // End drawing if mouse leaves canvas
+    // Remove old listeners before adding new ones to prevent duplicates
+    sigCanvas.removeEventListener('mousedown', sigStart);
+    sigCanvas.removeEventListener('mousemove', sigDraw);
+    sigCanvas.removeEventListener('mouseup', sigEnd);
+    sigCanvas.removeEventListener('mouseout', sigEnd);
+    sigCanvas.removeEventListener('touchstart', sigStart);
+    sigCanvas.removeEventListener('touchmove', sigDraw);
+    sigCanvas.removeEventListener('touchend', sigEnd);
 
-    // Touch events
-    sigCanvas.addEventListener('touchstart', sigStart, { passive: false });
-    sigCanvas.addEventListener('touchmove', sigDraw, { passive: false });
-    sigCanvas.addEventListener('touchend', sigEnd);
+    // Add event listeners for mouse
+    sigCanvas.addEventListener('mousedown', sigStart, false);
+    sigCanvas.addEventListener('mousemove', sigDraw, false);
+    sigCanvas.addEventListener('mouseup', sigEnd, false);
+    sigCanvas.addEventListener('mouseout', sigEnd, false); // End draw if mouse leaves canvas
+
+    // Add event listeners for touch
+    sigCanvas.addEventListener('touchstart', sigStart, false);
+    sigCanvas.addEventListener('touchmove', sigDraw, false);
+    sigCanvas.addEventListener('touchend', sigEnd, false);
+    console.log("[Signature] Pad initialized.");
 }
 
 function clearSignaturePad() {
     if (!sigCtx || !sigCanvas) return;
     sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-    sigPaths = []; // Reset paths
-    // Optional: Draw a placeholder line or text
-    sigCtx.fillStyle = "#999";
-    sigCtx.font = "italic 14px Arial";
-    // sigCtx.fillText("Sign here", sigCanvas.width / 2 - 30, sigCanvas.height / 2 + 5);
+    sigPaths = []; // Clear stored paths
+    console.log("[Signature] Pad cleared.");
 }
 
 function sigStart(e) {
-    e.preventDefault(); // Prevent page scrolling on touch
+    e.preventDefault(); // Prevent scrolling on touch
     sigPen = true;
     const pos = getSigPenPosition(e);
     sigCtx.beginPath();
     sigCtx.moveTo(pos.x, pos.y);
-    sigPaths.push([{ x: pos.x, y: pos.y }]); // Start new path
+    sigPaths.push([[pos.x, pos.y]]); // Start a new path
 }
 
 function sigDraw(e) {
@@ -1581,13 +1615,15 @@ function sigDraw(e) {
     sigCtx.lineTo(pos.x, pos.y);
     sigCtx.stroke();
     if (sigPaths.length > 0) {
-        sigPaths[sigPaths.length - 1].push({ x: pos.x, y: pos.y }); // Add point to current path
+        sigPaths[sigPaths.length - 1].push([pos.x, pos.y]); // Add point to current path
     }
 }
 
 function sigEnd(e) {
     e.preventDefault();
+    if (!sigPen) return;
     sigPen = false;
+    sigCtx.closePath();
 }
 
 function getSigPenPosition(e) {
@@ -1601,811 +1637,910 @@ function getSigPenPosition(e) {
         clientY = e.clientY;
     }
     return {
-        x: (clientX - rect.left) * (sigCanvas.width / rect.width),
-        y: (clientY - rect.top) * (sigCanvas.height / rect.height)
+        x: clientX - rect.left,
+        y: clientY - rect.top
     };
 }
 
 async function saveSignature() {
     if (!sigCanvas || sigPaths.length === 0) {
-        showMessage("No Signature", "Please draw a signature before saving.", "warning");
+        showMessage("Signature Error", "Please provide a signature before saving.", "warning");
         return;
     }
-    if (!currentAgreementData || !currentSignatureFor) {
-        showMessage("Error", "Agreement context not set for saving signature.", "error");
+    if (!window.currentLoadedAgreement || !window.currentLoadedAgreementWorkerUid) {
+        showMessage("Error", "No agreement loaded to save signature against.", "error");
+        logErrorToFirestore("saveSignature", "Attempted to save signature without a loaded agreement context.");
         return;
     }
 
     const signatureDataUrl = sigCanvas.toDataURL('image/png');
-    const signatureDate = serverTimestamp(); // Use server timestamp for reliability
-
-    let updates = {};
-    let newStatus = currentAgreementData.status;
-
-    if (currentSignatureFor === 'worker') {
-        updates.workerSignature = signatureDataUrl;
-        updates.workerSignatureDate = signatureDate;
-        if (currentAgreementData.participantSignature) newStatus = 'active';
-        else newStatus = 'signed_by_worker';
-    } else if (currentSignatureFor === 'participant') {
-        updates.participantSignature = signatureDataUrl;
-        updates.participantSignatureDate = signatureDate;
-        if (currentAgreementData.workerSignature) newStatus = 'active';
-        else newStatus = 'signed_by_participant';
-    }
-    updates.status = newStatus;
-    updates.updatedAt = serverTimestamp();
-
     showLoading("Saving signature...");
+
+    const agreementUpdate = {};
+    const signatureDate = serverTimestamp(); // Use server timestamp for signing date
+
+    if (signingAs === 'worker') {
+        agreementUpdate.workerSignature = signatureDataUrl;
+        agreementUpdate.workerSignatureDate = signatureDate;
+    } else if (signingAs === 'participant') {
+        agreementUpdate.participantSignature = signatureDataUrl;
+        agreementUpdate.participantSignatureDate = signatureDate;
+    } else {
+        hideLoading();
+        showMessage("Error", "Unknown signer type.", "error");
+        logErrorToFirestore("saveSignature", "Unknown signingAs value", { signingAs });
+        return;
+    }
+
     try {
-        // Determine whose agreement we are updating
-        const targetWorkerForAgreement = Object.values(allUsersCache).find(u => u.email === currentAgreementWorkerEmail) || userProfile;
-        if (!targetWorkerForAgreement || !targetWorkerForAgreement.uid) {
-             throw new Error("Target worker for agreement not found.");
+        const agreementRef = doc(fsDb, `artifacts/${appId}/users/${window.currentLoadedAgreementWorkerUid}/agreement`, "details");
+        // Ensure the document exists before updating, or use set with merge if creating for the first time on sign
+        const agreementSnap = await getDoc(agreementRef);
+        if (agreementSnap.exists()) {
+            await updateDoc(agreementRef, { ...agreementUpdate, updatedAt: serverTimestamp() });
+        } else {
+            // If agreement doc doesn't exist, create it with the signature
+            const initialAgreementData = {
+                workerUid: window.currentLoadedAgreementWorkerUid,
+                workerEmail: allUsersCache[currentAgreementWorkerEmail]?.email || window.currentLoadedAgreement.workerEmail, // Get email from cache or loaded data
+                createdAt: serverTimestamp(), // Should ideally be set when agreement is first viewed/generated
+                ...agreementUpdate // Add the current signature
+            };
+            await setDoc(agreementRef, initialAgreementData);
         }
 
-        const agreementDocRef = doc(fsDb, `artifacts/${appId}/users/${targetWorkerForAgreement.uid}/agreements`, "serviceAgreement_v1");
-        await updateDoc(agreementDocRef, updates);
 
-        // Update local currentAgreementData
-        currentAgreementData = { ...currentAgreementData, ...updates, status: newStatus };
-        // Convert server timestamps to Date objects for local display if needed, or rely on Firestore to do so on next load
-        if (updates.workerSignatureDate) currentAgreementData.workerSignatureDate = new Date(); // Approximate for immediate display
-        if (updates.participantSignatureDate) currentAgreementData.participantSignatureDate = new Date();
-
-
-        showMessage("Signature Saved", `Signature for ${currentSignatureFor} saved successfully. Agreement status: ${newStatus}.`, "success");
+        console.log(`[Signature] ${signingAs} signature saved for UID: ${window.currentLoadedAgreementWorkerUid}`);
         closeModal('sigModal');
-        updateSignatureDisplays(currentAgreementData);
-        updateAgreementChip(newStatus);
-        updateAgreementActionButtons(targetWorkerForAgreement);
+        showMessage("Signature Saved", `${signingAs}'s signature has been successfully saved.`, "success");
 
-    } catch (e) {
-        console.error("Signature Save Error:", e);
-        logErrorToFirestore("saveSignature", e.message, e);
-        showMessage("Save Error", "Could not save signature: " + e.message, "error");
+        // Reload and re-render the agreement to show the new signature and updated status
+        await loadAndRenderServiceAgreement(currentAgreementWorkerEmail); // currentAgreementWorkerEmail should be the email of the worker whose agreement is being viewed
+
+    } catch (error) {
+        console.error(`Error saving ${signingAs} signature:`, error);
+        logErrorToFirestore("saveSignature", error.message, { error, signingAs, workerUid: window.currentLoadedAgreementWorkerUid });
+        showMessage("Save Failed", `Could not save ${signingAs} signature. ${error.message}`, "error");
     } finally {
         hideLoading();
     }
 }
 
 function generateAgreementPdf() {
-    if (!agreementContentWrapperElement || !currentAgreementData) {
-        showMessage("Error", "Agreement content not found for PDF generation.", "error");
+    if (!agreementContentWrapperElement || !agreementHeaderForPdfElement) {
+        showMessage("PDF Error", "Agreement content elements not found for PDF generation.", "error");
         return;
     }
+     if (typeof html2pdf === 'undefined') {
+        showMessage("Error", "PDF generation library not loaded.", "error");
+        logErrorToFirestore("generateAgreementPdf", "html2pdf library not found");
+        return;
+    }
+
     showLoading("Generating Agreement PDF...");
 
-    // Prepare a clone of the content for PDF to avoid altering live display too much
-    const pdfContentClone = agreementContentWrapperElement.cloneNode(true);
-    // Ensure the header for PDF is visible in the clone
-    const headerForPdfInClone = pdfContentClone.querySelector("#agreementHeaderForPdf");
-    if (headerForPdfInClone) {
-        headerForPdfInClone.style.display = "block"; // Make it visible for PDF
-        headerForPdfInClone.innerHTML = `<h1>${currentAgreementData.agreementTemplateUsed?.overallTitle || agreementCustomData.overallTitle || 'Service Agreement'}</h1>`;
-        if (currentAgreementData.status === 'active') {
-            headerForPdfInClone.innerHTML += `<p>Status: Fully Signed</p>`;
-        } else {
-            headerForPdfInClone.innerHTML += `<p>Status: ${currentAgreementData.status}</p>`;
-        }
-    }
-    // Ensure signature images are actual images, not placeholders if signed
-    const sigP_clone = pdfContentClone.querySelector("#sigP");
-    const sigW_clone = pdfContentClone.querySelector("#sigW");
-    if (currentAgreementData.participantSignature && sigP_clone) sigP_clone.src = currentAgreementData.participantSignature;
-    if (currentAgreementData.workerSignature && sigW_clone) sigW_clone.src = currentAgreementData.workerSignature;
+    // Temporarily make the PDF header visible for rendering
+    agreementHeaderForPdfElement.style.display = 'block';
 
+    // Get worker name for filename, fallback if not available
+    const workerProfileForPdf = allUsersCache[currentAgreementWorkerEmail] || userProfile; // Use cached or current user
+    const workerNameForFile = workerProfileForPdf.name ? workerProfileForPdf.name.replace(/\s+/g, '_') : 'Agreement';
+    const participantNameForFile = (globalSettings.defaultParticipantName || "Participant").replace(/\s+/g, '_');
 
-    const targetWorkerForAgreement = Object.values(allUsersCache).find(u => u.email === currentAgreementWorkerEmail) || userProfile;
-    const workerName = targetWorkerForAgreement.name || "Worker";
-    const filename = `ServiceAgreement-${workerName.replace(/\s+/g, '_')}-${formatDateForInput(new Date())}.pdf`;
 
     const opt = {
-        margin:       [15, 12, 15, 12], // top, left, bottom, right in mm
-        filename:     filename,
+        margin:       [0.5, 0.5, 0.5, 0.5], // top, left, bottom, right margins in inches
+        filename:     `ServiceAgreement-${workerNameForFile}-${participantNameForFile}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0 }, // Ensure it captures from top
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Helps with page breaks
+        html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: -window.scrollY }, // try to capture from top
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Try to avoid breaking elements
     };
 
-    html2pdf().from(pdfContentClone).set(opt).save()
+    // Use the wrapper that contains both the header and the clauses
+    html2pdf().from(agreementContentWrapperElement).set(opt).save()
         .then(() => {
             hideLoading();
-            showMessage("PDF Generated", `Agreement ${filename} downloaded.`, "success");
+            agreementHeaderForPdfElement.style.display = 'none'; // Hide header again
+            showMessage("PDF Generated", "Service Agreement PDF has been downloaded.", "success");
         })
         .catch(err => {
             hideLoading();
+            agreementHeaderForPdfElement.style.display = 'none'; // Hide header again
             console.error("Agreement PDF Generation Error:", err);
             logErrorToFirestore("generateAgreementPdf", err.message, err);
-            showMessage("PDF Error", "Could not generate agreement PDF: " + err.message, "error");
+            showMessage("PDF Error", "Could not generate Agreement PDF. " + err.message, "error");
         });
 }
 
 
 /* ========== Admin Functions ========== */
 function renderAdminDashboard() {
-    if (!userProfile.isAdmin) { navigateToSection("home"); return; }
-    // Default to the first tab or a specific tab like 'adminGlobalSettings'
-    const activeTabBtn = $(".admin-tab-btn.active");
-    if (activeTabBtn && activeTabBtn.dataset.target) {
-        switchAdminTab(activeTabBtn.dataset.target);
-    } else {
-        switchAdminTab('adminGlobalSettings'); // Default tab
+    if (!userProfile || !userProfile.isAdmin) {
+        console.warn("[Admin] Non-admin attempting to render admin dashboard. Redirecting.");
+        navigateToSection('home');
+        return;
     }
+    console.log("[Admin] Rendering admin dashboard.");
+    // Default to the first admin tab or a specific overview tab
+    switchAdminTab('adminGlobalSettings'); // Or 'adminOverview' if you create one
+    renderAdminGlobalSettingsTab(); // Explicitly call render for the default tab
 }
 
 function switchAdminTab(targetId) {
-    if (adminNavTabButtons) adminNavTabButtons.forEach(b => b.classList.toggle('active', b.dataset.target === targetId));
-    if (adminContentPanels) adminContentPanels.forEach(p => p.classList.toggle('active', p.id === targetId));
+    if (!adminNavTabButtons || !adminContentPanels) return;
 
-    // Load data or render specific content for the activated tab
+    adminNavTabButtons.forEach(b => b.classList.toggle('active', b.dataset.target === targetId));
+    adminContentPanels.forEach(p => p.classList.toggle('active', p.id === targetId));
+
+    console.log(`[Admin] Switched to admin tab: ${targetId}`);
+    // Call specific render functions for each tab when it's switched to
+    // This ensures data is fresh if it's loaded on demand.
     switch (targetId) {
-        case 'adminGlobalSettings': renderAdminGlobalSettingsTab(); break;
-        case 'adminServiceManagement': renderAdminServiceManagementTab(); break;
-        case 'adminAgreementCustomization': renderAdminAgreementCustomizationTab(); break;
-        case 'adminWorkerManagement': renderAdminWorkerManagementTab(); break;
+        case 'adminGlobalSettings':
+            renderAdminGlobalSettingsTab();
+            break;
+        case 'adminServiceManagement':
+            renderAdminServiceManagementTab();
+            break;
+        case 'adminAgreementCustomization':
+            renderAdminAgreementCustomizationTab();
+            break;
+        case 'adminWorkerManagement':
+            renderAdminWorkerManagementTab();
+            break;
+        // Add cases for other admin tabs if any
+        default:
+            console.warn(`[Admin] No specific render logic for tab: ${targetId}`);
     }
-    console.log(`Admin tab switched to: ${targetId}`);
 }
 
 function renderAdminGlobalSettingsTab() {
-    if (!globalSettings || !userProfile.isAdmin) return;
-
-    if (adminEditOrgNameInputElement) adminEditOrgNameInputElement.value = globalSettings.organizationName || '';
-    if (adminEditOrgAbnInputElement) adminEditOrgAbnInputElement.value = globalSettings.organizationAbn || '';
-    if (adminEditOrgContactEmailInputElement) adminEditOrgContactEmailInputElement.value = globalSettings.organizationContactEmail || '';
-    if (adminEditOrgContactPhoneInputElement) adminEditOrgContactPhoneInputElement.value = globalSettings.organizationContactPhone || '';
-
-    if (adminEditParticipantNameInputElement) adminEditParticipantNameInputElement.value = globalSettings.defaultParticipantName || '';
-    if (adminEditParticipantNdisNoInputElement) adminEditParticipantNdisNoInputElement.value = globalSettings.defaultParticipantNdisNo || '';
-    if (adminEditPlanManagerNameInputElement) adminEditPlanManagerNameInputElement.value = globalSettings.defaultPlanManagerName || '';
-    if (adminEditPlanManagerEmailInputElement) adminEditPlanManagerEmailInputElement.value = globalSettings.defaultPlanManagerEmail || '';
-    if (adminEditPlanManagerPhoneInputElement) adminEditPlanManagerPhoneInputElement.value = globalSettings.defaultPlanManagerPhone || '';
-    if (adminEditPlanEndDateInputElement) adminEditPlanEndDateInputElement.value = globalSettings.defaultPlanEndDate ? formatDateForInput(new Date(globalSettings.defaultPlanEndDate)) : '';
-
-    // Invite Link (Example: direct registration link)
-    if (inviteLinkCodeElement) {
-        const portalUrl = window.location.origin + window.location.pathname;
-        inviteLinkCodeElement.textContent = `${portalUrl}#register`; // Simple link to registration page
+    if (!globalSettings) {
+        console.warn("[Admin] Global settings not loaded. Cannot render settings tab.");
+        return;
     }
+    console.log("[Admin] Rendering Global Settings Tab.");
+
+    // Populate Portal Type Radio Buttons
+    if (adminWizardPortalTypeRadioElements) {
+        adminWizardPortalTypeRadioElements.forEach(radio => {
+            radio.checked = (radio.value === globalSettings.portalType);
+        });
+    }
+    // Populate Organization Details
+    if(adminEditOrgNameInputElement) adminEditOrgNameInputElement.value = globalSettings.organizationName || '';
+    if(adminEditOrgAbnInputElement) adminEditOrgAbnInputElement.value = globalSettings.organizationAbn || '';
+    if(adminEditOrgContactEmailInputElement) adminEditOrgContactEmailInputElement.value = globalSettings.organizationContactEmail || '';
+    if(adminEditOrgContactPhoneInputElement) adminEditOrgContactPhoneInputElement.value = globalSettings.organizationContactPhone || '';
+
+    // Populate Participant & Plan Manager Defaults
+    if(adminEditParticipantNameInputElement) adminEditParticipantNameInputElement.value = globalSettings.defaultParticipantName || '';
+    if(adminEditParticipantNdisNoInputElement) adminEditParticipantNdisNoInputElement.value = globalSettings.defaultParticipantNdisNo || '';
+    if(adminEditPlanManagerNameInputElement) adminEditPlanManagerNameInputElement.value = globalSettings.defaultPlanManagerName || '';
+    if(adminEditPlanManagerEmailInputElement) adminEditPlanManagerEmailInputElement.value = globalSettings.defaultPlanManagerEmail || '';
+    if(adminEditPlanManagerPhoneInputElement) adminEditPlanManagerPhoneInputElement.value = globalSettings.defaultPlanManagerPhone || '';
+    if(adminEditPlanEndDateInputElement) adminEditPlanEndDateInputElement.value = globalSettings.defaultPlanEndDate ? formatDateForInput(new Date(globalSettings.defaultPlanEndDate)) : '';
+
+    // Invite Link (This is usually generated on demand or a fixed path)
+    // For a simple implementation, it could be the portal URL.
+    if(inviteLinkCodeElement) inviteLinkCodeElement.textContent = window.location.origin + window.location.pathname;
 }
 
 async function saveAdminPortalSettings() {
-    if (!userProfile.isAdmin) { showMessage("Unauthorized", "Only admins can save portal settings.", "error"); return; }
-
-    const newSettings = {
-        organizationName: adminEditOrgNameInputElement?.value.trim(),
-        organizationAbn: adminEditOrgAbnInputElement?.value.trim(),
-        organizationContactEmail: adminEditOrgContactEmailInputElement?.value.trim(),
-        organizationContactPhone: adminEditOrgContactPhoneInputElement?.value.trim(),
-        defaultParticipantName: adminEditParticipantNameInputElement?.value.trim(),
-        defaultParticipantNdisNo: adminEditParticipantNdisNoInputElement?.value.trim(),
-        defaultPlanManagerName: adminEditPlanManagerNameInputElement?.value.trim(),
-        defaultPlanManagerEmail: adminEditPlanManagerEmailInputElement?.value.trim(),
-        defaultPlanManagerPhone: adminEditPlanManagerPhoneInputElement?.value.trim(),
-        defaultPlanEndDate: adminEditPlanEndDateInputElement?.value, // Already in YYYY-MM-DD
-        setupComplete: globalSettings.setupComplete || false, // Preserve existing, or set if part of wizard
-        portalType: globalSettings.portalType || "organization", // Preserve existing
-        adminEmail: globalSettings.adminEmail || "admin@portal.com" // Preserve existing
-        // agreementTemplate is saved separately or via its own tab
-    };
-
-    // Validate emails if they are provided
-    if (newSettings.organizationContactEmail && !validateEmail(newSettings.organizationContactEmail)) {
-        showMessage("Invalid Email", "Organization contact email is not valid.", "warning"); return;
+    if (!userProfile || !userProfile.isAdmin || !globalSettings) {
+        showMessage("Error", "Not authorized or settings not loaded.", "error");
+        return;
     }
-    if (newSettings.defaultPlanManagerEmail && !validateEmail(newSettings.defaultPlanManagerEmail)) {
-        showMessage("Invalid Email", "Plan manager email is not valid.", "warning"); return;
-    }
+    showLoading("Saving portal settings...");
 
-    globalSettings = { ...globalSettings, ...newSettings }; // Update local state
-    await saveGlobalSettingsToFirestore(); // This function already shows messages
+    // Collect values from input fields
+    const selectedPortalTypeRadio = $$("input[name='adminWizPortalType']:checked")[0];
+    globalSettings.portalType = selectedPortalTypeRadio ? selectedPortalTypeRadio.value : globalSettings.portalType;
+
+    globalSettings.organizationName = adminEditOrgNameInputElement.value.trim();
+    globalSettings.organizationAbn = adminEditOrgAbnInputElement.value.trim();
+    globalSettings.organizationContactEmail = adminEditOrgContactEmailInputElement.value.trim();
+    globalSettings.organizationContactPhone = adminEditOrgContactPhoneInputElement.value.trim();
+
+    globalSettings.defaultParticipantName = adminEditParticipantNameInputElement.value.trim();
+    globalSettings.defaultParticipantNdisNo = adminEditParticipantNdisNoInputElement.value.trim();
+    globalSettings.defaultPlanManagerName = adminEditPlanManagerNameInputElement.value.trim();
+    globalSettings.defaultPlanManagerEmail = adminEditPlanManagerEmailInputElement.value.trim();
+    globalSettings.defaultPlanManagerPhone = adminEditPlanManagerPhoneInputElement.value.trim();
+    globalSettings.defaultPlanEndDate = adminEditPlanEndDateInputElement.value; // Already in YYYY-MM-DD
+
+    // Assume globalSettings.setupComplete would be true if admin is saving these.
+    // globalSettings.setupComplete = true; // Or manage this flag separately.
+
+    const success = await saveGlobalSettingsToFirestore(); // This function already handles Firestore write
+    hideLoading();
+    if (success) {
+        showMessage("Settings Saved", "Global portal settings have been updated.", "success");
+    } else {
+        showMessage("Save Failed", "Could not save portal settings. Check console for errors.", "error");
+    }
 }
 
 window.confirmResetGlobalSettings = () => {
-    if (confirm("DANGER! Are you sure you want to reset ALL global portal settings to their original defaults? This action cannot be undone and will affect default agreement data and portal behavior.")) {
-        if (confirm("SECOND CONFIRMATION: Resetting will revert organization details, participant defaults, and potentially the agreement template. Proceed?")) {
-            executeResetGlobalSettings();
-        }
+    // Replace with a proper modal confirmation
+    if (confirm("Are you sure you want to reset all global settings to their default values? This action cannot be undone.")) {
+        executeResetGlobalSettings();
     }
 };
 
-async function executeResetGlobalSettings() {
-    if (!userProfile.isAdmin) { showMessage("Unauthorized", "Only admins can reset settings.", "error"); return; }
-    showLoading("Resetting global settings...");
+window.executeResetGlobalSettings = async () => {
+    if (!userProfile || !userProfile.isAdmin) {
+        showMessage("Error", "Not authorized to reset settings.", "error");
+        return;
+    }
+    showLoading("Resetting settings...");
     globalSettings = getDefaultGlobalSettings(); // Get fresh defaults
-    agreementCustomData = JSON.parse(JSON.stringify(defaultAgreementCustomData)); // Reset agreement template too
-    globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Put it into global settings
+    globalSettings.setupComplete = false; // Reset setup status as well
+    agreementCustomData = JSON.parse(JSON.stringify(defaultAgreementCustomData)); // Reset agreement template
+    globalSettings.agreementTemplate = agreementCustomData;
 
-    const success = await saveGlobalSettingsToFirestore(); // Save these defaults
+
+    const success = await saveGlobalSettingsToFirestore(); // Save the new default settings
+    hideLoading();
     if (success) {
-        renderAdminGlobalSettingsTab(); // Re-render the tab with new defaults
-        renderAdminAgreementCustomizationTab(); // Also re-render agreement tab
+        renderAdminGlobalSettingsTab(); // Re-render tab to show defaults
         showMessage("Settings Reset", "Global portal settings have been reset to defaults.", "success");
     } else {
         showMessage("Reset Failed", "Could not reset settings. Check console for errors.", "error");
+        // Attempt to reload current settings from DB if reset save failed
+        await loadGlobalSettingsFromFirestore();
+        renderAdminGlobalSettingsTab();
     }
-    hideLoading();
-}
+};
 
-async function renderAdminServiceManagementTab() {
-    if (!userProfile.isAdmin) return;
-    if (adminManagedServices.length === 0) { // Load if not already loaded
-        await loadAdminServicesFromFirestore();
-    }
-    clearAdminServiceForm();
-    renderAdminServicesTable();
-    populateServiceCategoryTypeDropdown(); // For the form
-    renderAdminServiceRateFields(); // Initial render based on default category
+function renderAdminServiceManagementTab() {
+    console.log("[Admin] Rendering Service Management Tab.");
+    clearAdminServiceForm(); // Clear form for new entry or edit
+    renderAdminServicesTable(); // Display existing services
+    populateServiceCategoryTypeDropdown(); // Populate dropdown for service types
+    renderAdminServiceRateFields(); // Initialize rate fields based on default/current selection
 }
 
 function populateServiceCategoryTypeDropdown() {
     if (!adminServiceCategoryTypeSelectElement) return;
-    adminServiceCategoryTypeSelectElement.innerHTML = ''; // Clear existing
+    adminServiceCategoryTypeSelectElement.innerHTML = '<option value="">-- Select Category Type --</option>'; // Clear and add default
     for (const key in SERVICE_CATEGORY_TYPES) {
         const option = document.createElement('option');
         option.value = SERVICE_CATEGORY_TYPES[key];
-        // Make descriptions more user-friendly
-        let text = key.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()); // Title Case
-        if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.CORE_STANDARD) text = "Core - Standard Rates";
-        else if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) text = "Core - High Intensity Rates";
-        else if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD) text = "Capacity Building - Therapy Standard";
-        else if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST) text = "Capacity Building - Specialist";
-        else if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.TRAVEL_KM) text = "Travel - Per Kilometre";
-        else if (SERVICE_CATEGORY_TYPES[key] === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) text = "Other - Single Flat Rate";
-        option.textContent = text;
+        // Make it more human-readable: CORE_STANDARD -> Core Standard
+        option.textContent = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         adminServiceCategoryTypeSelectElement.appendChild(option);
     }
 }
 
 function renderAdminServiceRateFields() {
     if (!adminServiceRateFieldsContainerElement || !adminServiceCategoryTypeSelectElement) return;
-    const categoryType = adminServiceCategoryTypeSelectElement.value;
+    const selectedType = adminServiceCategoryTypeSelectElement.value;
     adminServiceRateFieldsContainerElement.innerHTML = ''; // Clear previous fields
 
-    let fieldsHtml = '';
-    if (categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-        fieldsHtml = `
-            <div class="form-group">
-                <label for="serviceRate_flat">Rate ($ per Km or Flat Rate):</label>
-                <input type="number" id="serviceRate_flat" step="0.01" min="0" placeholder="e.g., 0.85 or 50.00">
-            </div>`;
-    } else { // For CORE_STANDARD, CORE_HIGH_INTENSITY, CAPACITY_THERAPY_STD, CAPACITY_SPECIALIST
-        RATE_CATEGORIES.forEach(rateCat => {
-            if (rateCat === "flat") return; // Skip flat for these complex types
-            fieldsHtml += `
-                <div class="form-group">
-                    <label for="serviceRate_${rateCat}">${rateCat.charAt(0).toUpperCase() + rateCat.slice(1)} Rate ($ per hour):</label>
-                    <input type="number" id="serviceRate_${rateCat}" step="0.01" min="0" placeholder="e.g., 55.75">
-                </div>`;
-        });
-    }
-    adminServiceRateFieldsContainerElement.innerHTML = `<div class="rate-inputs-grid">${fieldsHtml}</div>`;
+    if (selectedType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || selectedType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+        // Single rate field for travel or flat rate
+        const rateDiv = document.createElement('div');
+        rateDiv.classList.add('form-group', 'inline');
+        rateDiv.innerHTML = `
+            <label for="adminServiceRate_flat">Rate ($):</label>
+            <input type="number" id="adminServiceRate_flat" class="form-input admin-service-rate" step="0.01" placeholder="0.00">
+        `;
+        adminServiceRateFieldsContainerElement.appendChild(rateDiv);
+        if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.style.display = (selectedType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'block' : 'none';
+        if(selectTravelCodeButtonElement) selectTravelCodeButtonElement.style.display = (selectedType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) ? 'inline-block' : 'none';
 
-    // If editing, populate fields
-    if (currentAdminServiceEditingId) {
-        const service = adminManagedServices.find(s => s.id === currentAdminServiceEditingId);
-        if (service && service.rates) {
-            if (categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-                const flatRateInput = $(`#serviceRate_flat`);
-                if (flatRateInput) flatRateInput.value = service.rates.flat || '';
-            } else {
-                RATE_CATEGORIES.forEach(rateCat => {
-                    if (rateCat === "flat") return;
-                    const rateInput = $(`#serviceRate_${rateCat}`);
-                    if (rateInput) rateInput.value = service.rates[rateCat] || '';
-                });
-            }
-        }
+    } else if (selectedType) { // For category types that use standard rate categories
+        if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.style.display = 'none';
+        if(selectTravelCodeButtonElement) selectTravelCodeButtonElement.style.display = 'none';
+
+        RATE_CATEGORIES.forEach(category => {
+            const rateDiv = document.createElement('div');
+            rateDiv.classList.add('form-group', 'inline');
+            rateDiv.innerHTML = `
+                <label for="adminServiceRate_${category}">${category.charAt(0).toUpperCase() + category.slice(1)} Rate ($):</label>
+                <input type="number" id="adminServiceRate_${category}" class="form-input admin-service-rate" data-rate-category="${category}" step="0.01" placeholder="0.00">
+            `;
+            adminServiceRateFieldsContainerElement.appendChild(rateDiv);
+        });
+    } else {
+         if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.style.display = 'none';
+         if(selectTravelCodeButtonElement) selectTravelCodeButtonElement.style.display = 'none';
     }
 }
 
-
 function clearAdminServiceForm() {
-    if (adminServiceIdInputElement) adminServiceIdInputElement.value = '';
-    if (adminServiceCodeInputElement) adminServiceCodeInputElement.value = '';
-    if (adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = '';
-    if (adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = SERVICE_CATEGORY_TYPES.CORE_STANDARD; // Default
-    if (adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = '';
-    if (adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = 'None selected';
-    currentAdminServiceEditingId = null;
-    renderAdminServiceRateFields(); // Clears and re-renders rate fields for the default category
-    if (saveAdminServiceButtonElement) saveAdminServiceButtonElement.innerHTML = '<i class="fas fa-save"></i> Add New Service';
+    currentAdminServiceEditingId = null; // Reset editing ID
+    if(adminServiceIdInputElement) adminServiceIdInputElement.value = ''; // This might be hidden or auto-generated
+    if(adminServiceCodeInputElement) adminServiceCodeInputElement.value = '';
+    if(adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = '';
+    if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = '';
+    if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = ''; // Hidden input for travel code ID
+    if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.textContent = 'No travel code selected.';
+
+
+    renderAdminServiceRateFields(); // This will clear and render based on empty category type
+    if(saveAdminServiceButtonElement) saveAdminServiceButtonElement.textContent = 'Save New Service';
+    console.log("[Admin] Service form cleared.");
 }
 
 function renderAdminServicesTable() {
     if (!adminServicesTableBodyElement) return;
-    adminServicesTableBodyElement.innerHTML = '';
+    adminServicesTableBodyElement.innerHTML = ''; // Clear existing rows
+
+    if (adminManagedServices.length === 0) {
+        adminServicesTableBodyElement.innerHTML = '<tr><td colspan="5">No services defined yet.</td></tr>';
+        return;
+    }
+
     adminManagedServices.forEach(service => {
         const row = adminServicesTableBodyElement.insertRow();
-        const primaryRateKey = Object.keys(service.rates || {}).find(k => k !== 'flat' && service.rates[k]) || 'flat';
-        const primaryRate = service.rates ? (service.rates[primaryRateKey] || service.rates.flat || 0) : 0;
-        const travelService = service.travelCodeId ? adminManagedServices.find(s => s.id === service.travelCodeId) : null;
+        // Display primary rate (e.g., weekday) or flat rate for brevity in table
+        let displayRate = "N/A";
+        if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || service.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+            displayRate = service.rates && service.rates.flat ? formatCurrency(service.rates.flat) : formatCurrency(0);
+        } else if (service.rates && service.rates.weekday) {
+            displayRate = formatCurrency(service.rates.weekday);
+        } else if (service.rates) { // Fallback if weekday is not set but other rates might be
+            const firstRateKey = Object.keys(service.rates)[0];
+            displayRate = firstRateKey ? formatCurrency(service.rates[firstRateKey]) : formatCurrency(0);
+        }
+
 
         row.innerHTML = `
-            <td>${service.code || 'N/A'}</td>
-            <td>${service.description || 'N/A'}</td>
-            <td>${(Object.keys(SERVICE_CATEGORY_TYPES).find(key => SERVICE_CATEGORY_TYPES[key] === service.categoryType) || service.categoryType || '').replace(/_/g, ' ')}</td>
-            <td>${formatCurrency(primaryRate)} ${service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM ? '/km' : (service.categoryType !== SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE ? '/hr' : '')}</td>
-            <td>${travelService ? `${travelService.code} (${travelService.description.substring(0,20)}...)` : 'None'}</td>
+            <td>${service.serviceCode}</td>
+            <td>${service.description}</td>
+            <td>${(service.categoryType || 'N/A').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+            <td>${displayRate}</td>
             <td>
-                <button class="btn-secondary btn-small edit-service-btn" data-id="${service.id}"><i class="fas fa-edit"></i> Edit</button>
-                <button class="btn-danger btn-small delete-service-btn" data-id="${service.id}"><i class="fas fa-trash-alt"></i> Delete</button>
+                <button class="btn btn-sm btn-primary" onclick="window.editAdminService('${service.id}')"><i class="fas fa-edit"></i> Edit</button>
+                <button class="btn btn-sm btn-danger" onclick="window.deleteAdminService('${service.id}')"><i class="fas fa-trash"></i> Delete</button>
             </td>
         `;
-        row.querySelector('.edit-service-btn').addEventListener('click', () => editAdminService(service.id));
-        row.querySelector('.delete-service-btn').addEventListener('click', () => deleteAdminService(service.id));
     });
+    console.log("[Admin] Services table rendered.");
 }
 
-window.editAdminService = (id) => { // Made global for dynamic buttons
-    const service = adminManagedServices.find(s => s.id === id);
-    if (!service) { showMessage("Error", "Service not found for editing.", "error"); return; }
+window.editAdminService = (id) => {
+    const serviceToEdit = adminManagedServices.find(s => s.id === id);
+    if (!serviceToEdit) {
+        showMessage("Error", "Service not found for editing.", "error");
+        return;
+    }
+    currentAdminServiceEditingId = id; // Set editing ID
 
-    currentAdminServiceEditingId = id;
-    if (adminServiceIdInputElement) adminServiceIdInputElement.value = id;
-    if (adminServiceCodeInputElement) adminServiceCodeInputElement.value = service.code || '';
-    if (adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = service.description || '';
-    if (adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = service.categoryType || SERVICE_CATEGORY_TYPES.CORE_STANDARD;
-    
-    renderAdminServiceRateFields(); // This will populate based on currentAdminServiceEditingId and selected category
+    if(adminServiceIdInputElement) adminServiceIdInputElement.value = serviceToEdit.id; // Usually hidden or read-only
+    if(adminServiceCodeInputElement) adminServiceCodeInputElement.value = serviceToEdit.serviceCode || '';
+    if(adminServiceDescriptionInputElement) adminServiceDescriptionInputElement.value = serviceToEdit.description || '';
+    if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = serviceToEdit.categoryType || '';
 
-    const travelService = service.travelCodeId ? adminManagedServices.find(s => s.id === service.travelCodeId) : null;
-    if (adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = service.travelCodeId || '';
-    if (adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = travelService ? `${travelService.code} - ${travelService.description}` : 'None selected';
-    
-    if (saveAdminServiceButtonElement) saveAdminServiceButtonElement.innerHTML = '<i class="fas fa-save"></i> Update Service';
-    adminServiceCodeInputElement.focus(); // Focus on the first editable field
+    renderAdminServiceRateFields(); // Render appropriate rate fields for the category
+
+    // Populate rate fields
+    if (serviceToEdit.rates) {
+        if (serviceToEdit.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || serviceToEdit.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
+            const flatRateInput = $("#adminServiceRate_flat");
+            if (flatRateInput) flatRateInput.value = serviceToEdit.rates.flat || '';
+        } else {
+            RATE_CATEGORIES.forEach(category => {
+                const rateInput = $(`#adminServiceRate_${category}`);
+                if (rateInput) rateInput.value = serviceToEdit.rates[category] || '';
+            });
+        }
+    }
+    // Populate travel code if applicable
+    if (serviceToEdit.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM && serviceToEdit.travelCode) {
+        if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = serviceToEdit.travelCode; // Store ID
+        const travelService = adminManagedServices.find(s => s.id === serviceToEdit.travelCode);
+        if(adminServiceTravelCodeDisplayElement && travelService) adminServiceTravelCodeDisplayElement.textContent = `${travelService.description} (${travelService.serviceCode})`;
+        else if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.textContent = 'Selected: ' + serviceToEdit.travelCode;
+    } else {
+        if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = '';
+        if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.textContent = 'No travel code selected.';
+    }
+
+
+    if(saveAdminServiceButtonElement) saveAdminServiceButtonElement.textContent = 'Update Service';
+    adminServiceDescriptionInputElement.focus(); // Focus on a main field
+    console.log("[Admin] Editing service:", id);
 };
 
-window.deleteAdminService = (id) => { // Made global
-    if (confirm(`Are you sure you want to delete service with ID: ${id}? This cannot be undone and might affect existing data if this service is in use.`)) {
+window.deleteAdminService = (id) => {
+    // Replace with a proper modal confirmation
+    if (confirm(`Are you sure you want to delete this service? This action cannot be undone and may affect existing invoices or agreements if not handled carefully.`)) {
         _confirmDeleteServiceFirestore(id);
     }
 };
 
-async function _confirmDeleteServiceFirestore(id) {
-    if (!userProfile.isAdmin || !fsDb) { showMessage("Error", "Unauthorized or DB not available.", "error"); return; }
+window._confirmDeleteServiceFirestore = async (id) => {
+    if (!fsDb || !userProfile.isAdmin) {
+        showMessage("Error", "Not authorized or system error.", "error");
+        return;
+    }
     showLoading("Deleting service...");
     try {
+        // Path to service document: artifacts/{appId}/public/services/{id} (6 segments - correct)
         await deleteDoc(doc(fsDb, `artifacts/${appId}/public/services`, id));
-        adminManagedServices = adminManagedServices.filter(s => s.id !== id); // Update local cache
+        // Update local cache
+        adminManagedServices = adminManagedServices.filter(s => s.id !== id);
         renderAdminServicesTable(); // Refresh table
-        clearAdminServiceForm(); // If it was being edited
-        showMessage("Service Deleted", `Service ID ${id} has been deleted.`, "success");
-    } catch (e) {
-        console.error("Service Delete Error:", e);
-        logErrorToFirestore("_confirmDeleteServiceFirestore", e.message, e);
-        showMessage("Delete Error", "Could not delete service: " + e.message, "error");
+        clearAdminServiceForm(); // Clear form if the deleted service was being edited
+        showMessage("Service Deleted", "The service has been successfully deleted.", "success");
+        console.log("[Admin] Service deleted:", id);
+    } catch (error) {
+        console.error("Error deleting service:", error);
+        logErrorToFirestore("_confirmDeleteServiceFirestore", error.message, { serviceId: id });
+        showMessage("Delete Failed", "Could not delete service. " + error.message, "error");
     } finally {
         hideLoading();
     }
-}
+};
 
 async function saveAdminServiceToFirestore() {
-    if (!userProfile.isAdmin || !fsDb) { showMessage("Error", "Unauthorized or DB not available.", "error"); return; }
-
-    const serviceData = {
-        code: adminServiceCodeInputElement?.value.trim() || null, // Allow null if empty
-        description: adminServiceDescriptionInputElement?.value.trim(),
-        categoryType: adminServiceCategoryTypeSelectElement?.value,
-        rates: {},
-        travelCodeId: adminServiceTravelCodeInputElement?.value || null, // ID of another service item
-        updatedAt: serverTimestamp()
-    };
-
-    if (!serviceData.description || !serviceData.categoryType) {
-        showMessage("Validation Error", "Service description and category type are required.", "warning");
+    if (!fsDb || !userProfile.isAdmin) {
+        showMessage("Error", "Not authorized or system error.", "error");
         return;
     }
 
-    // Collect rates based on category type
+    const serviceData = {
+        serviceCode: adminServiceCodeInputElement.value.trim(),
+        description: adminServiceDescriptionInputElement.value.trim(),
+        categoryType: adminServiceCategoryTypeSelectElement.value,
+        rates: {},
+        travelCode: null // For travel services, this will link to another service ID
+    };
+
+    if (!serviceData.serviceCode || !serviceData.description || !serviceData.categoryType) {
+        showMessage("Validation Error", "Please fill in Service Code, Description, and Category Type.", "warning");
+        return;
+    }
+
+    // Collect rates
     if (serviceData.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || serviceData.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-        const flatRate = parseFloat($(`#serviceRate_flat`)?.value);
-        if (!isNaN(flatRate) && flatRate >=0) serviceData.rates.flat = flatRate;
-        else { showMessage("Validation Error", "Valid flat rate is required.", "warning"); return; }
+        const flatRateInput = $("#adminServiceRate_flat");
+        if (flatRateInput && flatRateInput.value) {
+            serviceData.rates.flat = parseFloat(flatRateInput.value);
+        } else {
+             showMessage("Validation Error", "Please enter a rate for the service.", "warning"); return;
+        }
+        if (serviceData.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) {
+            serviceData.travelCode = adminServiceTravelCodeInputElement.value || null; // Get linked travel code ID
+        }
     } else {
-        let hasAtLeastOneRate = false;
-        RATE_CATEGORIES.forEach(rateCat => {
-            if (rateCat === "flat") return;
-            const rateVal = parseFloat($(`#serviceRate_${rateCat}`)?.value);
-            if (!isNaN(rateVal) && rateVal >=0) {
-                 serviceData.rates[rateCat] = rateVal;
-                 hasAtLeastOneRate = true;
+        let ratesEntered = false;
+        RATE_CATEGORIES.forEach(category => {
+            const rateInput = $(`#adminServiceRate_${category}`);
+            if (rateInput && rateInput.value) {
+                serviceData.rates[category] = parseFloat(rateInput.value);
+                ratesEntered = true;
             } else {
-                serviceData.rates[rateCat] = 0; // Default to 0 if not set or invalid, but NDIS might require them.
+                serviceData.rates[category] = 0; // Default to 0 if not entered
             }
         });
-        if (!hasAtLeastOneRate && (serviceData.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM && serviceData.categoryType !== SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) ) {
-            // For complex rate types, at least one rate should ideally be set.
-            // Depending on strictness, you might warn or error.
-            // For now, we allow saving with 0 rates, but it's not practical.
-            console.warn("Saving service with no defined hourly rates for a complex category type.");
+        if (!ratesEntered) {
+            // showMessage("Validation Error", "Please enter at least one rate for the selected category.", "warning"); return;
+            // Allow saving with zero rates, admin can update later
         }
     }
 
-
-    showLoading(currentAdminServiceEditingId ? "Updating service..." : "Adding service...");
+    showLoading(currentAdminServiceEditingId ? "Updating service..." : "Saving new service...");
     try {
-        let serviceDocRef;
         if (currentAdminServiceEditingId) { // Update existing
-            serviceDocRef = doc(fsDb, `artifacts/${appId}/public/services`, currentAdminServiceEditingId);
-            await updateDoc(serviceDocRef, serviceData);
-            // Update in local cache
+            const serviceRef = doc(fsDb, `artifacts/${appId}/public/services`, currentAdminServiceEditingId);
+            await updateDoc(serviceRef, { ...serviceData, updatedAt: serverTimestamp() });
+            // Update local cache
             const index = adminManagedServices.findIndex(s => s.id === currentAdminServiceEditingId);
-            if (index > -1) adminManagedServices[index] = { ...adminManagedServices[index], ...serviceData, id: currentAdminServiceEditingId };
+            if (index > -1) adminManagedServices[index] = { id: currentAdminServiceEditingId, ...serviceData };
             showMessage("Service Updated", "Service details have been updated.", "success");
-        } else { // Add new
-            serviceData.createdAt = serverTimestamp();
-            serviceDocRef = await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/services`), serviceData);
-            adminManagedServices.push({ ...serviceData, id: serviceDocRef.id }); // Add to local cache
-            showMessage("Service Added", "New service has been added.", "success");
+            console.log("[Admin] Service updated:", currentAdminServiceEditingId);
+        } else { // Create new
+            const servicesCollectionRef = collection(fsDb, `artifacts/${appId}/public/services`);
+            const newServiceRef = await fsAddDoc(servicesCollectionRef, { ...serviceData, createdAt: serverTimestamp() });
+            // Add to local cache with new ID
+            adminManagedServices.push({ id: newServiceRef.id, ...serviceData });
+            showMessage("Service Saved", "New service has been added.", "success");
+            console.log("[Admin] New service saved with ID:", newServiceRef.id);
         }
-        adminManagedServices.sort((a, b) => (a.code || "").localeCompare(b.code || "")); // Re-sort
-        renderAdminServicesTable();
-        clearAdminServiceForm();
-    } catch (e) {
-        console.error("Service Save Error:", e);
-        logErrorToFirestore("saveAdminServiceToFirestore", e.message, e);
-        showMessage("Save Error", "Could not save service: " + e.message, "error");
+        renderAdminServicesTable(); // Refresh table
+        clearAdminServiceForm();    // Clear form
+    } catch (error) {
+        console.error("Error saving service:", error);
+        logErrorToFirestore("saveAdminServiceToFirestore", error.message, { serviceData, editingId: currentAdminServiceEditingId });
+        showMessage("Save Failed", "Could not save service. " + error.message, "error");
     } finally {
         hideLoading();
     }
 }
 
 function openTravelCodeSelectionModal() {
-    if (!travelCodeListContainerElement || !adminManagedServices) return;
+    if (!travelCodeSelectionModalElement || !travelCodeListContainerElement) return;
+    console.log("[Admin] Opening travel code selection modal.");
+
+    // Filter to only show services of type TRAVEL_KM that are NOT the current service being edited (if any)
+    const travelServices = adminManagedServices.filter(s =>
+        s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM && s.id !== currentAdminServiceEditingId
+    );
+
     travelCodeListContainerElement.innerHTML = ''; // Clear previous list
-
-    const travelServices = adminManagedServices.filter(s => s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
-
     if (travelServices.length === 0) {
-        travelCodeListContainerElement.innerHTML = '<p>No travel-specific services (per Km) have been defined yet. Please add one in the NDIS Services tab first.</p>';
+        travelCodeListContainerElement.innerHTML = '<p>No suitable travel code services found. Please create a TRAVEL_KM service first.</p>';
     } else {
-        const ul = document.createElement('ul');
-        ul.className = 'modal-selectable-list';
         travelServices.forEach(service => {
-            const li = document.createElement('li');
-            li.textContent = `${service.code || 'No Code'} - ${service.description} (${formatCurrency(service.rates?.flat || 0)}/km)`;
-            li.dataset.serviceId = service.id;
-            li.dataset.serviceCode = service.code || '';
-            li.dataset.serviceDescription = service.description || '';
-            li.addEventListener('click', () => {
-                // Handle selection visually (e.g., add 'selected' class)
-                ul.querySelectorAll('li').forEach(item => item.classList.remove('selected'));
-                li.classList.add('selected');
-            });
-            ul.appendChild(li);
+            const div = document.createElement('div');
+            div.classList.add('travel-code-option');
+            div.innerHTML = `
+                <input type="radio" name="travelCodeSelection" id="tc_${service.id}" value="${service.id}" data-description="${service.description} (${service.serviceCode})">
+                <label for="tc_${service.id}">${service.description} (${service.serviceCode}) - Rate: ${formatCurrency(service.rates.flat)}/km</label>
+            `;
+            travelCodeListContainerElement.appendChild(div);
         });
-        travelCodeListContainerElement.appendChild(ul);
     }
-    if (travelCodeFilterInputElement) travelCodeFilterInputElement.value = ''; // Clear filter
     openModal('travelCodeSelectionModal');
-}
-if (confirmTravelCodeSelectionButtonElement) {
-    confirmTravelCodeSelectionButtonElement.addEventListener('click', () => {
-        const selectedLi = travelCodeListContainerElement.querySelector('li.selected');
-        if (selectedLi && adminServiceTravelCodeInputElement && adminServiceTravelCodeDisplayElement) {
-            adminServiceTravelCodeInputElement.value = selectedLi.dataset.serviceId;
-            adminServiceTravelCodeDisplayElement.value = `${selectedLi.dataset.serviceCode} - ${selectedLi.dataset.serviceDescription}`;
+
+    // Event listener for confirm button (should only be added once or managed)
+    confirmTravelCodeSelectionButtonElement.onclick = () => { // Use .onclick for simplicity here
+        const selectedRadio = travelCodeListContainerElement.querySelector('input[name="travelCodeSelection"]:checked');
+        if (selectedRadio) {
+            if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = selectedRadio.value;
+            if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.textContent = `Selected: ${selectedRadio.dataset.description}`;
             closeModal('travelCodeSelectionModal');
         } else {
-            showMessage("No Selection", "Please select a travel service code from the list.", "info");
+            showMessage("Selection Required", "Please select a travel code service.", "warning");
         }
-    });
+    };
 }
-if (travelCodeFilterInputElement && travelCodeListContainerElement) {
-    travelCodeFilterInputElement.addEventListener('input', (e) => {
-        const filterText = e.target.value.toLowerCase();
-        travelCodeListContainerElement.querySelectorAll('li').forEach(li => {
-            const serviceText = li.textContent.toLowerCase();
-            li.style.display = serviceText.includes(filterText) ? '' : 'none';
-        });
-    });
-}
-
 
 function renderAdminAgreementCustomizationTab() {
-    if (!userProfile.isAdmin || !globalSettings.agreementTemplate || !adminAgreementOverallTitleInputElement || !adminAgreementClausesContainerElement) return;
-    
-    agreementCustomData = JSON.parse(JSON.stringify(globalSettings.agreementTemplate || defaultAgreementCustomData));
+    if (!agreementCustomData || !adminAgreementOverallTitleInputElement || !adminAgreementClausesContainerElement || !adminAgreementPreviewElement) {
+        console.warn("[Admin] Cannot render agreement customization: Missing elements or data.");
+        return;
+    }
+    console.log("[Admin] Rendering Agreement Customization Tab.");
 
-    adminAgreementOverallTitleInputElement.value = agreementCustomData.overallTitle || '';
+    // Use global `agreementCustomData` which should be loaded with `globalSettings`
+    adminAgreementOverallTitleInputElement.value = agreementCustomData.overallTitle || defaultAgreementCustomData.overallTitle;
     renderAdminAgreementClausesEditor();
     updateAdminAgreementPreview();
 }
 
 function renderAdminAgreementClausesEditor() {
-    if (!adminAgreementClausesContainerElement || !agreementCustomData.clauses) return;
+    if (!adminAgreementClausesContainerElement || !agreementCustomData) return;
     adminAgreementClausesContainerElement.innerHTML = ''; // Clear existing
 
-    agreementCustomData.clauses.forEach((clause, index) => {
-        const clauseDiv = document.createElement('div');
-        clauseDiv.className = 'agreement-clause-editor';
-        clauseDiv.innerHTML = `
-            <div class="form-group">
-                <label for="clauseHeading_${index}">Clause Heading (e.g., ${clause.id})</label>
-                <input type="text" id="clauseHeading_${index}" value="${clause.heading}">
-            </div>
-            <div class="form-group">
-                <label for="clauseBody_${index}">Clause Body (Markdown & Placeholders like {{participantName}} allowed)</label>
-                <textarea id="clauseBody_${index}" rows="5">${clause.body}</textarea>
-            </div>
-            <button class="btn-danger btn-small remove-clause-btn" data-index="${index}"><i class="fas fa-times"></i> Remove Clause</button>
-            <hr class="compact-hr">
-        `;
-        adminAgreementClausesContainerElement.appendChild(clauseDiv);
+    (agreementCustomData.clauses || defaultAgreementCustomData.clauses).forEach((clause, index) => {
+        const clauseEditorDiv = document.createElement('div');
+        clauseEditorDiv.classList.add('agreement-clause-editor');
+        clauseEditorDiv.dataset.clauseId = clause.id || `custom_${index}`; // Use existing ID or generate one
 
-        // Add event listeners for input changes to update agreementCustomData
-        clauseDiv.querySelector(`#clauseHeading_${index}`).addEventListener('input', (e) => {
-            agreementCustomData.clauses[index].heading = e.target.value;
-            updateAdminAgreementPreview(); // Live preview update
-        });
-        clauseDiv.querySelector(`#clauseBody_${index}`).addEventListener('input', (e) => {
-            agreementCustomData.clauses[index].body = e.target.value;
-            updateAdminAgreementPreview();
-        });
-        clauseDiv.querySelector('.remove-clause-btn').addEventListener('click', (e) => {
-            if (confirm("Are you sure you want to remove this clause?")) {
-                agreementCustomData.clauses.splice(index, 1);
-                renderAdminAgreementClausesEditor(); // Re-render clauses
-                updateAdminAgreementPreview();
+        clauseEditorDiv.innerHTML = `
+            <h4>Clause: ${clause.heading || `Clause ${index + 1}`}</h4>
+            <div class="form-group">
+                <label>Heading:</label>
+                <input type="text" class="form-input clause-heading-input" value="${clause.heading || ''}">
+            </div>
+            <div class="form-group">
+                <label>Body (Use {{placeholder}} for dynamic content, **bold text** for bold):</label>
+                <textarea class="form-input clause-body-textarea" rows="5">${clause.body || ''}</textarea>
+            </div>
+            <button class="btn btn-danger btn-sm remove-clause-btn" data-index="${index}">&times; Remove Clause</button>
+            <hr>
+        `;
+        adminAgreementClausesContainerElement.appendChild(clauseEditorDiv);
+    });
+
+    // Add event listeners for dynamic updates and removal
+    adminAgreementClausesContainerElement.querySelectorAll('.clause-heading-input, .clause-body-textarea').forEach(input => {
+        input.addEventListener('input', updateAdminAgreementPreview); // Update preview on any change
+    });
+    adminAgreementClausesContainerElement.querySelectorAll('.remove-clause-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const clauseIndexToRemove = parseInt(e.target.dataset.index, 10);
+            if (!isNaN(clauseIndexToRemove) && agreementCustomData.clauses && agreementCustomData.clauses[clauseIndexToRemove]) {
+                agreementCustomData.clauses.splice(clauseIndexToRemove, 1);
+                renderAdminAgreementClausesEditor(); // Re-render editor
+                updateAdminAgreementPreview();     // Update preview
             }
         });
     });
 }
 
 function addAdminAgreementClauseEditor() {
+    if (!agreementCustomData) agreementCustomData = JSON.parse(JSON.stringify(defaultAgreementCustomData)); // Initialize if empty
     if (!agreementCustomData.clauses) agreementCustomData.clauses = [];
-    const newClauseId = `customClause${Date.now()}`;
+
+    const newClauseId = `new_clause_${Date.now()}`;
     agreementCustomData.clauses.push({
         id: newClauseId,
-        heading: "New Custom Clause",
-        body: "Enter content here. Use placeholders like {{workerName}} or {{participantName}}."
+        heading: "New Clause Heading",
+        body: "New clause body content. Use {{placeholders}}."
     });
-    renderAdminAgreementClausesEditor(); // Re-render all clause editors
-    updateAdminAgreementPreview();
-    // Scroll to the new clause editor if possible
-    const newEditor = adminAgreementClausesContainerElement.lastElementChild;
+    renderAdminAgreementClausesEditor(); // Re-render the editor section
+    updateAdminAgreementPreview();     // Update the preview
+    // Scroll to the new clause editor
+    const newEditor = adminAgreementClausesContainerElement.querySelector(`[data-clause-id="${newClauseId}"]`);
     if (newEditor) newEditor.scrollIntoView({ behavior: 'smooth' });
 }
 
-
 function updateAdminAgreementPreview() {
-    if (!adminAgreementPreviewElement || !agreementCustomData) return;
-    let previewHtml = `<h2>${adminAgreementOverallTitleInputElement?.value || agreementCustomData.overallTitle || 'Service Agreement'}</h2>`;
-    if (agreementCustomData.clauses) {
-        agreementCustomData.clauses.forEach(clause => {
-            previewHtml += `<h3>${clause.heading}</h3>`;
-            // Basic placeholder replacement for preview - actual replacement happens during real agreement generation
-            let previewBody = clause.body.replace(/\{\{(.*?)\}\}/g, '<span class="placeholder-preview">[$1]</span>');
-            previewHtml += `<div class="clause-body-preview">${simpleMarkdownToHtml(previewBody)}</div>`;
-        });
-    } else {
-        previewHtml += "<p><em>No clauses defined yet.</em></p>";
-    }
-    adminAgreementPreviewElement.innerHTML = previewHtml;
+    if (!adminAgreementPreviewElement || !adminAgreementOverallTitleInputElement) return;
+
+    // Temporarily collect data from editor fields to update `agreementCustomData` for preview
+    const previewAgreementData = {
+        overallTitle: adminAgreementOverallTitleInputElement.value,
+        clauses: []
+    };
+    adminAgreementClausesContainerElement.querySelectorAll('.agreement-clause-editor').forEach(editorDiv => {
+        const headingInput = editorDiv.querySelector('.clause-heading-input');
+        const bodyTextarea = editorDiv.querySelector('.clause-body-textarea');
+        if (headingInput && bodyTextarea) {
+            previewAgreementData.clauses.push({
+                id: editorDiv.dataset.clauseId,
+                heading: headingInput.value,
+                body: bodyTextarea.value
+            });
+        }
+    });
+
+
+    // Simulate rendering the agreement with dummy worker and settings for preview
+    const dummyWorker = { name: "Support Worker Name", abn: "Worker ABN", authorizedServices: [{id: "sample", description:"Sample Service", serviceCode:"S001"}] };
+    const dummySettings = {
+        defaultParticipantName: "Participant Name", defaultParticipantNdisNo: "000000000",
+        defaultPlanEndDate: new Date().toISOString().split('T')[0], // Today for preview
+        defaultPlanManagerName: "Plan Manager Name", defaultPlanManagerEmail: "pm@example.com"
+    };
+    const dummyAgreementState = { createdAt: new Date() }; // For {{agreementStartDate}}
+
+    // Store original agreementContentContainerElement and its dynamic title
+    const originalContentContainer = agreementContentContainerElement;
+    const originalDynamicTitle = agreementDynamicTitleElement;
+
+    // Temporarily assign preview element to be used by renderAgreementClauses
+    window.agreementContentContainerElement = adminAgreementPreviewElement; // Use global var used by render func
+    window.agreementDynamicTitleElement = null; // Don't update main page title during preview
+
+    // Use the previewAgreementData for rendering
+    const originalCustomData = agreementCustomData; // Backup
+    agreementCustomData = previewAgreementData;     // Use temp data for preview
+
+    renderAgreementClauses(dummyWorker, dummySettings, dummyAgreementState);
+
+    // Restore original elements and data
+    window.agreementContentContainerElement = originalContentContainer;
+    window.agreementDynamicTitleElement = originalDynamicTitle;
+    agreementCustomData = originalCustomData; // Restore
+
+    console.log("[Admin] Agreement preview updated.");
 }
 
 
 async function saveAdminAgreementCustomizationsToFirestore() {
-    if (!userProfile.isAdmin || !adminAgreementOverallTitleInputElement) {
-        showMessage("Error", "Unauthorized or form elements missing.", "error");
+    if (!userProfile.isAdmin || !globalSettings || !adminAgreementOverallTitleInputElement) {
+        showMessage("Error", "Not authorized or data not loaded.", "error");
         return;
     }
     showLoading("Saving agreement template...");
-    agreementCustomData.overallTitle = adminAgreementOverallTitleInputElement.value.trim();
-    // Clause data is already updated in agreementCustomData by input listeners
 
-    globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Update the template in globalSettings
-    
-    const success = await saveGlobalSettingsToFirestore(); // This will save the entire globalSettings object
-    if (success) {
-        showMessage("Agreement Template Saved", "The service agreement template has been updated.", "success");
-    } else {
-        showMessage("Save Failed", "Could not save the agreement template.", "error");
-    }
-    hideLoading();
-}
+    // Collect the final customized data from the editor fields
+    const finalCustomizedAgreement = {
+        overallTitle: adminAgreementOverallTitleInputElement.value.trim(),
+        clauses: []
+    };
 
-async function renderAdminWorkerManagementTab() {
-    if (!userProfile.isAdmin) return;
-    // Ensure all users are loaded before proceeding
-    if (Object.keys(allUsersCache).length === 0) {
-        await loadAllUsersForAdmin();
-    }
-    // Ensure services are loaded
-    if (adminManagedServices.length === 0) {
-        await loadAdminServicesFromFirestore();
-    }
-    await loadPendingApprovalWorkers();
-    await loadApprovedWorkersForAuthManagement();
-    // Clear selection details
-    if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.textContent = "Select an Approved Worker to Manage Services";
-    if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.classList.add('hide');
-
-}
-
-async function loadPendingApprovalWorkers() {
-    if (!pendingWorkersListElement || !noPendingWorkersMessageElement) return;
-    pendingWorkersListElement.innerHTML = ''; // Clear list
-    let hasPending = false;
-
-    // Iterate through allUsersCache as it should be up-to-date
-    Object.values(allUsersCache).forEach(worker => {
-        if (!worker.isAdmin && !worker.approved) {
-            hasPending = true;
-            const div = document.createElement('div');
-            div.className = 'pending-worker-item'; // Add a class for styling
-            div.innerHTML = `
-                <span><strong>${worker.name || worker.email}</strong> (${worker.email})</span>
-                <span>
-                    Registered: ${worker.createdAt ? formatDateForDisplay(worker.createdAt.toDate ? worker.createdAt.toDate() : new Date(worker.createdAt)) : 'N/A'}
-                    <button class="btn-primary btn-small approve-worker-btn" data-uid="${worker.uid}"><i class="fas fa-check"></i> Approve</button>
-                    <button class="btn-danger btn-small deny-worker-btn" data-uid="${worker.uid}"><i class="fas fa-times"></i> Deny</button>
-                </span>`;
-            pendingWorkersListElement.appendChild(div);
+    adminAgreementClausesContainerElement.querySelectorAll('.agreement-clause-editor').forEach(editorDiv => {
+        const headingInput = editorDiv.querySelector('.clause-heading-input');
+        const bodyTextarea = editorDiv.querySelector('.clause-body-textarea');
+        if (headingInput && bodyTextarea) {
+            finalCustomizedAgreement.clauses.push({
+                id: editorDiv.dataset.clauseId, // Preserve original ID or generated one
+                heading: headingInput.value.trim(),
+                body: bodyTextarea.value.trim()
+            });
         }
     });
 
-    if (hasPending) {
-        noPendingWorkersMessageElement.style.display = 'none';
-        // Add event listeners for new buttons
-        $$('.approve-worker-btn').forEach(btn => btn.addEventListener('click', () => approveWorkerInFirestore(btn.dataset.uid)));
-        $$('.deny-worker-btn').forEach(btn => btn.addEventListener('click', () => denyWorkerInFirestore(btn.dataset.uid)));
+    // Update the global `agreementCustomData` and then save it within `globalSettings`
+    agreementCustomData = finalCustomizedAgreement;
+    globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Deep copy
+
+    const success = await saveGlobalSettingsToFirestore(); // This will save the entire globalSettings object
+    hideLoading();
+    if (success) {
+        showMessage("Template Saved", "Service agreement template has been updated.", "success");
     } else {
-        noPendingWorkersMessageElement.style.display = 'block';
+        showMessage("Save Failed", "Could not save agreement template.", "error");
+        // If save failed, consider reloading globalSettings to revert changes to agreementCustomData
+        await loadGlobalSettingsFromFirestore();
+        renderAdminAgreementCustomizationTab(); // Re-render with (potentially) reverted data
     }
 }
 
+function renderAdminWorkerManagementTab() {
+    console.log("[Admin] Rendering Worker Management Tab.");
+    loadPendingApprovalWorkers();
+    loadApprovedWorkersForAuthManagement();
+    // Clear selection details
+    if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.textContent = "No worker selected.";
+    if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.style.display = 'none';
+    if(servicesListCheckboxesElement) servicesListCheckboxesElement.innerHTML = '';
+    selectedWorkerEmailForAuth = null;
+}
+
+async function loadPendingApprovalWorkers() {
+    if (!pendingWorkersListElement || !noPendingWorkersMessageElement || !allUsersCache) return;
+    pendingWorkersListElement.innerHTML = ''; // Clear list
+    const pendingUsers = Object.values(allUsersCache).filter(u => !u.isAdmin && !u.approved);
+
+    if (pendingUsers.length === 0) {
+        noPendingWorkersMessageElement.style.display = 'block';
+        pendingWorkersListElement.style.display = 'none';
+    } else {
+        noPendingWorkersMessageElement.style.display = 'none';
+        pendingWorkersListElement.style.display = 'block';
+        pendingUsers.forEach(user => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span>${user.name} (${user.email}) - Registered: ${formatDateForDisplay(user.createdAt)}</span>
+                <div>
+                    <button class="btn btn-sm btn-success" onclick="window.approveWorkerInFirestore('${user.uid}')">Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="window.denyWorkerInFirestore('${user.uid}')">Deny & Delete</button>
+                </div>
+            `;
+            pendingWorkersListElement.appendChild(li);
+        });
+    }
+    console.log("[Admin] Pending approval workers list updated.");
+}
 
 window.approveWorkerInFirestore = async (uid) => {
-    if (!userProfile.isAdmin || !fsDb || !uid) { showMessage("Error", "Unauthorized or DB not available.", "error"); return; }
-    if (confirm(`Are you sure you want to approve worker with UID: ${uid}?`)) {
-        showLoading("Approving worker...");
-        try {
-            const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
-            await updateDoc(workerProfileRef, { approved: true, approvedAt: serverTimestamp() });
-            
-            // Update local cache
-            if (allUsersCache[uid]) allUsersCache[uid].approved = true;
-            
-            showMessage("Worker Approved", `Worker ${allUsersCache[uid]?.email || uid} has been approved.`, "success");
-            await loadPendingApprovalWorkers(); // Refresh pending list
-            await loadApprovedWorkersForAuthManagement(); // Refresh approved list for auth
-        } catch (e) {
-            console.error("Worker Approve Error:", e);
-            logErrorToFirestore("approveWorkerInFirestore", e.message, e);
-            showMessage("Approve Error", "Could not approve worker: " + e.message, "error");
-        } finally {
-            hideLoading();
-        }
+    if (!fsDb || !userProfile.isAdmin) { showMessage("Error", "Not authorized.", "error"); return; }
+    showLoading("Approving worker...");
+    try {
+        const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
+        await updateDoc(workerProfileRef, { approved: true, approvedAt: serverTimestamp() });
+
+        // Update local cache
+        const workerInCache = Object.values(allUsersCache).find(u => u.uid === uid);
+        if (workerInCache) workerInCache.approved = true;
+
+        showMessage("Worker Approved", "The worker has been approved and can now log in.", "success");
+        loadPendingApprovalWorkers(); // Refresh pending list
+        loadApprovedWorkersForAuthManagement(); // Refresh approved list for auth
+    } catch (error) {
+        console.error("Error approving worker:", error);
+        logErrorToFirestore("approveWorkerInFirestore", error.message, { workerUid: uid });
+        showMessage("Approval Failed", "Could not approve worker. " + error.message, "error");
+    } finally {
+        hideLoading();
     }
 };
 
 window.denyWorkerInFirestore = async (uid) => {
-    if (!userProfile.isAdmin || !fsDb || !uid) { showMessage("Error", "Unauthorized or DB not available.", "error"); return; }
-    // Denying could mean deleting the user or marking them as denied. Deleting is cleaner if they are not to be reconsidered.
-    if (confirm(`Are you sure you want to DENY and DELETE worker with UID: ${uid}? This action is permanent.`)) {
-        showLoading("Denying and deleting worker...");
-        try {
-            // For a full denial, you might delete their profile document.
-            // Or, mark as denied if you want to keep a record. For this example, we delete.
-            const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
-            await deleteDoc(workerProfileRef);
-            // Note: This does NOT delete their Firebase Auth user. That's a separate Admin SDK operation.
-            // For client-side, we can only remove their data from our app's Firestore.
+    // This is a destructive action. Consider if just marking as 'denied' is better than full deletion.
+    // For full deletion, you'd also need to delete their Auth user record (requires Admin SDK or callable function).
+    // Here, we'll just delete their Firestore profile data. The user won't be able to log in if their profile is gone.
+    if (!fsDb || !userProfile.isAdmin) { showMessage("Error", "Not authorized.", "error"); return; }
 
-            // Remove from local cache
-            delete allUsersCache[uid];
+    if (!confirm("Are you sure you want to deny and delete this worker's registration data? This worker will not be able to use the portal.")) return;
 
-            showMessage("Worker Denied", `Worker ${uid} has been denied and their profile data removed.`, "success");
-            await loadPendingApprovalWorkers(); // Refresh pending list
-        } catch (e) {
-            console.error("Worker Deny Error:", e);
-            logErrorToFirestore("denyWorkerInFirestore", e.message, e);
-            showMessage("Deny Error", "Could not deny worker: " + e.message, "error");
-        } finally {
-            hideLoading();
-        }
+    showLoading("Denying worker...");
+    try {
+        // Delete profile document and containing folder (more complex, usually just doc)
+        const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
+        await deleteDoc(workerProfileRef);
+        // Potentially delete the parent user doc: doc(fsDb, `artifacts/${appId}/users`, uid) if it's just a container.
+        // For now, just deleting the profile details.
+
+        // Remove from local cache
+        const workerEmailToDelete = Object.keys(allUsersCache).find(email => allUsersCache[email].uid === uid);
+        if (workerEmailToDelete) delete allUsersCache[workerEmailToDelete];
+
+
+        showMessage("Worker Denied", "The worker's registration has been denied and their data removed.", "success");
+        loadPendingApprovalWorkers(); // Refresh pending list
+        // Note: Auth user still exists. Manual deletion in Firebase console needed for that.
+    } catch (error) {
+        console.error("Error denying worker:", error);
+        logErrorToFirestore("denyWorkerInFirestore", error.message, { workerUid: uid });
+        showMessage("Denial Failed", "Could not deny worker. " + error.message, "error");
+    } finally {
+        hideLoading();
     }
 };
 
 async function loadApprovedWorkersForAuthManagement() {
-    if (!workersListForAuthElement) return;
+    if (!workersListForAuthElement || !allUsersCache) return;
     workersListForAuthElement.innerHTML = ''; // Clear list
 
-    Object.values(allUsersCache).forEach(worker => {
-        if (!worker.isAdmin && worker.approved) {
+    const approvedWorkers = Object.values(allUsersCache).filter(u => !u.isAdmin && u.approved);
+
+    if (approvedWorkers.length === 0) {
+        workersListForAuthElement.innerHTML = '<p>No approved workers found to manage authorizations.</p>';
+    } else {
+        approvedWorkers.forEach(worker => {
             const li = document.createElement('li');
-            li.textContent = `${worker.name || worker.email} (${worker.email})`;
-            li.dataset.uid = worker.uid;
-            li.dataset.email = worker.email; // Store email for selection
-            li.addEventListener('click', () => selectWorkerForAuth(worker.uid, worker.name || worker.email, worker.email));
+            li.innerHTML = `
+                <span>${worker.name} (${worker.email})</span>
+                <button class="btn btn-sm btn-secondary" onclick="window.selectWorkerForAuth('${worker.uid}', '${worker.name}', '${worker.email}')">Manage Services</button>
+            `;
             workersListForAuthElement.appendChild(li);
-        }
-    });
-     if (workersListForAuthElement.children.length === 0) {
-        workersListForAuthElement.innerHTML = '<li>No approved workers found.</li>';
+        });
     }
+    console.log("[Admin] Approved workers list for auth management updated.");
 }
 
 window.selectWorkerForAuth = (uid, name, email) => {
     if (!selectedWorkerNameForAuthElement || !servicesForWorkerContainerElement || !servicesListCheckboxesElement || !adminManagedServices) return;
 
-    // Highlight selected worker in the list
-    workersListForAuthElement.querySelectorAll('li').forEach(item => {
-        item.classList.toggle('selected', item.dataset.uid === uid);
-    });
-    
-    selectedWorkerEmailForAuth = email; // Store the email of the worker being configured
-    selectedWorkerNameForAuthElement.innerHTML = `<i class="fas fa-user-shield"></i> Services for: <strong>${name}</strong>`;
-    servicesForWorkerContainerElement.classList.remove('hide');
+    selectedWorkerEmailForAuth = email; // Store email of worker being edited
+    selectedWorkerNameForAuthElement.textContent = `Managing services for: ${name} (${email})`;
+    servicesForWorkerContainerElement.style.display = 'block';
     servicesListCheckboxesElement.innerHTML = ''; // Clear previous checkboxes
 
-    const workerProfile = allUsersCache[uid];
-    const currentAuthorizedServices = workerProfile?.authorizedServices || [];
+    const workerProfile = allUsersCache[email]; // Get their current profile from cache
+    const authorizedServicesForWorker = workerProfile ? workerProfile.authorizedServices || [] : [];
 
     if (adminManagedServices.length === 0) {
-        servicesListCheckboxesElement.innerHTML = '<li>No NDIS services defined by admin yet.</li>';
+        servicesListCheckboxesElement.innerHTML = '<p>No services have been defined by the admin yet.</p>';
         return;
     }
 
     adminManagedServices.forEach(service => {
-        const li = document.createElement('li');
-        const checkboxId = `service_auth_${service.id}_${uid}`; // Unique ID for checkbox
-        li.innerHTML = `
-            <label for="${checkboxId}" class="chk no-margin">
-                <input type="checkbox" id="${checkboxId}" value="${service.id}" ${currentAuthorizedServices.includes(service.id) ? 'checked' : ''}>
-                ${service.description} (${service.code || 'No Code'})
-            </label>`;
-        servicesListCheckboxesElement.appendChild(li);
+        // Don't list TRAVEL_KM services as directly authorizable here, they are linked via other services.
+        if (service.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM) return;
+
+        const div = document.createElement('div');
+        div.classList.add('checkbox-group');
+        const isChecked = authorizedServicesForWorker.includes(service.id);
+        div.innerHTML = `
+            <input type="checkbox" id="auth_serv_${service.id}" value="${service.id}" ${isChecked ? 'checked' : ''}>
+            <label for="auth_serv_${service.id}">${service.description} (${service.serviceCode})</label>
+        `;
+        servicesListCheckboxesElement.appendChild(div);
     });
 };
 
 async function saveWorkerAuthorizationsToFirestore() {
-    if (!selectedWorkerEmailForAuth || !servicesListCheckboxesElement) {
-        showMessage("Error", "No worker selected or services list not found.", "error");
+    if (!fsDb || !userProfile.isAdmin || !selectedWorkerEmailForAuth || !servicesListCheckboxesElement) {
+        showMessage("Error", "No worker selected or system error.", "error");
         return;
     }
 
-    const workerProfile = Object.values(allUsersCache).find(u => u.email === selectedWorkerEmailForAuth);
-    if (!workerProfile || !workerProfile.uid) {
-        showMessage("Error", "Selected worker profile not found.", "error");
+    const workerToUpdate = allUsersCache[selectedWorkerEmailForAuth];
+    if (!workerToUpdate) {
+        showMessage("Error", "Could not find worker profile to update.", "error");
+        logErrorToFirestore("saveWorkerAuthorizations", "Worker profile not found in cache", { email: selectedWorkerEmailForAuth });
         return;
     }
-    const workerUid = workerProfile.uid;
 
     const selectedServiceIds = [];
-    servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-        selectedServiceIds.push(cb.value);
+    servicesListCheckboxesElement.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedServiceIds.push(checkbox.value);
     });
 
-    showLoading(`Saving authorizations for ${workerProfile.name || workerProfile.email}...`);
+    showLoading("Saving authorizations...");
     try {
-        const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${workerUid}/profile`, "details");
+        const workerProfileRef = doc(fsDb, `artifacts/${appId}/users/${workerToUpdate.uid}/profile`, "details");
         await updateDoc(workerProfileRef, {
             authorizedServices: selectedServiceIds,
             updatedAt: serverTimestamp()
         });
 
         // Update local cache
-        if (allUsersCache[workerUid]) {
-            allUsersCache[workerUid].authorizedServices = selectedServiceIds;
-        }
-        // If the updated worker is the current user (e.g. admin editing their own non-admin profile, unlikely but possible)
-        if (currentUserId === workerUid) {
-            userProfile.authorizedServices = selectedServiceIds;
-            await loadUserAuthorizedServices(); // Reload their specific services list
-        }
+        workerToUpdate.authorizedServices = selectedServiceIds;
 
+        showMessage("Authorizations Saved", `Service authorizations for ${workerToUpdate.name} have been updated.`, "success");
+        console.log("[Admin] Worker authorizations saved for:", selectedWorkerEmailForAuth);
+        // Optionally clear selection or refresh part of the UI
+        if(servicesForWorkerContainerElement) servicesForWorkerContainerElement.style.display = 'none';
+        if(selectedWorkerNameForAuthElement) selectedWorkerNameForAuthElement.textContent = 'No worker selected.';
+        selectedWorkerEmailForAuth = null;
 
-        showMessage("Authorizations Saved", `Service authorizations for ${workerProfile.name || workerProfile.email} have been updated.`, "success");
-    } catch (e) {
-        console.error("Worker Authorizations Save Error:", e);
-        logErrorToFirestore("saveWorkerAuthorizationsToFirestore", e.message, e);
-        showMessage("Save Error", "Could not save authorizations: " + e.message, "error");
+    } catch (error) {
+        console.error("Error saving worker authorizations:", error);
+        logErrorToFirestore("saveWorkerAuthorizationsToFirestore", error.message, { workerEmail: selectedWorkerEmailForAuth, serviceIds: selectedServiceIds });
+        showMessage("Save Failed", "Could not save authorizations. " + error.message, "error");
     } finally {
         hideLoading();
     }
@@ -2413,571 +2548,293 @@ async function saveWorkerAuthorizationsToFirestore() {
 
 
 /* ========== Modal & Wizard Functions ========== */
-
-// Shift Request Modal
-function openRequestShiftModal() {
-    if (!requestShiftModalElement) return;
-    // Reset form
-    if(requestDateInputElement) requestDateInputElement.value = formatDateForInput(new Date());
-    if(requestStartTimeInputElement) { requestStartTimeInputElement.value = ''; requestStartTimeInputElement.dataset.value24 = ''; }
-    if(requestEndTimeInputElement) { requestEndTimeInputElement.value = ''; requestEndTimeInputElement.dataset.value24 = ''; }
-    if(requestReasonTextareaElement) requestReasonTextareaElement.value = '';
-    openModal('rqModal');
-}
-
-async function saveShiftRequest() {
-    if (!requestDateInputElement || !requestStartTimeInputElement || !requestEndTimeInputElement || !requestReasonTextareaElement || !currentUserId) {
-        showMessage("Error", "Form elements missing or not logged in.", "error");
-        return;
-    }
-    const requestData = {
-        userId: currentUserId,
-        userEmail: currentUserEmail,
-        userName: userProfile.name,
-        date: requestDateInputElement.value,
-        startTime: requestStartTimeInputElement.dataset.value24,
-        endTime: requestEndTimeInputElement.dataset.value24,
-        reason: requestReasonTextareaElement.value.trim(),
-        status: "pending", // "pending", "approved", "declined"
-        requestedAt: serverTimestamp()
-    };
-
-    if (!requestData.date || !requestData.startTime || !requestData.endTime) {
-        showMessage("Validation Error", "Date, start time, and end time are required for a shift request.", "warning");
-        return;
-    }
-    if (timeToMinutes(requestData.endTime) <= timeToMinutes(requestData.startTime)) {
-        showMessage("Validation Error", "End time must be after start time.", "warning");
-        return;
-    }
-
-    showLoading("Submitting shift request...");
-    try {
-        // Store shift requests in a public collection for admin review, or user-specific if only for their record
-        // For admin review, a public path is better.
-        const requestsCollectionRef = collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`);
-        await fsAddDoc(requestsCollectionRef, requestData);
-        showMessage("Request Submitted", "Your shift request has been submitted for review.", "success");
-        closeModal('rqModal');
-        await loadUserShiftRequests(); // Refresh the list on home page
-    } catch (e) {
-        console.error("Shift Request Save Error:", e);
-        logErrorToFirestore("saveShiftRequest", e.message, e);
-        showMessage("Submit Error", "Could not submit shift request: " + e.message, "error");
-    } finally {
-        hideLoading();
-    }
-}
-
-async function loadUserShiftRequests() {
-    if (!currentUserId || !fsDb || !shiftRequestsTableBodyElement) return;
-    showLoading("Loading shift requests...");
-    shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Loading requests...</td></tr>';
-    try {
-        const q = query(
-            collection(fsDb, `artifacts/${appId}/public/data/shiftRequests`),
-            where("userId", "==", currentUserId)
-            // orderBy("requestedAt", "desc") // Requires composite index if not just filtering by userId
-        );
-        const querySnapshot = await getDocs(q);
-        const requests = [];
-        querySnapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
-        
-        // Sort in memory to avoid index issues for now
-        requests.sort((a,b) => (b.requestedAt?.toDate() || 0) - (a.requestedAt?.toDate() || 0));
-
-
-        shiftRequestsTableBodyElement.innerHTML = ''; // Clear loading message
-        if (requests.length === 0) {
-            shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">You have no pending or past shift requests.</td></tr>';
-        } else {
-            requests.forEach(req => {
-                const row = shiftRequestsTableBodyElement.insertRow();
-                row.innerHTML = `
-                    <td>${formatDateForDisplay(req.date)}</td>
-                    <td>${formatTime12Hour(req.startTime)}</td>
-                    <td>${formatTime12Hour(req.endTime)}</td>
-                    <td>${req.reason || 'N/A'}</td>
-                    <td><span class="chip ${req.status === 'approved' ? 'green' : req.status === 'declined' ? 'danger' : 'yellow'}">${req.status}</span></td>
-                `;
-            });
-        }
-        $('#shiftRequestsContainer')?.classList.remove('hide');
-
-    } catch (e) {
-        console.error("Error loading shift requests:", e);
-        logErrorToFirestore("loadUserShiftRequests", e.message, e);
-        shiftRequestsTableBodyElement.innerHTML = '<tr><td colspan="5">Could not load shift requests.</td></tr>';
-    } finally {
-        hideLoading();
-    }
-}
-
-
-// Log Shift Modal
-function openLogShiftModal() {
-    if (!logShiftModalElement || !logShiftSupportTypeSelectElement) return;
-    // Reset form
-    if(logShiftDateInputElement) logShiftDateInputElement.value = formatDateForInput(new Date());
-    if(logShiftStartTimeInputElement) { logShiftStartTimeInputElement.value = ''; logShiftStartTimeInputElement.dataset.value24 = ''; }
-    if(logShiftEndTimeInputElement) { logShiftEndTimeInputElement.value = ''; logShiftEndTimeInputElement.dataset.value24 = ''; }
-    if(logShiftClaimTravelToggleElement) logShiftClaimTravelToggleElement.checked = false;
-    if(logShiftKmFieldsContainerElement) logShiftKmFieldsContainerElement.classList.add('hide');
-    if(logShiftStartKmInputElement) logShiftStartKmInputElement.value = '';
-    if(logShiftEndKmInputElement) logShiftEndKmInputElement.value = '';
-    if(logShiftCalculatedKmElement) logShiftCalculatedKmElement.textContent = '0.0 Km';
-
-    // Populate support type dropdown
-    logShiftSupportTypeSelectElement.innerHTML = '<option value="">-- Select Support Type --</option>';
-    const services = userProfile.isAdmin ? adminManagedServices : userAuthorizedServices;
-    services.forEach(service => {
-        // Exclude travel-only services from being primary log types, unless it's the only option
-        if (service.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM || services.length === 1) {
-            const option = document.createElement('option');
-            option.value = service.id;
-            option.textContent = `${service.description} (${service.code || 'No Code'})`;
-            logShiftSupportTypeSelectElement.appendChild(option);
-        }
-    });
-    openModal('logShiftModal');
-}
-
-function calculateLoggedKm() {
-    if (!logShiftStartKmInputElement || !logShiftEndKmInputElement || !logShiftCalculatedKmElement) return;
-    const startKm = parseFloat(logShiftStartKmInputElement.value) || 0;
-    const endKm = parseFloat(logShiftEndKmInputElement.value) || 0;
-    if (endKm > startKm) {
-        logShiftCalculatedKmElement.textContent = `${(endKm - startKm).toFixed(1)} Km`;
-    } else {
-        logShiftCalculatedKmElement.textContent = '0.0 Km';
-    }
-}
-if (logShiftStartKmInputElement) logShiftStartKmInputElement.addEventListener('input', calculateLoggedKm);
-if (logShiftEndKmInputElement) logShiftEndKmInputElement.addEventListener('input', calculateLoggedKm);
-if (logShiftClaimTravelToggleElement && logShiftKmFieldsContainerElement) {
-    logShiftClaimTravelToggleElement.addEventListener('change', () => {
-        logShiftKmFieldsContainerElement.classList.toggle('hide', !logShiftClaimTravelToggleElement.checked);
-        if (!logShiftClaimTravelToggleElement.checked) { // Clear KM if unchecked
-            if(logShiftStartKmInputElement) logShiftStartKmInputElement.value = '';
-            if(logShiftEndKmInputElement) logShiftEndKmInputElement.value = '';
-            calculateLoggedKm();
-        }
-    });
-}
-
-
-async function saveShiftFromModalToInvoice() {
-    if (!logShiftDateInputElement || !logShiftSupportTypeSelectElement || !logShiftStartTimeInputElement || !logShiftEndTimeInputElement) {
-        showMessage("Error", "Required form elements for logging shift are missing.", "error");
-        return;
-    }
-
-    const serviceId = logShiftSupportTypeSelectElement.value;
-    const serviceDetails = (userProfile.isAdmin ? adminManagedServices : userAuthorizedServices).find(s => s.id === serviceId);
-
-    if (!serviceDetails) {
-        showMessage("Validation Error", "Please select a valid support type.", "warning");
-        return;
-    }
-
-    const shiftData = {
-        id: generateUniqueId('item_'), // For invoice item
-        date: logShiftDateInputElement.value,
-        serviceId: serviceId,
-        description: serviceDetails.description,
-        serviceCode: serviceDetails.code,
-        startTime: logShiftStartTimeInputElement.dataset.value24,
-        endTime: logShiftEndTimeInputElement.dataset.value24,
-        isTravel: logShiftClaimTravelToggleElement.checked,
-        travelKm: 0,
-        travelServiceId: serviceDetails.travelCodeId || null // For associating cost later
-    };
-
-    if (!shiftData.date || !shiftData.startTime || !shiftData.endTime) {
-        showMessage("Validation Error", "Date, start time, and end time are required.", "warning");
-        return;
-    }
-    if (timeToMinutes(shiftData.endTime) <= timeToMinutes(shiftData.startTime)) {
-        showMessage("Validation Error", "End time must be after start time.", "warning");
-        return;
-    }
-
-    shiftData.hours = calculateHours(shiftData.startTime, shiftData.endTime);
-    shiftData.rateType = determineRateType(shiftData.date, shiftData.startTime);
-
-    if (serviceDetails.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM || serviceDetails.categoryType === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-        shiftData.rate = parseFloat(serviceDetails.rates?.flat || 0);
-        shiftData.rateType = "flat";
-    } else if (serviceDetails.rates && serviceDetails.rates[shiftData.rateType]) {
-        shiftData.rate = parseFloat(serviceDetails.rates[shiftData.rateType] || 0);
-    } else if (serviceDetails.rates?.weekday) {
-        shiftData.rate = parseFloat(serviceDetails.rates.weekday || 0);
-        shiftData.rateType = "weekday";
-    } else {
-        shiftData.rate = 0;
-    }
-    
-    let travelCost = 0;
-    if (shiftData.isTravel) {
-        const startKm = parseFloat(logShiftStartKmInputElement.value) || 0;
-        const endKm = parseFloat(logShiftEndKmInputElement.value) || 0;
-        if (endKm > startKm) {
-            shiftData.travelKm = parseFloat((endKm - startKm).toFixed(1));
-            if (shiftData.travelServiceId) {
-                const travelService = adminManagedServices.find(s => s.id === shiftData.travelServiceId);
-                if (travelService && travelService.rates?.flat) {
-                    travelCost = shiftData.travelKm * parseFloat(travelService.rates.flat);
-                } else {
-                     showMessage("Warning", "Travel service rate not found for associated travel code. Travel cost will be 0.", "warning");
-                }
-            } else {
-                showMessage("Warning", "No travel service code associated with the selected support type. Travel cost will be 0.", "warning");
-            }
-        } else if (startKm > 0 || endKm > 0) { // Only warn if KMs were entered but invalid
-            showMessage("Validation Error", "End odometer must be greater than start odometer for travel.", "warning");
-            return;
-        }
-    }
-    
-    shiftData.total = (shiftData.hours * shiftData.rate) + travelCost;
-
-
-    // Navigate to invoice section if not already there
-    if (!$("section#invoice.active")) {
-        navigateToSection("invoice");
-    }
-    // Add to currentInvoiceData and UI
-    currentInvoiceData.items.push(shiftData);
-    addInvoiceRowToTable(shiftData); // This will also call updateInvoiceTotals
-    
-    showMessage("Shift Added", "The shift has been added to the current invoice draft.", "success");
-    closeModal('logShiftModal');
-    // Optionally, save draft immediately
-    // await saveInvoiceDraft();
-}
-
-
-// User Setup Wizard
 function openUserSetupWizard() {
     if (!userSetupWizardModalElement || !userProfile) return;
+    console.log("[Wizard] Opening User Setup Wizard.");
     currentUserWizardStep = 1;
-    navigateWizard('user', 1);
+    navigateWizard('user', 1); // Navigate to the first step
 
-    // Populate with existing profile data if available (for editing)
+    // Pre-fill from profile if available (e.g., if wizard was interrupted)
     if(wizardNameInputElement) wizardNameInputElement.value = userProfile.name || '';
     if(wizardAbnInputElement) wizardAbnInputElement.value = userProfile.abn || '';
     if(wizardGstCheckboxElement) wizardGstCheckboxElement.checked = userProfile.gstRegistered || false;
     if(wizardBsbInputElement) wizardBsbInputElement.value = userProfile.bsb || '';
     if(wizardAccInputElement) wizardAccInputElement.value = userProfile.acc || '';
-    wizardFileUploads = []; // Clear previous wizard uploads
-    if(wizardFilesListElement) wizardFilesListElement.innerHTML = ''; // Clear file list display
+    // File list would need more complex pre-fill if resuming uploads
 
     openModal('wiz');
 }
 
-// Admin Setup Wizard
 function openAdminSetupWizard() {
     if (!adminSetupWizardModalElement || !globalSettings) return;
+    console.log("[Wizard] Opening Admin Setup Wizard.");
     currentAdminWizardStep = 1;
-    navigateWizard('admin', 1);
-    // Populate with existing global settings
-    if (adminWizardOrgNameInputElement) adminWizardOrgNameInputElement.value = globalSettings.organizationName || '';
-    // ... and so on for all admin wizard fields
+    navigateWizard('admin', 1); // Navigate to the first step
+
+    // Pre-fill from globalSettings
+    if(adminWizardPortalTypeRadioElements) {
+        adminWizardPortalTypeRadioElements.forEach(radio => {
+            radio.checked = (radio.value === globalSettings.portalType);
+        });
+    }
+    if(adminWizardOrgNameInputElement) adminWizardOrgNameInputElement.value = globalSettings.organizationName || '';
+    if(adminWizardOrgAbnInputElement) adminWizardOrgAbnInputElement.value = globalSettings.organizationAbn || '';
+    if(adminWizardOrgContactEmailInputElement) adminWizardOrgContactEmailInputElement.value = globalSettings.organizationContactEmail || '';
+    if(adminWizardOrgContactPhoneInputElement) adminWizardOrgContactPhoneInputElement.value = globalSettings.organizationContactPhone || '';
+    // Admin user's name (might be different from org contact)
+    if(adminWizardUserNameInputElement) adminWizardUserNameInputElement.value = userProfile.name || ''; // Admin's own name
+
+    if(adminWizardParticipantNameInputElement) adminWizardParticipantNameInputElement.value = globalSettings.defaultParticipantName || '';
+    if(adminWizardParticipantNdisNoInputElement) adminWizardParticipantNdisNoInputElement.value = globalSettings.defaultParticipantNdisNo || '';
+    if(adminWizardPlanManagerNameInputElement) adminWizardPlanManagerNameInputElement.value = globalSettings.defaultPlanManagerName || '';
+    if(adminWizardPlanManagerEmailInputElement) adminWizardPlanManagerEmailInputElement.value = globalSettings.defaultPlanManagerEmail || '';
+    if(adminWizardPlanManagerPhoneInputElement) adminWizardPlanManagerPhoneInputElement.value = globalSettings.defaultPlanManagerPhone || '';
+    if(adminWizardPlanEndDateInputElement) adminWizardPlanEndDateInputElement.value = globalSettings.defaultPlanEndDate ? formatDateForInput(new Date(globalSettings.defaultPlanEndDate)) : '';
+
+
     openModal('adminSetupWizard');
 }
 
 function navigateWizard(type, step) {
-    const wizardModal = type === 'user' ? userSetupWizardModalElement : adminSetupWizardModalElement;
-    const stepElements = type === 'user' ? userWizardStepElements : adminWizardStepElements;
-    const indicatorElements = type === 'user' ? userWizardIndicatorElements : adminWizardIndicatorElements;
+    let steps, indicators, currentStepVar;
+    if (type === 'user') {
+        steps = userWizardStepElements; indicators = userWizardIndicatorElements; currentStepVar = 'currentUserWizardStep';
+        window[currentStepVar] = step; // Update global current step for user wizard
+    } else if (type === 'admin') {
+        steps = adminWizardStepElements; indicators = adminWizardIndicatorElements; currentStepVar = 'currentAdminWizardStep';
+        window[currentStepVar] = step; // Update global current step for admin wizard
+    } else { return; }
 
-    if (!wizardModal || !stepElements || !indicatorElements) return;
-
-    stepElements.forEach(el => el.classList.add('hide'));
-    stepElements[step - 1]?.classList.remove('hide');
-
-    indicatorElements.forEach((el, index) => {
-        el.classList.remove('active', 'completed');
-        if (index < step -1) el.classList.add('completed');
-        if (index === step -1) el.classList.add('active');
+    steps.forEach((s, i) => s.style.display = (i + 1 === step) ? 'block' : 'none');
+    indicators.forEach((ind, i) => {
+        ind.classList.toggle('active', i + 1 === step);
+        ind.classList.toggle('completed', i + 1 < step);
     });
-
-    if (type === 'user') currentUserWizardStep = step;
-    else currentAdminWizardStep = step;
-
-    // Specific logic for admin wizard step 2 title/fields based on portal type
-    if (type === 'admin' && step === 2) {
-        const portalType = adminWizardPortalTypeRadioElements.find(r => r.checked)?.value || 'organization';
-        const step2Title = wizardModal.querySelector('#adminWizStep2Title');
-        const orgFields = wizardModal.querySelector('#adminWizOrgFields');
-        const userFields = wizardModal.querySelector('#adminWizUserFields'); // For participant type
-
-        if (portalType === 'organization') {
-            if(step2Title) step2Title.textContent = "Step 2: Organization Details";
-            if(orgFields) orgFields.classList.remove('hide');
-            if(userFields) userFields.classList.add('hide');
-        } else { // participant
-            if(step2Title) step2Title.textContent = "Step 2: Your Details (as Participant)";
-            if(orgFields) orgFields.classList.add('hide');
-            if(userFields) userFields.classList.remove('hide');
-            if(adminWizardUserNameInputElement && userProfile) adminWizardUserNameInputElement.value = userProfile.name || currentUserEmail.split('@')[0];
-        }
-    }
+    console.log(`[Wizard] Navigated to ${type} wizard step ${step}.`);
 }
 
 function wizardNext(type) {
-    // Add validation for current step before proceeding if needed
-    if (type === 'user') {
-        if (currentUserWizardStep < userWizardStepElements.length) {
-            // Example validation for step 1 (user wizard)
-            if (currentUserWizardStep === 1) {
-                if (!wizardNameInputElement.value.trim()) {
-                    showMessage("Missing Info", "Please enter your full name.", "warning"); return;
-                }
-            }
-            navigateWizard('user', currentUserWizardStep + 1);
+    let totalSteps, currentStepVar;
+    if (type === 'user') { totalSteps = userWizardStepElements.length; currentStepVar = 'currentUserWizardStep'; }
+    else if (type === 'admin') { totalSteps = adminWizardStepElements.length; currentStepVar = 'currentAdminWizardStep'; }
+    else { return; }
+
+    // Add validation logic for current step before proceeding
+    // Example for user wizard step 1:
+    if (type === 'user' && window[currentStepVar] === 1) {
+        if (!wizardNameInputElement.value.trim()) {
+            showMessage("Validation Error", "Please enter your name.", "warning"); return;
         }
-    } else { // admin
-        if (currentAdminWizardStep < adminWizardStepElements.length) {
-             // Example validation for admin step 1
-            if (currentAdminWizardStep === 1) {
-                const portalTypeSelected = Array.from(adminWizardPortalTypeRadioElements).some(r => r.checked);
-                if (!portalTypeSelected) {
-                    showMessage("Missing Info", "Please select a portal type.", "warning"); return;
-                }
-            }
-            navigateWizard('admin', currentAdminWizardStep + 1);
-        }
+    }
+    // Add more validation for other steps and admin wizard as needed
+
+    if (window[currentStepVar] < totalSteps) {
+        window[currentStepVar]++;
+        navigateWizard(type, window[currentStepVar]);
     }
 }
 
 function wizardPrev(type) {
-    if (type === 'user') {
-        if (currentUserWizardStep > 1) navigateWizard('user', currentUserWizardStep - 1);
-    } else { // admin
-        if (currentAdminWizardStep > 1) navigateWizard('admin', currentAdminWizardStep - 1);
+    let currentStepVar;
+    if (type === 'user') { currentStepVar = 'currentUserWizardStep'; }
+    else if (type === 'admin') { currentStepVar = 'currentAdminWizardStep'; }
+    else { return; }
+
+    if (window[currentStepVar] > 1) {
+        window[currentStepVar]--;
+        navigateWizard(type, window[currentStepVar]);
     }
 }
 
 async function finishUserWizard() {
-    // Collect all data from wizard inputs
-    const profileUpdates = {
-        name: wizardNameInputElement?.value.trim(),
-        abn: wizardAbnInputElement?.value.trim(),
-        gstRegistered: wizardGstCheckboxElement?.checked,
-        bsb: wizardBsbInputElement?.value.trim(),
-        acc: wizardAccInputElement?.value.trim(),
-        // profileSetupComplete will be set to true by saveProfileDetails
-    };
-
-    // Validate final step if needed
-    if (!profileUpdates.name) { // Basic validation
-        showMessage("Missing Name", "Your name is required to finish setup.", "warning");
-        navigateWizard('user', 1); // Go back to name step
-        return;
+    if (!userProfile || !currentUserId) {
+        showMessage("Error", "User profile not loaded. Cannot finish setup.", "error"); return;
     }
+    // Validation for the last step (e.g., file uploads if mandatory)
+    if (globalSettings.requireDocumentUploads && wizardFileUploads.length === 0 && currentUserWizardStep === 3) { // Assuming step 3 is files
+         // showMessage("Validation Error", "Please upload required documents or skip if not applicable.", "warning");
+         // return; // Or allow skipping if uploads are optional
+    }
+
 
     showLoading("Finalizing setup...");
-    const profileSaved = await saveProfileDetails(profileUpdates, true); // true for isWizardFinish
-
-    if (profileSaved && wizardFileUploads.length > 0) {
-        // Simulate file input for uploadProfileDocuments
-        // This is a bit of a hack. A better way would be to pass File objects directly.
-        // For now, let's assume uploadProfileDocuments can handle an array of File objects if modified,
-        // or we trigger it differently.
-        // For simplicity, let's directly call a modified upload function for wizard files.
-        await uploadWizardProfileDocuments(wizardFileUploads);
-    }
-
-    if (profileSaved) {
-        closeModal('wiz');
-        showMessage("Setup Complete!", "Your profile setup is complete.", "success");
-        // Check if initial invoice number needs to be set
-        if (!userProfile.nextInvoiceNumber) {
-            openModal('setInitialInvoiceModal');
-            if(initialInvoiceNumberInputElement) initialInvoiceNumberInputElement.value = "1001";
-        }
-    }
-    hideLoading(); // Ensure loading is hidden
-    wizardFileUploads = []; // Clear wizard files
-}
-// Helper for wizard file uploads
-async function uploadWizardProfileDocuments(filesToUpload) {
-    if (!filesToUpload || filesToUpload.length === 0) return;
-    if (!currentUserId || !fbStorage || !fsDb) return;
-
-    showLoading(`Uploading ${filesToUpload.length} document(s) from setup...`);
-    const uploadPromises = filesToUpload.map(async (file) => { /* ... same as uploadProfileDocuments ... */
-        const filePath = `artifacts/${appId}/users/${currentUserId}/profileDocuments/${Date.now()}_${file.name}`;
-        const fileRef = ref(fbStorage, filePath);
-        try {
-            const snapshot = await uploadBytes(fileRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            return { name: file.name, url: downloadURL, path: filePath, uploadedAt: serverTimestamp() };
-        } catch (e) { console.error(`Wizard Upload Error ${file.name}:`, e); throw e; }
-    });
-    try {
-        const uploadedFileObjects = await Promise.all(uploadPromises);
-        if (!userProfile.files) userProfile.files = [];
-        userProfile.files.push(...uploadedFileObjects);
-        const profileDocRef = doc(fsDb, `artifacts/${appId}/users/${currentUserId}/profile`, "details");
-        await updateDoc(profileDocRef, { files: arrayUnion(...uploadedFileObjects) });
-        renderProfileFilesList(); // Refresh if profile section is visible
-        console.log("Wizard documents uploaded.");
-    } catch (e) { showMessage("Wizard Upload Failed", "Could not upload documents from setup.", "error");}
-    // hideLoading is handled by finishUserWizard
-}
-
-
-async function finishAdminWizard() {
-    const portalType = Array.from(adminWizardPortalTypeRadioElements).find(r => r.checked)?.value;
-    const updates = {
-        portalType: portalType,
-        organizationName: adminWizardOrgNameInputElement?.value.trim(),
-        organizationAbn: adminWizardOrgAbnInputElement?.value.trim(),
-        organizationContactEmail: adminWizardOrgContactEmailInputElement?.value.trim(),
-        organizationContactPhone: adminWizardOrgContactPhoneInputElement?.value.trim(),
-        // If participant type, admin's name might be used for participant if fields are shared
-        defaultParticipantName: adminWizardParticipantNameInputElement?.value.trim(),
-        defaultParticipantNdisNo: adminWizardParticipantNdisNoInputElement?.value.trim(),
-        defaultPlanManagerName: adminWizardPlanManagerNameInputElement?.value.trim(),
-        defaultPlanManagerEmail: adminWizardPlanManagerEmailInputElement?.value.trim(),
-        defaultPlanManagerPhone: adminWizardPlanManagerPhoneInputElement?.value.trim(),
-        defaultPlanEndDate: adminWizardPlanEndDateInputElement?.value,
-        setupComplete: true, // Mark setup as complete
-        adminEmail: currentUserEmail // Ensure current admin's email is set as the portal admin
+    const profileUpdates = {
+        name: wizardNameInputElement.value.trim(),
+        abn: wizardAbnInputElement.value.trim(),
+        gstRegistered: wizardGstCheckboxElement.checked,
+        bsb: wizardBsbInputElement.value.trim(),
+        acc: wizardAccInputElement.value.trim(),
+        // bankName, accountName might be other fields
+        profileSetupComplete: true, // Mark setup as complete
+        // uploadedFiles: arrayUnion(...wizardFileUploads) // Add uploaded files. This needs careful handling of serverTimestamp.
+                                                        // It's better to upload files directly in their step.
     };
 
-    if (portalType === 'participant') { // If portal is for a self-managed participant
-        updates.organizationName = updates.defaultParticipantName; // Org name becomes participant name
-        // Clear other org fields or set them appropriately
-        updates.organizationAbn = updates.defaultParticipantNdisNo; // ABN might be NDIS number
-        updates.organizationContactEmail = currentUserEmail; // Admin is the contact
+    // If wizardFileUploads contains metadata from uploads within the wizard, merge them.
+    // This assumes wizardFileUploads are new files not yet in userProfile.uploadedFiles.
+    if (wizardFileUploads.length > 0) {
+        profileUpdates.uploadedFiles = arrayUnion(...wizardFileUploads.map(f => ({...f, uploadedAt: serverTimestamp()})));
     }
 
 
-    globalSettings = { ...globalSettings, ...updates };
-    const success = await saveGlobalSettingsToFirestore();
+    const success = await saveProfileDetails(profileUpdates); // Use existing save function
+    hideLoading();
+    if (success) {
+        closeModal('wiz');
+        showMessage("Setup Complete", "Your profile setup is complete!", "success");
+        // userProfile is updated within saveProfileDetails, UI should reflect changes.
+        // Re-render relevant parts of the main UI if necessary, e.g., profile display.
+        renderProfileSection(); // Or just updateProfileDisplay()
+        if (!userProfile.nextInvoiceNumber) openModal('setInitialInvoiceModal'); // Prompt for invoice # if not set
+    } else {
+        showMessage("Error", "Could not finalize your setup. Please try again.", "error");
+        // Keep wizard open or handle error appropriately
+        // Revert profileSetupComplete if save failed?
+        await saveProfileDetails({ profileSetupComplete: false }); // Mark as incomplete again
+    }
+    wizardFileUploads = []; // Clear wizard uploads
+}
+
+async function finishAdminWizard() {
+    if (!globalSettings || !userProfile || !userProfile.isAdmin) {
+        showMessage("Error", "Settings not loaded or not authorized.", "error"); return;
+    }
+    // Validation for the last step of admin wizard
+    if (!adminWizardParticipantNameInputElement.value.trim() && currentAdminWizardStep === 3) { // Assuming step 3 is participant details
+        showMessage("Validation Error", "Please enter default participant details.", "warning"); return;
+    }
+
+    showLoading("Finalizing admin setup...");
+
+    // Collect all settings from wizard fields and update globalSettings object
+    const selectedPortalTypeRadio = $$("input[name='adminWizPortalType']:checked")[0];
+    globalSettings.portalType = selectedPortalTypeRadio ? selectedPortalTypeRadio.value : globalSettings.portalType;
+
+    globalSettings.organizationName = adminWizardOrgNameInputElement.value.trim();
+    globalSettings.organizationAbn = adminWizardOrgAbnInputElement.value.trim();
+    globalSettings.organizationContactEmail = adminWizardOrgContactEmailInputElement.value.trim();
+    globalSettings.organizationContactPhone = adminWizardOrgContactPhoneInputElement.value.trim();
+
+    // Update admin's own name in their profile if changed in wizard
+    const adminNameFromWizard = adminWizardUserNameInputElement.value.trim();
+    if (adminNameFromWizard && adminNameFromWizard !== userProfile.name) {
+        await saveProfileDetails({ name: adminNameFromWizard }); // Update admin's own profile
+        userProfile.name = adminNameFromWizard; // Update local cache
+    }
+
+    globalSettings.defaultParticipantName = adminWizardParticipantNameInputElement.value.trim();
+    globalSettings.defaultParticipantNdisNo = adminWizardParticipantNdisNoInputElement.value.trim();
+    globalSettings.defaultPlanManagerName = adminWizardPlanManagerNameInputElement.value.trim();
+    globalSettings.defaultPlanManagerEmail = adminWizardPlanManagerEmailInputElement.value.trim();
+    globalSettings.defaultPlanManagerPhone = adminWizardPlanManagerPhoneInputElement.value.trim();
+    globalSettings.defaultPlanEndDate = adminWizardPlanEndDateInputElement.value;
+
+    globalSettings.setupComplete = true; // Mark admin setup as complete
+
+    const success = await saveGlobalSettingsToFirestore(); // Save updated globalSettings
+    hideLoading();
     if (success) {
         closeModal('adminSetupWizard');
-        showMessage("Portal Setup Complete!", "The portal has been configured.", "success");
-        renderAdminGlobalSettingsTab(); // Refresh the display
-        // Also update admin's own profile if their name was part of the wizard (for participant type)
-        if (portalType === 'participant' && adminWizardUserNameInputElement?.value.trim() && userProfile.name !== adminWizardUserNameInputElement.value.trim()) {
-            await saveProfileDetails({ name: adminWizardUserNameInputElement.value.trim() });
-        }
-    }
-}
-
-// Custom Time Picker
-function openCustomTimePicker(inputEl, callbackFn) {
-    if (!customTimePickerElement || !inputEl) return;
-    activeTimeInput = inputEl;
-    timePickerCallback = callbackFn;
-
-    // Reset picker state
-    selectedAmPm = null; selectedHour12 = null; selectedMinute = null;
-    setTimeButtonElement.disabled = true;
-    timePickerBackButtonElement.classList.add('hide');
-
-    // Initial step: AM/PM
-    currentTimePickerStep = 'ampm';
-    if(currentTimePickerStepLabelElement) currentTimePickerStepLabelElement.textContent = '(AM/PM)';
-    $('#timePickerStepAmPm')?.classList.remove('hide');
-    $('#timePickerStepHour')?.classList.add('hide');
-    $('#timePickerStepMinute')?.classList.add('hide');
-    renderTimePickerAmPm();
-
-    // Position and show
-    const inputRect = activeTimeInput.getBoundingClientRect();
-    customTimePickerElement.style.top = `${inputRect.bottom + window.scrollY + 5}px`;
-    customTimePickerElement.style.left = `${inputRect.left + window.scrollX}px`;
-    customTimePickerElement.classList.remove('hide');
-}
-
-function renderTimePickerAmPm() {
-    if (!timePickerAmPmButtonsContainerElement) return;
-    timePickerAmPmButtonsContainerElement.innerHTML = '';
-    ['AM', 'PM'].forEach(val => {
-        const btn = document.createElement('button');
-        btn.textContent = val;
-        btn.onclick = () => { selectedAmPm = val; navigateTimePicker('hour'); };
-        timePickerAmPmButtonsContainerElement.appendChild(btn);
-    });
-}
-function renderTimePickerHours() {
-    if (!timePickerHoursContainerElement) return;
-    timePickerHoursContainerElement.innerHTML = '';
-    for (let i = 1; i <= 12; i++) {
-        const btn = document.createElement('button');
-        btn.textContent = i;
-        btn.onclick = () => { selectedHour12 = i; navigateTimePicker('minute'); };
-        timePickerHoursContainerElement.appendChild(btn);
-    }
-}
-function renderTimePickerMinutes() {
-     if (!timePickerMinutesContainerElement) return;
-    timePickerMinutesContainerElement.innerHTML = '';
-    ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].forEach(val => {
-        const btn = document.createElement('button');
-        btn.textContent = val;
-        btn.onclick = () => {
-            selectedMinute = parseInt(val);
-            // Highlight selected minute
-            timePickerMinutesContainerElement.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            if(setTimeButtonElement) setTimeButtonElement.disabled = false;
-        };
-        timePickerMinutesContainerElement.appendChild(btn);
-    });
-}
-
-function navigateTimePicker(nextStep) {
-    currentTimePickerStep = nextStep;
-    $('#timePickerStepAmPm')?.classList.add('hide');
-    $('#timePickerStepHour')?.classList.add('hide');
-    $('#timePickerStepMinute')?.classList.add('hide');
-    if(setTimeButtonElement) setTimeButtonElement.disabled = true; // Disable until minute is chosen
-
-    if (nextStep === 'hour') {
-        if(currentTimePickerStepLabelElement) currentTimePickerStepLabelElement.textContent = `(${selectedAmPm} - Hour)`;
-        $('#timePickerStepHour')?.classList.remove('hide');
-        if(timePickerBackButtonElement) timePickerBackButtonElement.classList.remove('hide');
-        renderTimePickerHours();
-    } else if (nextStep === 'minute') {
-        if(currentTimePickerStepLabelElement) currentTimePickerStepLabelElement.textContent = `(${selectedAmPm} - ${selectedHour12}h - Minute)`;
-        $('#timePickerStepMinute')?.classList.remove('hide');
-        if(timePickerBackButtonElement) timePickerBackButtonElement.classList.remove('hide');
-        renderTimePickerMinutes();
-    } else { // back to ampm or initial
-        if(currentTimePickerStepLabelElement) currentTimePickerStepLabelElement.textContent = '(AM/PM)';
-        $('#timePickerStepAmPm')?.classList.remove('hide');
-        if(timePickerBackButtonElement) timePickerBackButtonElement.classList.add('hide');
-    }
-}
-
-function handleSetTimePickerTime() {
-    if (selectedAmPm && selectedHour12 != null && selectedMinute != null && activeTimeInput) {
-        let hour24 = selectedHour12;
-        if (selectedAmPm === 'PM' && selectedHour12 < 12) hour24 += 12;
-        if (selectedAmPm === 'AM' && selectedHour12 === 12) hour24 = 0; // Midnight case
-
-        const time24 = `${String(hour24).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`;
-        activeTimeInput.value = formatTime12Hour(time24); // Display 12-hour format
-        activeTimeInput.dataset.value24 = time24; // Store 24-hour format
-
-        closeModal('customTimePicker');
-        if (timePickerCallback) timePickerCallback();
+        showMessage("Admin Setup Complete", "Portal initial setup is complete!", "success");
+        renderAdminGlobalSettingsTab(); // Refresh the main admin settings tab with new values
+        updatePortalTitle(); // Update title based on new settings
     } else {
-        showMessage("Incomplete Time", "Please select AM/PM, hour, and minute.", "warning");
+        showMessage("Error", "Could not finalize admin setup. Please try again.", "error");
+        await saveGlobalSettingsToFirestore({setupComplete: false}); // Mark as incomplete again
     }
 }
-if (timePickerBackButtonElement) {
-    timePickerBackButtonElement.addEventListener('click', () => {
-        if (currentTimePickerStep === 'minute') navigateTimePicker('hour');
-        else if (currentTimePickerStep === 'hour') navigateTimePicker('ampm');
-    });
+
+
+// Custom Time Picker Logic (Simplified)
+function openCustomTimePicker(inputElementRef, onTimeSetCallback) {
+    if (!customTimePickerElement || !inputElementRef) return;
+    activeTimeInput = inputElementRef; // Store the input element that triggered the picker
+    timePickerCallback = onTimeSetCallback; // Store the callback
+
+    // Initialize picker (e.g., to current input value or a default)
+    const currentTime = activeTimeInput.value || "09:00"; // Default to 09:00
+    const [hr, min] = currentTime.split(':').map(Number);
+    selectedHour12 = hr % 12 || 12;
+    selectedAmPm = hr >= 12 ? 'PM' : 'AM';
+    selectedMinute = Math.floor(min / 15) * 15; // Snap to nearest 15 min
+
+    currentTimePickerStep = 'hours'; // Start with hour selection
+    renderTimePickerStep();
+    openModal('customTimePicker');
 }
+
+function renderTimePickerStep() {
+    if (!currentTimePickerStepLabelElement || !timePickerHoursContainerElement || !timePickerMinutesContainerElement || !timePickerAmPmButtonsContainerElement || !timePickerBackButtonElement) return;
+
+    timePickerHoursContainerElement.style.display = 'none';
+    timePickerMinutesContainerElement.style.display = 'none';
+    timePickerAmPmButtonsContainerElement.style.display = 'none';
+    timePickerBackButtonElement.style.display = 'none';
+
+    let currentSelectionDisplay = "";
+
+    if (currentTimePickerStep === 'hours') {
+        currentTimePickerStepLabelElement.textContent = "Select Hour";
+        timePickerHoursContainerElement.style.display = 'grid'; // Assuming grid layout for hours
+        timePickerHoursContainerElement.innerHTML = ''; // Clear
+        for (let i = 1; i <= 12; i++) {
+            const hourBtn = document.createElement('button');
+            hourBtn.textContent = i;
+            hourBtn.classList.add('time-picker-btn', 'hour-btn');
+            if (i === selectedHour12) hourBtn.classList.add('selected');
+            hourBtn.onclick = () => { selectedHour12 = i; currentTimePickerStep = 'ampm'; renderTimePickerStep(); };
+            timePickerHoursContainerElement.appendChild(hourBtn);
+        }
+        currentSelectionDisplay = `${selectedHour12}:XX ${selectedAmPm}`;
+    } else if (currentTimePickerStep === 'ampm') {
+        currentTimePickerStepLabelElement.textContent = "Select AM/PM";
+        timePickerAmPmButtonsContainerElement.style.display = 'flex';
+        timePickerBackButtonElement.style.display = 'inline-block';
+        // AM/PM buttons setup (assuming they exist in HTML or are created here)
+        // Example:
+        $("#timePickerAMBtn").onclick = () => { selectedAmPm = 'AM'; currentTimePickerStep = 'minutes'; renderTimePickerStep(); };
+        $("#timePickerPMBtn").onclick = () => { selectedAmPm = 'PM'; currentTimePickerStep = 'minutes'; renderTimePickerStep(); };
+        currentSelectionDisplay = `${selectedHour12}:XX ${selectedAmPm}`;
+
+    } else if (currentTimePickerStep === 'minutes') {
+        currentTimePickerStepLabelElement.textContent = `Select Minute (${selectedHour12}:XX ${selectedAmPm})`;
+        timePickerMinutesContainerElement.style.display = 'grid'; // Assuming grid for minutes
+        timePickerBackButtonElement.style.display = 'inline-block';
+        timePickerMinutesContainerElement.innerHTML = ''; // Clear
+        for (let i = 0; i < 60; i += 15) { // 15-minute intervals
+            const minBtn = document.createElement('button');
+            minBtn.textContent = String(i).padStart(2, '0');
+            minBtn.classList.add('time-picker-btn', 'minute-btn');
+            if (i === selectedMinute) minBtn.classList.add('selected');
+            minBtn.onclick = () => { selectedMinute = i; /* Update display, enable Set button */ renderTimePickerStep(); }; // Re-render to update selection
+            timePickerMinutesContainerElement.appendChild(minBtn);
+        }
+        currentSelectionDisplay = `${selectedHour12}:${String(selectedMinute).padStart(2, '0')} ${selectedAmPm}`;
+    }
+    // Update a display element within the picker if you have one for current selection
+    // e.g., $("#currentTimeDisplayInPicker").textContent = currentSelectionDisplay;
+}
+
+setTimeButtonElement?.addEventListener('click', () => {
+    if (activeTimeInput && typeof selectedHour12 !== 'undefined' && typeof selectedMinute !== 'undefined' && selectedAmPm) {
+        let finalHour24 = selectedHour12;
+        if (selectedAmPm === 'PM' && selectedHour12 !== 12) finalHour24 += 12;
+        if (selectedAmPm === 'AM' && selectedHour12 === 12) finalHour24 = 0; // Midnight case
+
+        const timeString = `${String(finalHour24).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`;
+        activeTimeInput.value = timeString;
+        if (timePickerCallback) timePickerCallback(timeString); // Call callback if provided
+        closeModal('customTimePicker');
+    } else {
+        showMessage("Time Error", "Please complete time selection.", "warning");
+    }
+});
+
+timePickerBackButtonElement?.addEventListener('click', () => {
+    if (currentTimePickerStep === 'minutes') currentTimePickerStep = 'ampm';
+    else if (currentTimePickerStep === 'ampm') currentTimePickerStep = 'hours';
+    renderTimePickerStep();
+});
 
 
 /* ========== Event Listeners Setup ========== */
@@ -2989,43 +2846,51 @@ function setupEventListeners() {
     authPasswordInputElement?.addEventListener('keypress', e => { if (e.key === 'Enter') modalLogin(); });
 
     // Navigation
-    $$("nav#side a.link, nav#bottom a.bLink").forEach(a => a.addEventListener('click', e => {
-        e.preventDefault();
-        const sectionId = a.hash.substring(1);
-        navigateToSection(sectionId);
-    }));
+    $$("nav#side a.link, nav#bottom a.bLink").forEach(a => {
+        if (a) { // Ensure 'a' is not null
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                if (a.hash) { // Ensure 'a.hash' is defined
+                    navigateToSection(a.hash.substring(1));
+                } else {
+                    console.warn("Navigation link missing hash:", a);
+                }
+            });
+        }
+    });
+
 
     // Profile
     editProfileButtonElement?.addEventListener('click', () => openUserSetupWizard()); // Re-use wizard for editing
     uploadProfileDocumentsButtonElement?.addEventListener('click', uploadProfileDocuments);
-    // Delete file buttons are added dynamically in renderProfileFilesList
+    // Note: Delete document confirmation is handled by inline onclick, but could be delegated here.
 
     // Invoice
     addInvoiceRowButtonElement?.addEventListener('click', addInvRowUserAction);
     saveDraftButtonElement?.addEventListener('click', saveInvoiceDraft);
     generateInvoicePdfButtonElement?.addEventListener('click', generateInvoicePdf);
     saveInitialInvoiceNumberButtonElement?.addEventListener('click', saveInitialInvoiceNumber);
-    if (invoiceDateInputElement && invoiceWeekLabelElement) {
+    if(invoiceDateInputElement && invoiceWeekLabelElement) {
         invoiceDateInputElement.addEventListener('change', () => {
             invoiceWeekLabelElement.textContent = getWeekNumber(new Date(invoiceDateInputElement.value));
         });
     }
 
+
     // Agreement
     signAgreementButtonElement?.addEventListener('click', () => openSignatureModal('worker'));
-    participantSignButtonElement?.addEventListener('click', () => openSignatureModal('participant'));
+    participantSignButtonElement?.addEventListener('click', () => openSignatureModal('participant')); // Admin signs as participant
     downloadAgreementPdfButtonElement?.addEventListener('click', generateAgreementPdf);
     saveSignatureButtonElement?.addEventListener('click', saveSignature);
-    clearSignatureButtonElement?.addEventListener('click', clearSignaturePad);
     closeSignatureModalButtonElement?.addEventListener('click', () => closeModal('sigModal'));
+    clearSignaturePadButton?.addEventListener('click', clearSignaturePad); // Assuming ID: clearSignaturePadButton
+
     loadServiceAgreementForSelectedWorkerButtonElement?.addEventListener('click', () => {
-        if (adminSelectWorkerForAgreementElement) {
-            const selectedEmail = adminSelectWorkerForAgreementElement.value;
-            if (selectedEmail) {
-                loadAndRenderServiceAgreement(selectedEmail);
-            } else {
-                showMessage("No Worker Selected", "Please select a worker from the dropdown.", "info");
-            }
+        if (adminSelectWorkerForAgreementElement && adminSelectWorkerForAgreementElement.value) {
+            currentAgreementWorkerEmail = adminSelectWorkerForAgreementElement.value;
+            loadAndRenderServiceAgreement(currentAgreementWorkerEmail);
+        } else {
+            showMessage("Selection Missing", "Please select a worker to load their agreement.", "warning");
         }
     });
 
@@ -3036,10 +2901,13 @@ function setupEventListeners() {
     saveAdminPortalSettingsButtonElement?.addEventListener('click', saveAdminPortalSettings);
     resetGlobalSettingsToDefaultsButtonElement?.addEventListener('click', window.confirmResetGlobalSettings);
     copyInviteLinkButtonElement?.addEventListener('click', () => {
-        if (inviteLinkCodeElement && navigator.clipboard) {
+        if (inviteLinkCodeElement && inviteLinkCodeElement.textContent) {
             navigator.clipboard.writeText(inviteLinkCodeElement.textContent)
                 .then(() => showMessage("Copied!", "Invite link copied to clipboard.", "success"))
-                .catch(err => showMessage("Copy Failed", "Could not copy link.", "error"));
+                .catch(err => {
+                    console.error("Failed to copy invite link:", err);
+                    showMessage("Copy Failed", "Could not copy link. Check browser permissions.", "error");
+                });
         }
     });
 
@@ -3054,95 +2922,134 @@ function setupEventListeners() {
     // Admin Agreement Customization
     adminAddAgreementClauseButtonElement?.addEventListener('click', addAdminAgreementClauseEditor);
     saveAdminAgreementCustomizationsButtonElement?.addEventListener('click', saveAdminAgreementCustomizationsToFirestore);
-    if (adminAgreementOverallTitleInputElement) { // Live preview for title
-        adminAgreementOverallTitleInputElement.addEventListener('input', updateAdminAgreementPreview);
-    }
-
+    // Preview updates on input in renderAdminAgreementClausesEditor
 
     // Admin Worker Management
     saveWorkerAuthorizationsButtonElement?.addEventListener('click', saveWorkerAuthorizationsToFirestore);
 
-    // Shift Request Modal
-    requestShiftButtonElement?.addEventListener('click', openRequestShiftModal);
-    closeRequestModalButtonElement?.addEventListener('click', () => closeModal('rqModal'));
-    saveRequestButtonElement?.addEventListener('click', saveShiftRequest);
-    $$('.custom-time-input').forEach(input => { // Attach to all custom time inputs
-        input.addEventListener('click', () => openCustomTimePicker(input, () => {
-            // Optional: Callback after time is set, e.g., if it needs to trigger another update
-            // For invoice rows, this is handled by updateInvoiceItemFromRow
-            // For modals like shift request, might need specific logic if values are interdependent
-            if (input.closest('#rqModal') || input.closest('#logShiftModal')) {
-                // If in request or log shift modal, could re-validate start/end times here
-            }
-        }));
+    // Modals & Wizards Common Close Buttons
+    $$(".modal .close-modal-btn").forEach(btn => { // Generic close button for modals
+        const modal = btn.closest('.modal');
+        if (modal) btn.addEventListener('click', () => closeModal(modal.id));
     });
 
+    // Request Shift Modal (Example - needs implementation)
+    requestShiftButtonElement?.addEventListener('click', () => openModal('rqModal'));
+    closeRequestModalButtonElement?.addEventListener('click', () => closeModal('rqModal'));
+    saveRequestButtonElement?.addEventListener('click', () => { /* Add save shift request logic */ closeModal('rqModal'); });
 
-    // Log Shift Modal
-    logTodayShiftButtonElement?.addEventListener('click', openLogShiftModal);
+    // Log Shift Modal (Example - needs implementation)
+    logTodayShiftButtonElement?.addEventListener('click', () => openModal('logShiftModal'));
     closeLogShiftModalButtonElement?.addEventListener('click', () => closeModal('logShiftModal'));
-    saveShiftToInvoiceButtonElement?.addEventListener('click', saveShiftFromModalToInvoice);
-
+    saveShiftToInvoiceButtonElement?.addEventListener('click', () => { /* Add save shift to invoice logic */ closeModal('logShiftModal'); });
 
     // Message Modal
     closeMessageModalButtonElement?.addEventListener('click', () => closeModal('messageModal'));
 
-    // User Wizard
+    // User Setup Wizard Navigation
     wizardNextButton1Element?.addEventListener('click', () => wizardNext('user'));
     wizardNextButton2Element?.addEventListener('click', () => wizardNext('user'));
-    wizardNextButton3Element?.addEventListener('click', () => wizardNext('user'));
+    wizardNextButton3Element?.addEventListener('click', () => wizardNext('user')); // Assuming step 3 is files
     wizardPrevButton2Element?.addEventListener('click', () => wizardPrev('user'));
     wizardPrevButton3Element?.addEventListener('click', () => wizardPrev('user'));
-    wizardPrevButton4Element?.addEventListener('click', () => wizardPrev('user'));
+    wizardPrevButton4Element?.addEventListener('click', () => wizardPrev('user')); // Back from summary to files
     wizardFinishButtonElement?.addEventListener('click', finishUserWizard);
+    // Handle file uploads in user wizard step 3
     wizardFilesInputElement?.addEventListener('change', (e) => {
-        wizardFileUploads = Array.from(e.target.files);
-        if (wizardFilesListElement) {
-            wizardFilesListElement.innerHTML = wizardFileUploads.map(f => `<div><i class="fas fa-file"></i> ${f.name} (${(f.size/1024).toFixed(1)}KB)</div>`).join('');
+        if (!wizardFilesListElement) return;
+        wizardFilesListElement.innerHTML = ''; // Clear previous list
+        wizardFileUploads = Array.from(e.target.files); // Store File objects
+        if (wizardFileUploads.length > 0) {
+            wizardFileUploads.forEach(file => {
+                const li = document.createElement('li');
+                li.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                wizardFilesListElement.appendChild(li);
+            });
+        } else {
+            wizardFilesListElement.innerHTML = '<li>No files selected.</li>';
         }
     });
 
 
-    // Admin Wizard
+    // Admin Setup Wizard Navigation
     adminWizardNextButton1Element?.addEventListener('click', () => wizardNext('admin'));
     adminWizardNextButton2Element?.addEventListener('click', () => wizardNext('admin'));
+    // adminWizardNextButton3Element?.addEventListener('click', () => wizardNext('admin')); // If more steps
     adminWizardPrevButton2Element?.addEventListener('click', () => wizardPrev('admin'));
     adminWizardPrevButton3Element?.addEventListener('click', () => wizardPrev('admin'));
     adminWizardFinishButtonElement?.addEventListener('click', finishAdminWizard);
-    adminWizardPortalTypeRadioElements.forEach(radio => { // Update admin wizard step 2 based on type selection
-        radio.addEventListener('change', () => { if (currentAdminWizardStep === 1 || currentAdminWizardStep === 2) navigateWizard('admin', 2); });
-    });
-
-    // Custom Time Picker
-    setTimeButtonElement?.addEventListener('click', handleSetTimePickerTime);
-    cancelTimeButtonElement?.addEventListener('click', () => closeModal('customTimePicker'));
 
 
-    // Global listener for hash changes (e.g. browser back/forward)
+    // Time Picker (already handled with direct .onclick or specific listeners)
+    // cancelTimeButtonElement, setTimeButtonElement, timePickerBackButtonElement handled above
+
+    // Other global listeners or initializations
     window.addEventListener('hashchange', () => {
-        const hash = window.location.hash || '#home';
+        const hash = window.location.hash || '#home'; // Default to #home if no hash
         navigateToSection(hash.substring(1));
     });
+
+    // Close modals on ESC key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === "Escape") {
+            $$('.modal').forEach(modal => {
+                if (modal.style.display === 'flex') {
+                    closeModal(modal.id);
+                }
+            });
+        }
+    });
+
+    console.log("[Events] All primary event listeners set up.");
 }
 
 /* ========== App Initialization ========== */
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("DOM fully loaded and parsed. App Version 1.1.0");
+    console.log("DOM fully loaded and parsed. App Version 1.1.0"); // Update version as needed
     showLoading("Initializing Portal...");
-    await initializeFirebaseApp(); // This now calls setupAuthListener internally
-    setupEventListeners();
 
-    // Initial navigation based on hash or default to home
-    // onAuthStateChanged will handle the primary navigation logic after auth is resolved.
-    // A simple initial hash check can be done, but might be preempted by auth.
-    const initialHash = window.location.hash.substring(1) || 'home';
-    if (!currentUserId) { // If auth hasn't kicked in yet, briefly show the target section (usually home)
-        navigateToSection(initialHash);
+    await initializeFirebaseApp(); // This now awaits setupAuthListener internally
+
+    // setupAuthListener is now called and awaited within initializeFirebaseApp
+    // So, by the time initializeFirebaseApp resolves, the first auth state is known.
+
+    setupEventListeners(); // Setup other event listeners after Firebase is ready
+
+    // Initial navigation based on hash or default
+    // Wait for initialAuthComplete before navigating to ensure user state is processed
+    // This can be tricky if initializeFirebaseApp resolves before onAuthStateChanged fully completes its first run.
+    // A better pattern is to let onAuthStateChanged handle initial navigation after auth state is clear.
+
+    // The navigation is now primarily driven by onAuthStateChanged logic (enterPortal, etc.)
+    // and the hashchange listener.
+    // We might still want to trigger initial hash check if onAuthStateChanged doesn't cover all cases.
+    if (initialAuthComplete) { // Check if auth listener has done its initial run
+        const initialHash = window.location.hash || '#home';
+        navigateToSection(initialHash.substring(1));
+    } else {
+        // If auth isn't complete yet, onAuthStateChanged will handle the first navigation.
+        // We can add a timeout or a flag that onAuthStateChanged sets, then check here.
+        // For now, relying on onAuthStateChanged.
+        console.log("Waiting for onAuthStateChanged to handle initial navigation.");
     }
-    // The main hideLoading will be in onAuthStateChanged after all initial auth and data loading.
-    // For now, if initializeFirebaseApp failed, hide loading.
-    if (!isFirebaseInitialized) {
-        hideLoading();
+
+
+    // Hide loading should ideally happen after the first meaningful paint/content is ready.
+    // Since onAuthStateChanged handles showing/hiding content, it also handles hideLoading().
+    // If initializeFirebaseApp fails early, it also calls hideLoading().
+    // So, this final hideLoading() might be redundant or could be removed if auth flow always handles it.
+    // For safety, keeping it here, but it might flicker if auth takes time.
+    if (loadingOverlayElement.style.display !== "none") { // Only hide if still visible
+        // hideLoading();
+        // Let onAuthStateChanged be the primary controller of the loading overlay during auth.
     }
+    console.log("[AppInit] DOMContentLoaded complete. App should be interactive or in auth flow.");
 });
 
+// Make sure clearSignaturePad is globally accessible if called by HTML onclick
+window.clearSignaturePad = clearSignaturePad;
+
+// NOTE: Many function bodies (like `renderProfileFilesList`, `saveProfileDetails`, etc.)
+// are marked as `/* ... Implementation ... */`. These need to be filled out with
+// the actual application logic based on the full requirements.
+// This structure provides the framework and connects the UI elements.
