@@ -396,23 +396,21 @@ async function loadUserProfileFromFirestore(uid) {
         return null;
     }
     try {
-        const userProfileRef = doc(fsDb, `artifacts/${appId}/users/${uid}/profile`, "details");
+        const userProfileRef = doc(fsDb, `artifacts/<span class="math-inline">\{appId\}/users/</span>{uid}/profile`, "details");
         const snap = await getDoc(userProfileRef);
         if (snap.exists()) {
+            const fetchedData = snap.data(); // Get the data
+            // ADD THIS LINE FOR DEBUGGING:
+            console.log("[DEBUG] Raw profile data from Firestore:", JSON.stringify(fetchedData));
             console.log("[DataLoad] User profile loaded from Firestore for UID:", uid);
-            return snap.data();
+            return fetchedData; // Return the fetched data
         } else {
             console.log("[DataLoad] No user profile found in Firestore for UID:", uid);
             return null;
         }
     }
-    catch (e) {
-        console.error("Profile Load Error:", e);
-        logErrorToFirestore("loadUserProfileFromFirestore", e.message, e);
-        return null;
-    }
+    // ... rest of the function
 }
-
 function getDefaultGlobalSettings() {
     return {
         portalTitle: "NDIS Support Portal",
