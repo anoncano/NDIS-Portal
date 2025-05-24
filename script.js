@@ -400,16 +400,22 @@ async function loadUserProfileFromFirestore(uid) {
         const snap = await getDoc(userProfileRef);
         if (snap.exists()) {
             const fetchedData = snap.data(); // Get the data
-            // ADD THIS LINE FOR DEBUGGING:
-            console.log("[DEBUG] Raw profile data from Firestore:", JSON.stringify(fetchedData));
+
+            // ***** ADD THIS DEBUG LINE: *****
+            console.log("[DEBUG] Raw profile data from Firestore for UID " + uid + ":", JSON.stringify(fetchedData));
+            // **********************************
+
             console.log("[DataLoad] User profile loaded from Firestore for UID:", uid);
             return fetchedData; // Return the fetched data
         } else {
             console.log("[DataLoad] No user profile found in Firestore for UID:", uid);
             return null;
         }
+    } catch (e) {
+        console.error("Profile Load Error:", e);
+        logErrorToFirestore("loadUserProfileFromFirestore", e.message, e);
+        return null;
     }
-    // ... rest of the function
 }
 function getDefaultGlobalSettings() {
     return {
