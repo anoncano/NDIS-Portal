@@ -427,42 +427,28 @@ function getDefaultGlobalSettings() {
 }
 
 async function loadGlobalSettingsFromFirestore() {
-    if (!fsDb) {
-        console.error("Global Settings Load Error: Firestore DB not initialized.");
-        globalSettings = getDefaultGlobalSettings();
-        updatePortalTitle(); // Update with default title
-        return;
-    }
+    if (!fsDb) { console.warn("Firestore not available for global settings load."); globalSettings = getDefaultGlobalSettings(); return; }
     try {
-        // Corrected path: collection 'artifacts/{appId}/public', document 'settings'
-        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public`, "settings");
+        // *** THE FIX IS HERE ***
+        const settingsDocRef = doc(fsDb, 'artifacts', appId, 'public', 'settings');
+        // *** END FIX ***
         const snap = await getDoc(settingsDocRef);
-
         if (snap.exists()) {
             globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() };
             console.log("[DataLoad] Global settings loaded from Firestore.");
         }
         else {
-            console.log("[DataLoad] No global settings found in Firestore. Using defaults and saving.");
+            console.log("[DataLoad] No global settings found. Using defaults.");
             globalSettings = getDefaultGlobalSettings();
-            // Attempt to save the default settings if an admin is effectively logged in or during initial setup
-            // This might be better handled by an explicit setup step by an admin.
-            // For now, we'll save it if we can (e.g., if this is part of an admin's first login flow)
-            // but be mindful of permissions.
-            if (userProfile && userProfile.isAdmin) { // Check if an admin is available to save
-                 await saveGlobalSettingsToFirestore();
-            } else {
-                console.warn("[DataLoad] Cannot save default global settings without admin privileges currently.")
-            }
+            await saveGlobalSettingsToFirestore(true); // Save defaults silently
         }
     } catch (e) {
         console.error("Global Settings Load Error:", e);
         logErrorToFirestore("loadGlobalSettingsFromFirestore", e.message, e);
-        globalSettings = getDefaultGlobalSettings(); // Fallback to defaults on error
+        globalSettings = getDefaultGlobalSettings();
     }
-    // Ensure agreementCustomData is initialized correctly
     agreementCustomData = globalSettings.agreementTemplate ? JSON.parse(JSON.stringify(globalSettings.agreementTemplate)) : JSON.parse(JSON.stringify(defaultAgreementCustomData));
-    updatePortalTitle(); // Update portal title based on loaded/default settings
+    updatePortalTitle(); // This needs updatePortalTitle function to exist
 }
 
 async function saveGlobalSettingsToFirestore() {
@@ -488,6 +474,26 @@ async function saveGlobalSettingsToFirestore() {
     }
 }
 
+function renderUserHomePage() {
+    const homeUserDiv = $("#homeUser");
+    const userNameDisplay = $("#userNameDisplay");
+    const shiftRequestsContainer = $('#shiftRequestsContainer');
+
+    if (currentUserId && userProfile.name) {
+        if(homeUserDiv) homeUserDiv.classList.remove('hide');
+        if(userNameDisplay) userNameDisplay.textContent = userProfile.name;
+        // Optionally show/hide shift requests based on data
+        if(shiftRequestsContainer) shiftRequestsContainer.classList.toggle('hide', !shiftRequestsTableBodyElement?.innerHTML.trim());
+    } else {
+        if(homeUserDiv) homeUserDiv.classList.add('hide');
+    }
+}
+
+function updatePortalTitle() {
+    if (portalTitleDisplayElement && globalSettings.portalTitle) {
+        portalTitleDisplayElement.innerHTML = `<i class="fas fa-cogs"></i> ${globalSettings.portalTitle}`;
+    }
+}
 
 async function loadAdminServicesFromFirestore() {
     adminManagedServices = [];
