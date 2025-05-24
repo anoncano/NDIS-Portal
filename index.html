@@ -16,16 +16,16 @@
     // It's populated with values from your Firebase project.
     // If __firebase_config is provided by the Canvas environment, it will override this.
     window.firebaseConfigForApp = {
-        // SECURITY NOTE: Hardcoding API keys directly in client-side code can be a security risk.
-        // It's generally recommended to use environment variables or a backend service to handle API keys.
-        // The __firebase_config variable (if provided by the Canvas environment) is a safer way to inject this.
-        apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", // User's provided API key
-        authDomain: "ndis-portal-6ab1e.firebaseapp.com",
-        databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
-        projectId: "ndis-portal-6ab1e",
-        storageBucket: "ndis-portal-6ab1e.appspot.com", 
-        messagingSenderId: "663606000491",
-        appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
+        // DEVELOPMENT FALLBACK ONLY - DO NOT USE IN PRODUCTION WITH HARDCODED KEYS
+        // For production, ensure __firebase_config is correctly populated by your deployment environment.
+        // For local development, consider using environment variables or a local config file not committed to Git.
+        apiKey: "YOUR_API_KEY", // Replace with your actual API key for local dev if __firebase_config is not available
+        authDomain: "YOUR_AUTH_DOMAIN",
+        databaseURL: "YOUR_DATABASE_URL", // Optional for Firestore v9+, but good if RTDB is used
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET", 
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
     };
 
     // Prioritize __firebase_config if available from the Canvas environment
@@ -36,20 +36,20 @@
             if (parsedConfig && 
                 parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
                 parsedConfig.authDomain &&
-                // databaseURL is not strictly required for Firestore v9+ client SDK but good to have if RTDB is also used
-                (parsedConfig.databaseURL || parsedConfig.projectId) && // Check for projectId as a minimum for Firestore
-                parsedConfig.projectId &&
+                parsedConfig.projectId && // projectId is essential
                 parsedConfig.storageBucket &&
                 parsedConfig.messagingSenderId &&
                 parsedConfig.appId && !parsedConfig.appId.startsWith("YOUR_")) {
                  window.firebaseConfigForApp = parsedConfig;
                  console.log("Using Firebase config from __firebase_config environment variable.");
             } else {
-                console.warn("__firebase_config is incomplete, uses placeholders, or is missing essential keys. Falling back to manually set config in index.html. Ensure __firebase_config provides all required Firebase settings.");
+                console.warn("__firebase_config is incomplete, uses placeholders, or is missing essential keys. Falling back to manually set config in index.html (ensure it's set for local development). For production, __firebase_config MUST be valid.");
             }
         } catch (e) {
-            console.error("Error parsing __firebase_config:", e, "Using manually set config in index.html.");
+            console.error("Error parsing __firebase_config:", e, "Using manually set config in index.html (ensure it's set for local development).");
         }
+    } else {
+        console.warn("Canvas environment variable __firebase_config not found. Using fallback firebaseConfigForApp from index.html. Ensure this is configured for local development and that __firebase_config is provided in production.");
     }
   </script>
 
@@ -185,8 +185,7 @@
             <div class="table-responsive">
               <table id="invTbl"><thead>
                 <tr>
-                    <th>#</th>
-                    <th>Date <span class="date-print-value"></span></th>
+                    <th>#</th> <th>Date <span class="date-print-value"></span></th>
                     <th class="column-code print-only pdf-show">Code <span class="code-print-value"></span></th> 
                     <th>Description <span class="description-print-value"></span></th>
                     <th>Start <span class="start-time-print-value"></span></th>
@@ -424,6 +423,7 @@
 <div id="sigModal" class="modal"><div class="dlg"><h3><i class="fas fa-pencil-alt"></i> Draw Signature</h3>
     <canvas id="signatureCanvas" width="300" height="100"></canvas><br>
     <div class="modal-actions">
+        <button id="clearSigBtn" class="btn-secondary"><i class="fas fa-eraser"></i> Clear</button>
         <button id="saveSigBtn" class="btn-primary"><i class="fas fa-check-circle"></i> Save Signature</button>
         <button id="closeSigModalBtn" class="btn-secondary"><i class="fas fa-times"></i> Cancel</button>
     </div></div></div>
@@ -449,6 +449,17 @@
 <div id="messageModal" class="modal"><div class="dlg"><h3 id="messageModalTitle"><i class="fas fa-info-circle"></i> Alert</h3><p id="messageModalText"></p><div class="modal-actions">
     <button id="closeMessageModalBtn" class="btn-primary">OK</button></div></div></div>
 
+<div id="confirmationModal" class="modal">
+  <div class="dlg">
+    <h3 id="confirmationModalTitle"><i class="fas fa-question-circle"></i> Confirm Action</h3>
+    <p id="confirmationModalText"></p>
+    <div class="modal-actions">
+      <button id="confirmationModalCancelBtn" class="btn-secondary">Cancel</button>
+      <button id="confirmationModalConfirmBtn" class="btn-primary">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div id="travelCodeSelectionModal" class="modal">
     <div class="dlg">
         <h3><i class="fas fa-map-signs"></i> Select Associated Travel Item Code</h3>
@@ -460,8 +471,8 @@
         <div id="travelCodeListContainer" class="modal-list-container">
             </div>
         <div class="modal-actions">
-            <button id="confirmTravelCodeSelectionBtn" class="btn-primary"><i class="fas fa-check-square"></i> Confirm Selection</button>
             <button id="closeTravelCodeSelectionModalBtn" class="btn-secondary"><i class="fas fa-times-circle"></i> Cancel</button>
+            <button id="confirmTravelCodeSelectionBtn" class="btn-primary"><i class="fas fa-check-square"></i> Confirm Selection</button>
         </div>
     </div>
 </div>
