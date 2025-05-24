@@ -16,16 +16,16 @@
     // It's populated with values from your Firebase project.
     // If __firebase_config is provided by the Canvas environment, it will override this.
     window.firebaseConfigForApp = {
-        // DEVELOPMENT FALLBACK ONLY - DO NOT USE IN PRODUCTION WITH HARDCODED KEYS
-        // For production, ensure __firebase_config is correctly populated by your deployment environment.
-        // For local development, consider using environment variables or a local config file not committed to Git.
-        apiKey: "YOUR_API_KEY", // Replace with your actual API key for local dev if __firebase_config is not available
-        authDomain: "YOUR_AUTH_DOMAIN",
-        databaseURL: "YOUR_DATABASE_URL", // Optional for Firestore v9+, but good if RTDB is used
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_STORAGE_BUCKET", 
-        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-        appId: "YOUR_APP_ID"
+        // SECURITY NOTE: Hardcoding API keys directly in client-side code can be a security risk.
+        // It's generally recommended to use environment variables or a backend service to handle API keys.
+        // The __firebase_config variable (if provided by the Canvas environment) is a safer way to inject this.
+        apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", // User's provided API key
+        authDomain: "ndis-portal-6ab1e.firebaseapp.com",
+        databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "ndis-portal-6ab1e",
+        storageBucket: "ndis-portal-6ab1e.appspot.com", 
+        messagingSenderId: "663606000491",
+        appId: "1:663606000491:web:350030eeae4212b899aa2e" // Ensure no trailing space if copied
     };
 
     // Prioritize __firebase_config if available from the Canvas environment
