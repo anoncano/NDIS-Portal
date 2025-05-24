@@ -466,7 +466,7 @@ function getDefaultGlobalSettings() {
 async function loadGlobalSettingsFromFirestore() {
     if (!fsDb) { console.warn("Firestore not available for global settings load."); globalSettings = getDefaultGlobalSettings(); return; }
     try {
-        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings`, "global");
+        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings/global`)
         const snap = await getDoc(settingsDocRef);
         if (snap.exists()) {
             globalSettings = { ...getDefaultGlobalSettings(), ...snap.data() }; // Merge with defaults to ensure all keys exist
@@ -489,12 +489,11 @@ async function loadGlobalSettingsFromFirestore() {
 
 async function saveGlobalSettingsToFirestore(isSilent = false) {
     if (!fsDb) { console.warn("Firestore not available for saving global settings."); return false; }
-    // Only admins should typically save global settings, but initial setup might bypass this.
-    // if (!userProfile.isAdmin && !isSilent) { console.warn("Attempt to save global settings by non-admin."); return false; }
+    if (!userProfile?.isAdmin && !isSilent) { console.warn("Attempt to save global settings by non-admin."); return false; }
 
     globalSettings.agreementTemplate = JSON.parse(JSON.stringify(agreementCustomData)); // Ensure latest agreement template is saved
     try {
-        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings`, "global");
+        const settingsDocRef = doc(fsDb, `artifacts/${appId}/public/settings/global`)
         await setDoc(settingsDocRef, globalSettings, { merge: true }); // Use merge to avoid overwriting fields unintentionally
         if (!isSilent) {
             showMessage("Settings Saved", "Global portal settings have been updated.", "success");
