@@ -38,8 +38,6 @@ body {
   color: var(--dark) !important; /* Ensure dark text */
   font-size: 16px;
   line-height: 1.6; 
-  /* DEBUG: Add a very obvious border to check if this CSS file is loading */
-  /* border: 10px solid red !important;  
 }
 
 /* ========== AUTHENTICATION SCREEN ========== */
@@ -92,18 +90,17 @@ body {
 /* ========== PORTAL APPLICATION CONTAINER ========== */
 #portalApp {
   display: none; /* Initially hidden, JS will show it after auth */
-  /* display: flex; */ /* Corrected: JS will handle display, but if shown it should be flex */
   width: 100%;
   min-height: 100vh;
-  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+  background-color: transparent; 
 }
 
 
 /* ========== NAVIGATION ========== */
 nav#side {
   width: 260px; 
-  background: var(--pri-dark); /* This should be dark blue */
-  color: var(--bg); /* Text color should be white (var(--bg)) */
+  background: var(--pri-dark); 
+  color: var(--bg); 
   display: flex;
   flex-direction: column;
   padding: 24px 15px; 
@@ -121,7 +118,7 @@ nav#side h1 {
   letter-spacing: -0.5px;
   padding: 10px 0;
   border-bottom: 1px solid rgba(255,255,255,0.1);
-  color: var(--bg) !important; /* Explicitly white text for title */
+  color: var(--bg) !important; 
 }
 nav#side h1 i { margin-right: 10px; color: var(--pri-light); }
 
@@ -138,7 +135,7 @@ nav#side a.link.active, nav#side a.link:hover {
   color: #fff !important; 
   transform: translateX(3px); 
 }
-nav#bottom { display: none; } /* Hidden by default, shown on mobile */
+nav#bottom { display: none; } 
 
 /* ========== MAIN CONTENT ========== */
 main { 
@@ -146,19 +143,19 @@ main {
   padding: 30px 25px; 
   overflow-y: auto; 
   position: relative; 
-  background-color: transparent; /* Ensure it doesn't set its own conflicting background */
+  background-color: transparent; 
 }
 .card {
   max-width: 1100px; 
   margin: 0 auto 30px auto; 
-  background: var(--bg) !important; /* Ensure white card background */
-  color: var(--dark) !important; /* Ensure dark text in card */
+  background: var(--bg) !important; 
+  color: var(--dark) !important; 
   padding: 30px 35px; 
   border-radius: var(--radius); 
   box-shadow: var(--shadow); 
   border: 1px solid var(--bd);
 }
-section.card { display: none; } /* Sections are hidden by default, JS shows active one */
+section.card { display: none; } 
 section.card.active { display: block; animation: fadeInContent 0.4s ease-out; }
 
 @keyframes fadeInContent {
@@ -184,7 +181,7 @@ hr.compact-hr { margin: 18px 0; }
 
 .card-subsection {
   padding: 20px;
-  background-color: var(--sec-light) !important; /* Ensure light subsection background */
+  background-color: var(--sec-light) !important; 
   border-radius: calc(var(--radius) - 2px);
   margin-bottom: 25px;
   border: 1px solid #e0e5eb;
@@ -194,7 +191,7 @@ hr.compact-hr { margin: 18px 0; }
   border: 1px solid var(--bd);
   border-radius: var(--radius);
   margin-bottom: 20px;
-  background-color: #fdfdfd !important; /* Ensure light form section background */
+  background-color: #fdfdfd !important; 
 }
 
 
@@ -260,8 +257,8 @@ td .custom-time-picker-container { margin-bottom: 0; }
 td .chk { margin-bottom: 0; padding: 5px 0; }
 td .delete-row-btn { padding: 6px 10px; font-size: 0.8rem; }
 
-.column-code, .column-rate-type { display: none; } /* Hidden by default, shown for print/PDF */
-.code-print-value, .rate-type-print-value, .description-print-value { display: none; } /* Spans for print/PDF content */
+.column-code, .column-rate-type { display: none; } 
+.code-print-value, .rate-type-print-value, .description-print-value { display: none; } 
 
 /* ========== BUTTONS ========== */
 button, .button, .btn-primary, .btn-secondary, .btn-danger { 
@@ -302,6 +299,8 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 .chip { display: inline-block; padding: 8px 16px; border-radius: 25px; font-size: 0.8rem; font-weight: 600; line-height: 1; text-transform: uppercase; letter-spacing: 0.5px; }
 .chip.yellow { background: var(--warn); color: var(--warn-text) !important; border: 1px solid #ffc1074d;}
 .chip.green { background: var(--ok); color: var(--bg) !important; border: 1px solid #28a7454d;}
+.chip.blue { background-color: #0dcaf0; color: white !important; border: 1px solid #0dcaf04d; }
+
 
 /* ========== SIGNATURE & AGREEMENT ========== */
 .signWrap { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 25px; padding: 15px 0; justify-content: space-around; }
@@ -316,10 +315,10 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 
 /* ========== MODALS (General overlay modals, not the auth screen) ========== */
 .modal { 
-  display: none; /* Hidden by default, JS will show */
+  display: none; 
   position: fixed; 
   inset: 0; 
-  background: rgba(30, 41, 59, 0.8); /* Dark overlay is fine */
+  background: rgba(30, 41, 59, 0.8); 
   align-items: center; 
   justify-content: center; 
   z-index: 2000; 
@@ -330,8 +329,8 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 @keyframes fadeInBackdrop { from { opacity: 0; } to { opacity: 1; } }
 
 .modal .dlg { 
-  background: var(--bg) !important; /* Ensure white dialog background */
-  color: var(--dark) !important; /* Ensure dark text in dialog */
+  background: var(--bg) !important; 
+  color: var(--dark) !important; 
   padding: 30px 35px; 
   border-radius: var(--radius); 
   width: 100%; 
@@ -345,17 +344,17 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 
 .modal .dlg h3 { margin-top: 0; margin-bottom: 25px; font-size: 1.6rem; color: var(--pri) !important; text-align: left; } 
 .modal .dlg h3 i { margin-right: 10px; }
-.modal .dlg canvas#signatureCanvas { /* Corrected ID from #pad to #signatureCanvas */
+.modal .dlg canvas#signatureCanvas { 
   border: 1px dashed var(--bd); 
   touch-action: none; 
-  width: 100%; /* Make canvas responsive within its container */
-  max-width: 300px; /* Max width as per HTML, but allow shrinking */
-  height: 100px; /* Fixed height as per HTML */
+  width: 100%; 
+  max-width: 300px; 
+  height: 100px; 
   border-radius: var(--radius); 
   margin-bottom: 18px; 
   background-color: #fcfcfc !important; 
-  display: block; /* Helps with centering or layout if needed */
-  margin-left: auto; /* Example centering if parent is flex/grid or has text-align:center */
+  display: block; 
+  margin-left: auto; 
   margin-right: auto;
 }
 
@@ -480,7 +479,6 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 /* ========== RESPONSIVE DESIGN ========== */
 @media(max-width: 768px) {
   nav#side { 
-    /* Hide side nav on small screens, bottom nav will be used */
     display: none; 
   }
   nav#bottom { 
@@ -507,21 +505,21 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
   }
   nav#bottom a.bLink.active { 
     transform: scale(1.1); 
-    color: var(--warn); /* Highlight active icon */
+    color: var(--warn); 
   }
   
-  main { padding: 20px 15px 80px 15px; } /* Add padding-bottom for bottom nav */
+  main { padding: 20px 15px 80px 15px; } 
   .card { padding: 20px; }
   h2 { font-size: 1.6rem; } h3 {font-size: 1.25rem;}
-  .row { flex-direction: column; gap: 0; } /* Stack row items */
-  .row > div { margin-bottom: 18px; min-width: unset; /* Allow shrinking */ } 
+  .row { flex-direction: column; gap: 0; } 
+  .row > div { margin-bottom: 18px; min-width: unset; } 
   
   #authScreen .dlg { width: 95%; padding: 25px; } 
   #authScreen .dlg h3 { font-size: 1.5rem; }
 
   .modal .dlg { width: 95%; padding: 25px; } 
   .modal .dlg h3 { font-size: 1.4rem; }
-  .modal .dlg canvas#signatureCanvas { max-width: 100%; /* Ensure canvas fits modal */ }
+  .modal .dlg canvas#signatureCanvas { max-width: 100%; }
 
 
   .home-buttons-container { flex-direction: column; }
@@ -539,29 +537,26 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
 /* ========== PRINT STYLES ========== */
 @media print {
   body { display: block; font-size: 10pt; color: #000 !important; background: #fff !important; border: none !important; }
-  #authScreen, nav#side, nav#bottom, #adminTab, /* #home, #profile, */ /* Keep home/profile if they might be printed */
-  #rqModal, #sigModal, #wiz, #customTimePicker, #messageModal, #setInitialInvoiceModal, #adminSetupWizard, #travelCodeSelectionModal,
+  #authScreen, nav#side, nav#bottom, #adminTab, 
+  #rqModal, #sigModal, #wiz, #customTimePicker, #messageModal, #setInitialInvoiceModal, #adminSetupWizard, #travelCodeSelectionModal, #confirmationModal,
   #invoice .invoice-actions button:not(.print-only-btn), #agreement .agreement-actions button:not(.print-only-btn),
   #invoice table th.no-print, #invoice table td.no-print, .modal-actions button, #agreement #agrChip,
-  #admin, .home-buttons-container, #homeGuest, /* #homeUser h3, #rqTbl, */ /* Keep if relevant for print */
+  #admin, .home-buttons-container, /* #homeGuest, */ /* Consider if #homeUser content is printable */
   .invite-link-container, .admin-nav-tabs,
   button i, #logoutBtn, #editProfileBtn, #uploadProfileDocumentsBtn, #addInvRowUserActionBtn, #saveDraftBtn, #signBtn, #participantSignBtn,
   #adminAddAgreementClauseBtn, #saveAdminAgreementCustomizationsBtn, #saveAdminPortalSettingsBtn, #resetGlobalSettingsToDefaultsBtn,
   #saveAdminServiceBtn, #clearAdminServiceFormBtn, #selectTravelCodeBtn, #saveWorkerAuthorizationsBtn, #copyLinkBtn,
   #adminAgreementWorkerSelector button, #initialInvoiceNumberInput + .modal-actions button,
-  #saveRequestBtn, #closeRqModalBtn, #saveShiftFromModalToInvoiceBtn, #closeLogShiftModalBtn, #saveSigBtn, #closeSigModalBtn,
-  .wizard-steps + div button, /* Wizard buttons */
+  #saveRequestBtn, #closeRqModalBtn, #saveShiftFromModalToInvoiceBtn, #closeLogShiftModalBtn, #saveSigBtn, #closeSigModalBtn, #clearSigBtn,
+  .wizard-steps + div button, 
   #closeMessageModalBtn, #confirmTravelCodeSelectionBtn, #closeTravelCodeSelectionModalBtn,
-  #logTodayShiftBtn, #rqBtn /* Home screen buttons */
+  #logTodayShiftBtn, #rqBtn 
    { display: none !important; }
   
   #portalApp { display: block !important; } 
   main { padding: 0; margin: 0; overflow: visible; }
   .card { box-shadow: none; border: none; padding: 0; margin: 0 auto; max-width: 100%; background: #fff !important; color: #000 !important;}
-  /* Ensure the active section to be printed is displayed */
   section.card.active { display: block !important; }
-  /* Specifically show invoice and agreement if they are the active ones being printed */
-  /* section#invoice.active, section#agreement.active { display: block !important; } */
 
 
   #agreementContentContainer { border: none; padding: 0; background-color: transparent !important; max-height: none; overflow: visible; color: #000 !important;}
@@ -570,12 +565,11 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
   #invoice .row { margin-bottom: 8px; }
   #invoice .row div label { font-weight: bold; font-size: 9pt; color: #000 !important;}
   #invoice #invNo, #invoice #invDate, #invoice #provName, #invoice #provAbn, #invoice #gstFlag { border: none; padding: 1px; background: transparent !important; font-size: 9pt; width: auto; margin-bottom: 0; color: #000 !important;}
-  #providerDetailsRow #gstFlagContainer { display: block !important; } /* Ensure GST flag is visible */
+  #providerDetailsRow #gstFlagContainer { display: block !important; } 
   #invTbl { font-size: 9pt; margin-top: 10px; background: #fff !important; }
   #invTbl th, #invTbl td { padding: 4px 6px; border: 1px solid #999 !important; color: #000 !important;}
   #invTbl th { background-color: #f0f0f0 !important; }
   #invTbl .column-code, #invTbl .column-rate-type, #invTbl .print-only-column { display: table-cell !important; }
-  /* Hide inputs in table cells, show print-specific spans */
   #invTbl input, #invTbl select, #invTbl textarea, #invTbl .custom-time-input, #invTbl .chk { display: none !important; }
   #invTbl .code-print-value, #invTbl .description-print-value, #invTbl .rate-type-print-value, 
   #invTbl .date-print-value, #invTbl .start-time-print-value, #invTbl .end-time-print-value,
@@ -583,12 +577,11 @@ button:disabled, .button:disabled { background-color: #ccc !important; border-co
   
   .totals { text-align: right; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; color: #000 !important;}
   .totals div { margin-bottom: 3px; }
-  #gstRow { display: block !important; } /* Ensure GST row is visible for print */
+  #gstRow { display: block !important; } 
   .signWrap { margin-top: 15px; page-break-inside: avoid; }
-  .signWrap img { width: 180px; height: 60px; border: 1px solid #ccc; } /* Add a light border for printed signatures */
-  .signature-image[src*="placehold.co"] { border: 1px dashed #999 !important; } /* Style placeholder for print */
+  .signWrap img { width: 180px; height: 60px; border: 1px solid #ccc; } 
+  .signature-image[src*="placehold.co"] { border: 1px dashed #999 !important; } 
 
-  /* Show PDF specific elements */
-  .pdf-show { display: table-cell !important; /* or appropriate display type */ }
+  .pdf-show { display: table-cell !important; }
   .pdf-hide { display: none !important; }
 }
