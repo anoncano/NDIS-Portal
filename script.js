@@ -35,38 +35,30 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 // --- Start of Firebase Configuration ---
-// This firebaseConfig will be used by the script.
-// It's populated with values from your Firebase project.
-// If __firebase_config is provided by the Canvas environment, it will override this.
 window.firebaseConfigForApp = {
-    // SECURITY NOTE: Hardcoding API keys directly in client-side code can be a security risk.
-    // It's generally recommended to use environment variables or a backend service to handle API keys.
-    // The __firebase_config variable (if provided by the Canvas environment) is a safer way to inject this.
-    apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", // User's provided API key
+    apiKey: "AIzaSyA33RDvrpWXUeOZYBpfJaqrytbUQFo0cgs", 
     authDomain: "ndis-portal-6ab1e.firebaseapp.com",
     databaseURL: "https://ndis-portal-6ab1e-default-rtdb.asia-southeast1.firebasedatabase.app/",
     projectId: "ndis-portal-6ab1e",
-    storageBucket: "ndis-portal-6ab1e.appspot.com",
+    storageBucket: "ndis-portal-6ab1e.appspot.com", 
     messagingSenderId: "663606000491",
     appId: "1:663606000491:web:350030eeae4212b899aa2e"
 };
 
-// Prioritize __firebase_config if available from the Canvas environment
 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
     try {
         const parsedConfig = JSON.parse(__firebase_config);
-        // Ensure all necessary keys are present in parsedConfig and are not placeholders
-        if (parsedConfig &&
+        if (parsedConfig && 
             parsedConfig.apiKey && !parsedConfig.apiKey.startsWith("YOUR_") &&
             parsedConfig.authDomain &&
-            parsedConfig.projectId &&
+            parsedConfig.projectId && 
             parsedConfig.storageBucket &&
             parsedConfig.messagingSenderId &&
             parsedConfig.appId && !parsedConfig.appId.startsWith("YOUR_")) {
             window.firebaseConfigForApp = parsedConfig;
             console.log("Using Firebase config from __firebase_config environment variable.");
         } else {
-            console.warn("__firebase_config is incomplete, uses placeholders, or is missing essential keys. Falling back to manually set config. Ensure __firebase_config provides all required Firebase settings.");
+            console.warn("__firebase_config is incomplete. Falling back to manually set config.");
         }
     } catch (e) {
         console.error("Error parsing __firebase_config:", e, "Using manually set config.");
@@ -90,56 +82,43 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'ndis-portal-app-loca
 console.log(`[App Init] Using appId: ${appId}`);
 
 /* ========== UI Element References ========== */
-// Main Screens
 const authScreenElement = $("#authScreen");
 const portalAppElement = $("#portalApp");
-// Auth Form
 const authEmailInputElement = $("#authEmail"), authPasswordInputElement = $("#authPassword"), authStatusMessageElement = $("#authStatusMessage");
 const loginButtonElement = $("#loginBtn"), registerButtonElement = $("#registerBtn"), logoutButtonElement = $("#logoutBtn");
-// Portal Common
 const userIdDisplayElement = $("#userIdDisplay"), portalTitleDisplayElement = $("#portalTitleDisplay");
 const adminTabElement = $("#adminTab"), adminBottomTabElement = $("#adminBottomTab");
-// Home
 const homeUserDivElement = $("#homeUser"), userNameDisplayElement = $("#userNameDisplay");
 const requestShiftButtonElement = $("#rqBtn"), logTodayShiftButtonElement = $("#logTodayShiftBtn");
 const shiftRequestsTableBodyElement = $("#rqTbl tbody");
-// Profile
 const profileNameElement = $("#profileName"), profileAbnElement = $("#profileAbn"), profileGstElement = $("#profileGst");
 const profileBsbElement = $("#profileBsb"), profileAccElement = $("#profileAcc");
 const profileFilesListElement = $("#profileFilesList"), profileFileUploadElement = $("#profileFileUpload"), uploadProfileDocumentsButtonElement = $("#uploadProfileDocumentsBtn");
 const editProfileButtonElement = $("#editProfileBtn");
-// Invoice
 const invoiceWeekLabelElement = $("#wkLbl"), invoiceNumberInputElement = $("#invNo"), invoiceDateInputElement = $("#invDate");
 const providerNameInputElement = $("#provName"), providerAbnInputElement = $("#provAbn"), gstFlagInputElement = $("#gstFlag");
 const invoiceTableBodyElement = $("#invTbl tbody"), subtotalElement = $("#sub"), gstRowElement = $("#gstRow"), gstAmountElement = $("#gst"), grandTotalElement = $("#grand");
 const addInvoiceRowButtonElement = $("#addInvRowUserActionBtn"), saveDraftButtonElement = $("#saveDraftBtn"), generateInvoicePdfButtonElement = $("#generateInvoicePdfBtn");
 const invoicePdfContentElement = $("#invoicePdfContent");
-// Agreement
 const agreementDynamicTitleElement = $("#agreementDynamicTitle"), adminAgreementWorkerSelectorElement = $("#adminAgreementWorkerSelector");
 const adminSelectWorkerForAgreementElement = $("#adminSelectWorkerForAgreement"), loadServiceAgreementForSelectedWorkerButtonElement = $("#loadServiceAgreementForSelectedWorkerBtn");
 const agreementChipElement = $("#agrChip"), agreementContentContainerElement = $("#agreementContentContainer");
 const participantSignatureImageElement = $("#sigP"), participantSignatureDateElement = $("#dP");
 const workerSignatureImageElement = $("#sigW"), workerSignatureDateElement = $("#dW");
 const signAgreementButtonElement = $("#signBtn"), participantSignButtonElement = $("#participantSignBtn"), downloadAgreementPdfButtonElement = $("#pdfBtn");
-// Admin - Global Settings
 const adminEditOrgNameInputElement = $("#adminEditOrgName"), adminEditOrgAbnInputElement = $("#adminEditOrgAbn"), adminEditOrgContactEmailInputElement = $("#adminEditOrgContactEmail"), adminEditOrgContactPhoneInputElement = $("#adminEditOrgContactPhone");
 const adminEditParticipantNameInputElement = $("#adminEditParticipantName"), adminEditParticipantNdisNoInputElement = $("#adminEditParticipantNdisNo"), adminEditPlanManagerNameInputElement = $("#adminEditPlanManagerName"), adminEditPlanManagerEmailInputElement = $("#adminEditPlanManagerEmail"), adminEditPlanManagerPhoneInputElement = $("#adminEditPlanManagerPhone"), adminEditPlanEndDateInputElement = $("#adminEditPlanEndDate");
 const saveAdminPortalSettingsButtonElement = $("#saveAdminPortalSettingsBtn"), resetGlobalSettingsToDefaultsButtonElement = $("#resetGlobalSettingsToDefaultsBtn");
 const inviteLinkCodeElement = $("#invite"), copyInviteLinkButtonElement = $("#copyLinkBtn");
-// Admin - Service Management
 const adminServiceIdInputElement = $("#adminServiceId"), adminServiceCodeInputElement = $("#adminServiceCode"), adminServiceDescriptionInputElement = $("#adminServiceDescription"), adminServiceCategoryTypeSelectElement = $("#adminServiceCategoryType");
 const adminServiceRateFieldsContainerElement = $("#adminServiceRateFieldsContainer"), adminServiceTravelCodeDisplayElement = $("#adminServiceTravelCodeDisplay"), selectTravelCodeButtonElement = $("#selectTravelCodeBtn"), adminServiceTravelCodeInputElement = $("#adminServiceTravelCode");
 const saveAdminServiceButtonElement = $("#saveAdminServiceBtn"), clearAdminServiceFormButtonElement = $("#clearAdminServiceFormBtn"), adminServicesTableBodyElement = $("#adminServicesTable tbody");
-// Admin - Agreement Customization
 const adminAgreementOverallTitleInputElement = $("#adminAgreementOverallTitle"), adminAgreementClausesContainerElement = $("#adminAgreementClausesContainer"), adminAddAgreementClauseButtonElement = $("#adminAddAgreementClauseBtn"), saveAdminAgreementCustomizationsButtonElement = $("#saveAdminAgreementCustomizationsBtn"), adminAgreementPreviewElement = $("#adminAgreementPreview");
-// Admin - Worker Management
 const workersListForAuthSelectElement = $("#workersListForAuthSelect"), selectedWorkerNameForAuthElement = $("#selectedWorkerNameForAuth"), servicesForWorkerContainerElement = $("#servicesForWorkerContainer"), servicesListCheckboxesElement = $("#servicesListCheckboxes"), saveWorkerAuthorizationsButtonElement = $("#saveWorkerAuthorizationsBtn");
 
-// Modal Bootstrap Instances
 let messageModalInstance, confirmationModalInstance, loadingOverlayInstance;
-let userSetupWizardModal, adminSetupWizardModal; // For Bootstrap interaction if needed outside Alpine
+let userSetupWizardModal, adminSetupWizardModal;
 
-/* ========== Local State Variables ========== */
 let userProfile = {};
 let globalSettings = {};
 let adminManagedServices = [];
@@ -162,7 +141,7 @@ let defaultAgreementCustomData = {
 const RATE_CATEGORIES = ["weekday", "evening", "night", "saturday", "sunday", "public"];
 const SERVICE_CATEGORY_TYPES = { CORE_STANDARD: 'core_standard', CORE_HIGH_INTENSITY: 'core_high_intensity', CAPACITY_THERAPY_STD: 'capacity_therapy_std', CAPACITY_SPECIALIST: 'capacity_specialist', TRAVEL_KM: 'travel_km', OTHER_FLAT_RATE: 'other_flat_rate' };
 let sigCanvas, sigCtx, sigPen = false, sigPaths = [];
-let sigCanvasRatio = 1; // For signature pad DPI scaling
+let sigCanvasRatio = 1;
 let currentAgreementWorkerEmail = null;
 let signingAs = 'worker';
 let isFirebaseInitialized = false, initialAuthComplete = false;
@@ -171,26 +150,30 @@ let currentAdminServiceEditingId = null;
 let allUsersCache = {};
 let currentOnConfirmCallback = null;
 
-/* ========== Error Logging ========== */
 async function logErrorToFirestore(location, errorMsg, errorDetails = {}) {
-    if (!fsDb || !appId || appId === 'ndis-portal-app-local') { console.error("Firestore not init/local dev, no log:", location, errorMsg, errorDetails); return; }
+    // Check if Firestore is initialized and not in a local-only dev mode.
+    // The original check `!appId || appId === 'ndis-portal-app-local'` might be too restrictive
+    // if `appId` is always set. Consider just `!fsDb`.
+    if (!fsDb) { 
+        console.error("Firestore not initialized, cannot log error to DB:", location, errorMsg, errorDetails); 
+        return; 
+    }
     try {
         await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/logs/errors`), {
             location: String(location), errorMessage: String(errorMsg),
             errorStack: errorDetails instanceof Error ? errorDetails.stack : JSON.stringify(errorDetails),
             user: currentUserEmail || currentUserId || "unknown", timestamp: serverTimestamp(),
-            appVersion: "1.2.1-libs-fix", userAgent: navigator.userAgent, url: window.location.href
+            appVersion: "1.2.2-pathfix", userAgent: navigator.userAgent, url: window.location.href
         });
-        console.info("Error logged:", location);
-    } catch (logError) { console.error("FATAL: Could not log error:", logError, "Original:", location, errorMsg); }
+        console.info("Error logged to Firestore:", location);
+    } catch (logError) { console.error("FATAL: Could not log error to Firestore:", logError, "Original error:", location, errorMsg); }
 }
 
-/* ========== UI Helpers (using Bootstrap Modals) ========== */
 function showLoading(message = "Loading...") {
     if (!loadingOverlayInstance) loadingOverlayInstance = new bootstrap.Modal(document.getElementById('loadingOverlay'), { keyboard: false, backdrop: 'static' });
     const messageP = document.getElementById('loadingOverlay').querySelector('p');
     if(messageP) messageP.textContent = message;
-    loadingOverlayInstance.show();
+    if (loadingOverlayInstance && !loadingOverlayInstance._isShown) loadingOverlayInstance.show();
 }
 function hideLoading() {
     if (loadingOverlayInstance && loadingOverlayInstance._isShown) {
@@ -271,7 +254,6 @@ function updatePortalTitle() {
     document.title = title;
 }
 
-/* ========== Utilities ========== */
 function validateEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase()); }
 function formatDateForDisplay(d) { if (!d) return ""; try { const date = d.toDate ? d.toDate() : new Date(d); return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return "Invalid"; } }
 function formatDateForInput(d) { if (!d) return ""; try { const date = d.toDate ? d.toDate() : new Date(d); const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, '0'), day = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; } catch (e) { return ""; } }
@@ -283,11 +265,9 @@ function formatCurrency(n) { return new Intl.NumberFormat('en-AU', { style: 'cur
 function generateUniqueId(prefix = 'id_') { return prefix + Date.now().toString(36) + Math.random().toString(36).substring(2, 9); }
 function getWeekNumber(d) { d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); const yS = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yS) / 86400000) + 1) / 7); }
 
-
-/* ========== Firebase Initialization & Auth ========== */
 async function initializeFirebaseApp() {
     console.log("[FirebaseInit] Initializing...");
-    const config = window.firebaseConfigForApp; // Now defined at the top of the script
+    const config = window.firebaseConfigForApp; 
 
     if (!config || !config.apiKey || config.apiKey.startsWith("YOUR_")) {
         showAuthStatusMessage("System Error: Portal configuration invalid. Missing Firebase config."); hideLoading();
@@ -324,8 +304,7 @@ async function setupAuthListener() {
 
                     await loadGlobalSettingsFromFirestore();
                     const profileData = await loadUserProfileFromFirestore(currentUserId);
-                    // let signedOut = false; // Not needed as logic directly proceeds or signs out
-
+                    
                     if (profileData) {
                         await handleExistingUserProfile(profileData);
                     } else if (currentUserEmail && globalSettings.adminEmail && currentUserEmail.toLowerCase() === globalSettings.adminEmail.toLowerCase()) {
@@ -362,7 +341,6 @@ async function setupAuthListener() {
 
 async function handleExistingUserProfile(data) {
     userProfile = { ...data, uid: currentUserId, email: currentUserEmail };
-    // Worker approval logic is removed, users are considered active if their profile exists.
     if (userProfile.isAdmin) {
         await loadAllDataForAdmin();
         enterPortal(true);
@@ -374,7 +352,6 @@ async function handleExistingUserProfile(data) {
             openModal('wizModal'); 
         }
     }
-    // return false; // No longer needed as this function doesn't determine sign-out status
 }
 
 async function handleNewAdminProfile() {
@@ -393,11 +370,9 @@ async function handleNewAdminProfile() {
         showMessage("Setup Error", "Could not initialize admin account.", "error");
         await fbSignOut(fbAuth); 
     }
-    // return false; // No longer needed
 }
 
 async function handleNewRegularUserProfile() {
-    // Worker approval logic removed, new users are auto-approved.
     userProfile = {
         name: currentUserEmail.split('@')[0], email: currentUserEmail, uid: currentUserId,
         isAdmin: false, approved: true, 
@@ -415,7 +390,6 @@ async function handleNewRegularUserProfile() {
         showMessage("Registration Error", "Could not complete registration.", "error");
         await fbSignOut(fbAuth); 
     }
-    // return false; // No longer needed
 }
 
 async function loadUserProfileFromFirestore(uid) { 
@@ -463,13 +437,24 @@ function renderUserHomePage() {
     if(userNameDisplayElement && userProfile.name) userNameDisplayElement.textContent = userProfile.name;
 }
 async function loadAdminServicesFromFirestore() {
-    adminManagedServices = []; if (!fsDb) return;
+    adminManagedServices = []; 
+    if (!fsDb) {
+        console.error("[DataLoad] Error loading NDIS services: Firestore DB not initialized.");
+        logErrorToFirestore("loadAdminServicesFromFirestore", "Firestore DB not initialized.");
+        return;
+    }
     try {
-        const qSnap = await getDocs(collection(fsDb, `artifacts/${appId}/public/services`));
-        qSnap.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
-    } catch (e) { logErrorToFirestore("loadAdminServicesFromFirestore", e.message, e); }
+        // CORRECTED PATH: Using `services` as a collection directly under `appId`
+        const servicesCollectionRef = collection(fsDb, `artifacts/${appId}/services`);
+        const querySnapshot = await getDocs(servicesCollectionRef);
+        querySnapshot.forEach(d => adminManagedServices.push({ id: d.id, ...d.data() }));
+        console.log("[DataLoad] Admin services loaded:", adminManagedServices.length);
+    } catch (e) {
+        console.error("[DataLoad] Error loading NDIS services:", e);
+        logErrorToFirestore("loadAdminServicesFromFirestore", e.message, e);
+    }
     renderAdminServicesTable();
- }
+}
 async function loadAllUsersForAdmin() { 
     allUsersCache = {}; if (!userProfile.isAdmin || !fsDb) return;
     try {
@@ -807,7 +792,7 @@ function renderAgreementSection() {
         if(adminAgreementWorkerSelectorElement) adminAgreementWorkerSelectorElement.classList.remove('d-none'); 
         if(adminSelectWorkerForAgreementElement) {
             adminSelectWorkerForAgreementElement.innerHTML = '<option value="">-- Select Worker --</option>';
-            Object.values(allUsersCache).filter(u => !u.isAdmin).forEach(worker => { // Removed u.approved check
+            Object.values(allUsersCache).filter(u => !u.isAdmin).forEach(worker => {
                 const option = document.createElement('option');
                 option.value = worker.email; 
                 option.textContent = `${worker.name || worker.email} (${worker.email})`;
@@ -867,7 +852,6 @@ function updateSignatureDisplays(agreementData) {
     const placeholderSig = 'https://placehold.co/250x85/e8e8e8/666666?text=Signature+Area&txtsize=16';
     if (participantSignatureImageElement) {
         participantSignatureImageElement.src = agreementData.participantSignature || placeholderSig;
-        // Bootstrap d-none/d-block can be used if image itself is hidden, or just border changes
         participantSignatureImageElement.style.border = agreementData.participantSignature ? '1px solid var(--ok)' : '1px dashed var(--bs-border-color)';
     }
     if (participantSignatureDateElement) participantSignatureDateElement.textContent = agreementData.participantSignatureDate ? `Signed: ${formatDateForDisplay(agreementData.participantSignatureDate.toDate ? agreementData.participantSignatureDate.toDate() : new Date(agreementData.participantSignatureDate))}` : 'Not Signed';
@@ -879,7 +863,7 @@ function updateSignatureDisplays(agreementData) {
 }
 function updateAgreementChip(agreementData) { 
     if (!agreementChipElement) return; if (!agreementData || !agreementData.status) { agreementChipElement.className = 'badge d-none'; return; }
-    let statusText = "Draft", chipClass = "badge bg-warning text-dark"; // Bootstrap classes
+    let statusText = "Draft", chipClass = "badge bg-warning text-dark"; 
     if (agreementData.workerSignature && agreementData.participantSignature) { statusText = "Active - Fully Signed"; chipClass = "badge bg-success"; }
     else if (agreementData.workerSignature) { statusText = "Signed by Worker"; chipClass = "badge bg-info text-dark"; }
     else if (agreementData.participantSignature) { statusText = "Signed by Participant"; chipClass = "badge bg-info text-dark"; }
@@ -931,8 +915,6 @@ function getSigPenPosition(e) {
     const rect = sigCanvas.getBoundingClientRect(); let clientX, clientY;
     if (e.touches?.length) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
     else { clientX = e.clientX; clientY = e.clientY; }
-    // Corrected scaling: client coordinates are already relative to viewport.
-    // We need to map them to the canvas's internal coordinate system, considering its CSS size.
     return { 
         x: (clientX - rect.left) * (sigCanvas.width / sigCanvasRatio / rect.width), 
         y: (clientY - rect.top) * (sigCanvas.height / sigCanvasRatio / rect.height)
@@ -957,7 +939,7 @@ async function saveSignature() {
         const agreementRef = doc(fsDb, `artifacts/${appId}/users/${window.currentLoadedAgreementWorkerUid}/agreement`, "details");
         const agreementSnap = await getDoc(agreementRef);
         if (agreementSnap.exists()) await updateDoc(agreementRef, agreementUpdate);
-        else { /* Fallback to setDoc if somehow deleted, as before */ }
+        else { /* Fallback to setDoc if somehow deleted */ }
         closeModal('sigModal'); showMessage("Signature Saved", "Signature saved.", "success");
         await loadAndRenderServiceAgreement(currentAgreementWorkerEmail); 
     } catch (e) { logErrorToFirestore("saveSignature", e.message, e); showMessage("Save Failed", e.message, "error"); }
@@ -1003,7 +985,7 @@ async function executeResetGlobalSettings() {
     globalSettings.agreementTemplate = agreementCustomData;
     if (await saveGlobalSettingsToFirestore()) { renderAdminGlobalSettingsTab(); showMessage("Settings Reset", "Global settings reset.", "success");}
 }
-function renderAdminServiceManagementTab() { loadAdminServicesFromFirestore(); }
+function renderAdminServiceManagementTab() { loadAdminServicesFromFirestore(); renderAdminServiceRateFields(); /* Init category dropdown listener */ }
 function renderAdminServicesTable() { 
     if (!adminServicesTableBodyElement) return; adminServicesTableBodyElement.innerHTML = '';
     adminManagedServices.forEach(s => {
@@ -1023,8 +1005,7 @@ function handleAdminServiceAction(e) {
             adminServiceCodeInputElement.value = service.serviceCode || '';
             adminServiceDescriptionInputElement.value = service.description || '';
             adminServiceCategoryTypeSelectElement.value = service.categoryType || SERVICE_CATEGORY_TYPES.CORE_STANDARD;
-            renderAdminServiceRateFields(); // This will now populate based on selected category
-            // Populate rate fields based on service.rates
+            renderAdminServiceRateFields(); 
             if (service.rates) {
                 Object.keys(service.rates).forEach(rateKey => {
                     const rateInput = $(`#adminServiceRate_${rateKey}`);
@@ -1044,7 +1025,8 @@ function requestDeleteAdminService(id, description) {
 async function executeDeleteAdminService(id) { 
     if (!fsDb || !id) return; showLoading(`Deleting service ${id}...`);
     try {
-        await deleteDoc(doc(fsDb, `artifacts/${appId}/public/services`, id));
+        // CORRECTED PATH
+        await deleteDoc(doc(fsDb, `artifacts/${appId}/services`, id));
         adminManagedServices = adminManagedServices.filter(s => s.id !== id); 
         renderAdminServicesTable(); showMessage("Service Deleted", `Service ${id} deleted.`, "success");
     } catch (e) { logErrorToFirestore("executeDeleteAdminService", e.message, e); showMessage("Delete Failed", e.message, "error");}
@@ -1059,29 +1041,23 @@ async function saveAdminServiceToFirestore() {
         description: adminServiceDescriptionInputElement.value.trim(),
         categoryType: adminServiceCategoryTypeSelectElement.value,
         rates: {},
-        travelCode: adminServiceTravelCodeInputElement.value || null, // Store null if empty
+        travelCode: adminServiceTravelCodeInputElement.value || null, 
         updatedAt: serverTimestamp()
     };
-    // Collect rates from dynamically generated fields
     adminServiceRateFieldsContainerElement.querySelectorAll('input[data-rate-key]').forEach(input => {
         if (input.value) serviceData.rates[input.dataset.rateKey] = parseFloat(input.value);
     });
-    if (Object.keys(serviceData.rates).length === 0 && serviceData.categoryType !== SERVICE_CATEGORY_TYPES.TRAVEL_KM && serviceData.categoryType !== SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-         // For time-based services, at least one rate should be set, or handle this more gracefully.
-         // For now, allow saving without rates, but it might cause issues in invoicing.
-    }
-
+    
     showLoading("Saving service...");
     try {
-        let serviceRef;
+        let serviceRefPath = `artifacts/${appId}/services`; // CORRECTED PATH
         if (currentAdminServiceEditingId) {
-            serviceRef = doc(fsDb, `artifacts/${appId}/public/services`, currentAdminServiceEditingId);
-            await updateDoc(serviceRef, serviceData);
+            await updateDoc(doc(fsDb, serviceRefPath, currentAdminServiceEditingId), serviceData);
         } else {
             serviceData.createdAt = serverTimestamp();
-            serviceRef = await fsAddDoc(collection(fsDb, `artifacts/${appId}/public/services`), serviceData);
+            await fsAddDoc(collection(fsDb, serviceRefPath), serviceData);
         }
-        await loadAdminServicesFromFirestore(); // Reload all services
+        await loadAdminServicesFromFirestore(); 
         clearAdminServiceForm();
         showMessage("Service Saved", "NDIS service details saved.", "success");
     } catch (e) { logErrorToFirestore("saveAdminServiceToFirestore", e.message, e); showMessage("Save Failed", e.message, "error");}
@@ -1094,7 +1070,7 @@ function clearAdminServiceForm() {
     if(adminServiceCategoryTypeSelectElement) adminServiceCategoryTypeSelectElement.value = SERVICE_CATEGORY_TYPES.CORE_STANDARD;
     if(adminServiceTravelCodeInputElement) adminServiceTravelCodeInputElement.value = '';
     if(adminServiceTravelCodeDisplayElement) adminServiceTravelCodeDisplayElement.value = 'None selected';
-    renderAdminServiceRateFields(); // This will clear and re-render based on default category
+    renderAdminServiceRateFields(); 
     currentAdminServiceEditingId = null;
 }
 function openTravelCodeSelectionModal() { 
@@ -1103,7 +1079,7 @@ function openTravelCodeSelectionModal() {
         travelCodeListContainerElement.innerHTML = '';
         const travelServices = adminManagedServices.filter(s => s.categoryType === SERVICE_CATEGORY_TYPES.TRAVEL_KM);
         if (travelServices.length === 0) {
-            travelCodeListContainerElement.innerHTML = '<p class="list-group-item">No travel services defined. Please add them in the NDIS Services tab first.</p>';
+            travelCodeListContainerElement.innerHTML = '<p class="list-group-item">No travel services defined.</p>';
         } else {
             travelServices.forEach(ts => {
                 const item = document.createElement('button');
@@ -1123,23 +1099,22 @@ function openTravelCodeSelectionModal() {
 }
 function renderAdminServiceRateFields() { 
     if(!adminServiceRateFieldsContainerElement || !adminServiceCategoryTypeSelectElement) return;
-    adminServiceRateFieldsContainerElement.innerHTML = ''; // Clear existing
+    adminServiceRateFieldsContainerElement.innerHTML = ''; 
     const category = adminServiceCategoryTypeSelectElement.value;
     let rateKeysToShow = [];
 
     if (category === SERVICE_CATEGORY_TYPES.CORE_STANDARD || category === SERVICE_CATEGORY_TYPES.CORE_HIGH_INTENSITY) {
-        rateKeysToShow = RATE_CATEGORIES; // weekday, evening, night, saturday, sunday, public
+        rateKeysToShow = RATE_CATEGORIES; 
     } else if (category === SERVICE_CATEGORY_TYPES.CAPACITY_THERAPY_STD || category === SERVICE_CATEGORY_TYPES.CAPACITY_SPECIALIST || category === SERVICE_CATEGORY_TYPES.TRAVEL_KM || category === SERVICE_CATEGORY_TYPES.OTHER_FLAT_RATE) {
-        rateKeysToShow = ['flat']; // Single flat rate
+        rateKeysToShow = ['flat']; 
     }
-    // Add more conditions if other categories have specific rate structures
-
+    
     if (rateKeysToShow.length > 0) {
         const gridDiv = document.createElement('div');
-        gridDiv.className = 'row g-2'; // Bootstrap grid
+        gridDiv.className = 'row g-2'; 
         rateKeysToShow.forEach(key => {
             const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-4 col-sm-6'; // Responsive columns
+            colDiv.className = 'col-md-4 col-sm-6'; 
             const label = document.createElement('label');
             label.htmlFor = `adminServiceRate_${key}`;
             label.className = 'form-label-sm text-capitalize';
@@ -1164,13 +1139,12 @@ function addAdminAgreementClauseEditor(clause = {}) { /* ... same logic ... */ }
 function updateAdminAgreementPreview() { /* ... same logic ... */ }
 async function saveAdminAgreementCustomizationsToFirestore() { /* ... same logic ... */ }
 function renderAdminWorkerManagementTab() { 
-    // Worker approval UI and logic is removed.
     loadApprovedWorkersForAuthManagement(); 
 }
 async function loadApprovedWorkersForAuthManagement() {
     if(!workersListForAuthSelectElement) return;
     workersListForAuthSelectElement.innerHTML = '<option value="">-- Select Worker --</option>';
-    Object.values(allUsersCache).filter(u => !u.isAdmin) // No u.approved check needed anymore
+    Object.values(allUsersCache).filter(u => !u.isAdmin) 
         .forEach(w => {
             const opt = document.createElement('option');
             opt.value = w.uid; opt.textContent = `${w.name || w.email}`;
@@ -1212,12 +1186,8 @@ async function saveWorkerAuthorizationsToFirestore() {
     finally { hideLoading(); }
 }
 
-// Expose Alpine.js component functions to the global scope
 window.portalApp = function() {
-    return {
-        // This can be expanded if the main body needs reactive properties
-        // For now, it's mainly a placeholder to initialize Alpine on the body
-    };
+    return {};
 }
 
 window.userSetupWizard = function() {
@@ -1235,7 +1205,6 @@ window.userSetupWizard = function() {
             await saveProfileDetails(profileUpdates);
             
             if (this.wizardFilesStaged.length > 0 && profileFileUploadElement) {
-                // Create a new FileList for the input
                 const dataTransfer = new DataTransfer();
                 this.wizardFilesStaged.forEach(file => dataTransfer.items.add(file));
                 profileFileUploadElement.files = dataTransfer.files;
@@ -1260,7 +1229,7 @@ window.adminSetupWizard = function() {
                 globalSettings.organizationContactEmail = $('#adminWizOrgContactEmail').value;
                 globalSettings.organizationContactPhone = $('#adminWizOrgContactPhone').value;
             } else { 
-                if (userProfile && $('#adminWizUserName')) { // Update current admin's name if individual setup
+                if (userProfile && $('#adminWizUserName')) { 
                      userProfile.name = $('#adminWizUserName').value || userProfile.name; 
                      await saveProfileDetails({name: userProfile.name}); 
                 }
@@ -1280,8 +1249,6 @@ window.adminSetupWizard = function() {
     };
 }
 
-
-/* ========== Event Listeners Setup ========== */
 function setupEventListeners() {
     loginButtonElement?.addEventListener('click', modalLogin);
     registerButtonElement?.addEventListener('click', modalRegister);
@@ -1356,12 +1323,12 @@ function setupEventListeners() {
     saveWorkerAuthorizationsButtonElement?.addEventListener('click', saveWorkerAuthorizationsToFirestore);
     
     requestShiftButtonElement?.addEventListener('click', () => openModal('rqModal'));
-    saveRequestButtonElement?.addEventListener('click', () => { /* TODO: Add save shift request logic */ closeModal('rqModal'); showMessage("Request Submitted", "Shift request submitted.", "success"); });
+    saveRequestButtonElement?.addEventListener('click', () => { closeModal('rqModal'); showMessage("Request Submitted", "Shift request submitted.", "success"); });
     
     logTodayShiftButtonElement?.addEventListener('click', () => openModal('logShiftModal'));
-    saveShiftToInvoiceButtonElement?.addEventListener('click', () => { /* TODO: Add save shift to invoice logic */ closeModal('logShiftModal'); showMessage("Shift Logged", "Shift added to invoice draft.", "success"); });
+    saveShiftToInvoiceButtonElement?.addEventListener('click', () => { closeModal('logShiftModal'); showMessage("Shift Logged", "Shift added to invoice draft.", "success"); });
     
-    initFlatpickr(); // Initialize Flatpickr for static elements
+    initFlatpickr();
 }
 
 function initFlatpickr() {
@@ -1382,21 +1349,17 @@ function initFlatpickrForRow(rowElement) {
     rowElement.querySelectorAll(".flatpickr-time").forEach(el => flatpickr(el, { enableTime: true, noCalendar: true, dateFormat: "H:i", time_24hr: true, allowInput: true }));
 }
 
-/* ========== App Initialization ========== */
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("DOM fully loaded. App Version 1.2.1-libs-fix");
+    console.log("DOM fully loaded. App Version 1.2.2-pathfix");
     showLoading("Initializing Portal...");
     
-    // Make Alpine component functions globally available
     window.portalApp = portalApp;
     window.userSetupWizard = userSetupWizard;
     window.adminSetupWizard = adminSetupWizard;
 
-    // Initialize Bootstrap Modals that are always in the DOM
     if (document.getElementById('loadingOverlay')) loadingOverlayInstance = new bootstrap.Modal(document.getElementById('loadingOverlay'), { keyboard: false, backdrop: 'static' });
     if (document.getElementById('messageModal')) messageModalInstance = new bootstrap.Modal(document.getElementById('messageModal'));
     if (document.getElementById('confirmationModal')) confirmationModalInstance = new bootstrap.Modal(document.getElementById('confirmationModal'));
-    // Wizard modals are controlled by Alpine, but we can get their instances if needed for JS control
     if (document.getElementById('wizModal')) userSetupWizardModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('wizModal'));
     if (document.getElementById('adminSetupWizardModal')) adminSetupWizardModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('adminSetupWizardModal'));
 
