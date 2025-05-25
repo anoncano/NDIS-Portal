@@ -1,587 +1,290 @@
+/* :root variables define the color palette and base styles for the portal */
 :root {
-  --pri: #007bff; /* Primary blue */
+  --pri: #007bff; 
   --pri-dark: #0056b3;
-  --pri-light: #e0f0ff; /* Lighter primary for backgrounds */
-  --sec: #6c757d;  /* Secondary grey */
+  --pri-light: #cce5ff; 
+  --sec: #6c757d;  
   --sec-dark: #545b62;
-  --sec-light: #f0f3f5; /* Even lighter grey for subtle backgrounds */
-  --light: #f8f9fa; /* Light grey page background */
-  --dark: #212529; /* Darker text for better contrast */
-  --bd: #ced4da;   /* Border color */
-  --bg: #ffffff;      /* Card background */
-  --head:#e9ecef; /* Table header background */
-  --row-alt:#f8f9fa;  /* Table row alt background */
-  --ok: #28a745;   /* Success green */
-  --ok-dark: #1e7e34;
-  --warn: #ffc107; /* Warning yellow */
+  --sec-light: #e9ecef; /* Bootstrap light gray for backgrounds */
+  --light: #f8f9fa; /* Bootstrap default light background */
+  --dark: #212529; /* Bootstrap default dark text */
+  --bd: #dee2e6;   /* Bootstrap default border color */
+  --bg: #ffffff;      
+  --head:#f8f9fa; /* Bootstrap light for table headers */
+  --row-alt:#f1f3f5;  
+  --ok: #198754;   /* Bootstrap success green */
+  --ok-dark: #146c43;
+  --warn: #ffc107; /* Bootstrap warning yellow */
   --warn-dark: #d39e00;
-  --warn-text: #664d03; /* Darker yellow text for better contrast on yellow bg */
-  --danger: #dc3545; /* Danger red */
+  --warn-text: #664d03; 
+  --danger: #dc3545; /* Bootstrap danger red */
   --danger-dark: #bd2130;
-  --shadow: 0 0.2rem 0.75rem rgba(0, 0, 0, 0.07); /* Softer, slightly larger shadow */
-  --radius: 0.4rem; /* Slightly more rounded corners */
-  --input-padding-y: 0.6rem; 
-  --input-padding-x: 0.9rem;
-  --input-font-size: 0.95rem;
-  --font-family-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --info: #0dcaf0; /* Bootstrap info blue */
+  
+  /* Mapping custom variables to Bootstrap CSS variables for theming */
+  --bs-primary: var(--pri);
+  --bs-secondary: var(--sec);
+  --bs-success: var(--ok);
+  --bs-info: var(--info);
+  --bs-warning: var(--warn);
+  --bs-danger: var(--danger);
+  --bs-light: var(--light);
+  --bs-dark: var(--dark);
+
+  --bs-primary-rgb: 0, 123, 255; 
+  --bs-secondary-rgb: 108, 117, 125;
+  /* Add other --bs-*-rgb variables if using Bootstrap opacity utilities with them */
+
+  --bs-body-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --bs-body-bg: var(--light);
+  --bs-body-color: var(--dark);
+  --bs-border-radius: 0.375rem; 
+  --bs-box-shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .075);
+  --bs-modal-header-border-color: var(--bd); /* Ensure modal headers have a border */
+  --bs-modal-footer-border-color: var(--bd); /* Ensure modal footers have a border */
 }
 
-* { 
-  box-sizing: border-box; 
-  font-family: var(--font-family-sans-serif); 
-}
-
+/* General body styling, leveraging Bootstrap variables */
 body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--light) !important; /* Ensure light page background */
-  color: var(--dark) !important; /* Ensure dark text */
-  font-size: 16px;
-  line-height: 1.6; 
+  font-family: var(--bs-body-font-family);
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  min-height: 100vh; /* Ensure body takes at least full viewport height */
 }
 
-/* ========== AUTHENTICATION SCREEN ========== */
-#authScreen {
-  display: flex; 
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: fixed;
-  inset: 0; 
-  background-color: var(--light) !important; 
-  z-index: 3000; 
-  padding: 20px;
-  animation: fadeInBackdrop 0.3s ease-out;
+/* Styles for the full-screen authentication view */
+#authScreen { 
+    display: flex; /* Initially shown, JS will hide after auth */
 }
-
-#authScreen .dlg { 
-  background: var(--bg) !important; /* Ensure white dialog */
-  color: var(--dark) !important; /* Ensure dark text in dialog */
-  padding: 30px 35px;
-  border-radius: var(--radius);
-  width: 100%;
-  max-width: 420px; 
-  text-align: left;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-  animation: slideInModal 0.3s ease-out;
-}
-#authScreen .dlg h3 {
-  margin-top: 0;
-  margin-bottom: 15px; 
-  font-size: 1.8rem; 
-  color: var(--pri-dark) !important;
-  text-align: center; 
-  font-weight: 700;
-}
-#authScreen .dlg h3 i {
-  margin-right: 12px;
-  color: var(--pri);
-}
-#authScreen .form-actions {
-    margin-top: 25px;
-    gap: 15px; 
-}
-#authScreen .form-actions button {
-    font-size: 1rem; 
-    padding: 12px 20px;
+.auth-dialog-content { /* Custom styling for the auth form container */
+    background-color: var(--bg); /* Use defined background color */
 }
 
 
-/* ========== PORTAL APPLICATION CONTAINER ========== */
-#portalApp {
-  display: none; /* Initially hidden, JS will show it after auth */
-  width: 100%;
-  min-height: 100vh;
-  background-color: transparent; 
-}
-
-
-/* ========== NAVIGATION ========== */
+/* Sidebar navigation custom styling */
 nav#side {
-  width: 260px; 
-  background: var(--pri-dark); 
-  color: var(--bg); 
-  display: flex;
-  flex-direction: column;
-  padding: 24px 15px; 
-  gap: 8px; 
-  box-shadow: 4px 0 12px rgba(0,0,0,0.1);
-  flex-shrink: 0;
-  z-index: 100; 
+  background-color: #212529; /* Bootstrap's dark theme color */
+  box-shadow: var(--bs-box-shadow-sm); /* Apply a subtle shadow */
 }
-nav#side h1 { 
-  margin: 0 0 24px; 
-  font-size: 1.6rem; 
-  font-weight: 700; 
-  text-align: center; 
-  line-height: 1.2; 
-  letter-spacing: -0.5px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  color: var(--bg) !important; 
+nav#side h1 {
+  font-size: 1.25rem; 
+  color: #fff; /* White text for title on dark background */
 }
-nav#side h1 i { margin-right: 10px; color: var(--pri-light); }
+nav#side .nav-link {
+  padding: .75rem 1rem;
+  font-size: 0.95rem;
+}
+/* Active state for sidebar navigation links */
+nav#side .nav-link.active {
+  background-color: var(--pri) !important; /* Use primary color for active link */
+  font-weight: 500;
+}
+/* Hover state for sidebar navigation links */
+nav#side .nav-link:hover {
+  background-color: var(--sec-dark); /* Darken on hover */
+}
 
-nav#side a.link {
-  color: rgba(255,255,255,0.9); text-decoration: none; padding: 14px 20px; 
-  border-radius: var(--radius); font-size: 1rem; font-weight: 500;
-  transition: background-color 0.2s ease-in-out, color 0.2s, transform 0.1s ease;
-  display: flex; 
-  align-items: center;
+/* Bottom navigation bar for mobile view, using Bootstrap navbar classes */
+#bottom.navbar {
+  padding: 0.5rem 0; 
 }
-nav#side a.link i { margin-right: 12px; width: 20px; text-align: center; } 
-nav#side a.link.active, nav#side a.link:hover { 
-  background: var(--pri); 
-  color: #fff !important; 
-  transform: translateX(3px); 
+#bottom .nav-link i {
+  font-size: 1.5rem; 
 }
-nav#bottom { display: none; } 
+/* Active state for bottom navigation links */
+#bottom .nav-link.active {
+  color: var(--warn) !important; /* Use warning color for active icon */
+  transform: scale(1.1); /* Slightly enlarge active icon */
+}
 
-/* ========== MAIN CONTENT ========== */
-main { 
-  flex: 1; 
-  padding: 30px 25px; 
-  overflow-y: auto; 
-  position: relative; 
-  background-color: transparent; 
+
+/* Main content area general styling */
+main {
+  padding: 1rem; 
 }
+
+/* Card component overrides and custom styling */
 .card {
-  max-width: 1100px; 
-  margin: 0 auto 30px auto; 
-  background: var(--bg) !important; 
-  color: var(--dark) !important; 
-  padding: 30px 35px; 
-  border-radius: var(--radius); 
-  box-shadow: var(--shadow); 
-  border: 1px solid var(--bd);
+  margin-bottom: 1.5rem; /* Consistent spacing below cards */
 }
-section.card { display: none; } 
-section.card.active { display: block; animation: fadeInContent 0.4s ease-out; }
+.card-title {
+    color: var(--pri-dark); /* Dark primary color for card titles */
+    border-bottom: 2px solid var(--pri-light); /* Light primary color for underline */
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+}
+.card-title i {
+    margin-right: 0.5rem; /* Space after icon in title */
+}
 
+/* Section visibility: sections are hidden by default, JS/Alpine shows the active one */
+main > section.card {
+  display: none;
+}
+main > section.card.active {
+  display: block; /* Show active section */
+  animation: fadeInContent 0.4s ease-out; /* Apply fade-in animation */
+}
+/* Fade-in animation for content sections */
 @keyframes fadeInContent {
-  from { opacity: 0; transform: translateY(15px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-h2 { 
-  margin: 0 0 30px; 
-  font-size: 1.9rem; 
-  font-weight: 600; 
-  color: var(--pri-dark) !important; 
-  border-bottom: 2px solid var(--pri-light); 
-  padding-bottom: 15px; 
-}
-h2 i { margin-right: 12px; }
-h3 { margin: 30px 0 20px; font-size: 1.45rem; font-weight: 600; color: var(--dark) !important; }
-h3 i { margin-right: 10px; color: var(--sec-dark); }
-h4 { margin: 22px 0 15px; font-size: 1.15rem; font-weight: 600; color: var(--sec-dark) !important; }
-h4 i { margin-right: 8px; }
-hr { border: none; border-top: 1px solid #e0e0e0; margin: 30px 0; }
-hr.compact-hr { margin: 18px 0; }
 
-.card-subsection {
-  padding: 20px;
-  background-color: var(--sec-light) !important; 
-  border-radius: calc(var(--radius) - 2px);
-  margin-bottom: 25px;
-  border: 1px solid #e0e5eb;
+/* Invoice specific styling */
+.totals {
+  font-size: 1.1rem; /* Slightly larger font for totals section */
 }
-.form-section {
-  padding: 20px;
-  border: 1px solid var(--bd);
-  border-radius: var(--radius);
-  margin-bottom: 20px;
-  background-color: #fdfdfd !important; 
+.totals b {
+  font-weight: 600; /* Make total amounts bold */
 }
 
-
-/* ========== FORMS ========== */
-.form-group { margin-bottom: 20px; } 
-label { 
-  font-size: 0.9rem; 
-  color: var(--sec-dark) !important; 
-  display: block; 
-  margin-bottom: 8px; 
-  font-weight: 600; 
+/* Agreement specific styling */
+.signature-image {
+  max-width: 250px; /* Max width for signature images */
+  height: auto; /* Maintain aspect ratio */
+  border: 1px dashed var(--bs-border-color); /* Dashed border for signature area */
+  background: #fdfdfd; /* Light background for signature area */
+  padding: 5px;
+  border-radius: var(--bs-border-radius); /* Use Bootstrap's border radius */
 }
-label i { margin-right: 6px; }
+/* Styling for the rendered agreement content */
+.agreement-content-view h2 { font-size: 1.5rem; margin-top: 1.2em; margin-bottom: 0.6em; }
+.agreement-content-view h3 { font-size: 1.25rem; margin-top: 1em; margin-bottom: 0.5em; }
+.agreement-content-view p, .agreement-content-view li { font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.8em; }
 
-input[type="text"], input[type="password"], input[type="email"],
-input[type="date"], input[type="number"], input[type="file"],
-select, textarea {
-  display: block; width: 100%;
-  padding: var(--input-padding-y) var(--input-padding-x);
-  font-size: var(--input-font-size); font-weight: 400; line-height: 1.5;
-  color: var(--dark) !important; 
-  background-color: var(--bg) !important; 
-  background-clip: padding-box;
-  border: 1px solid var(--bd); appearance: none; border-radius: var(--radius);
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+/* Admin panel tabs styling */
+.admin-nav-tabs .nav-link {
+  cursor: pointer; /* Indicate clickable tabs */
 }
-input[type="file"] { padding: calc(var(--input-padding-y) - 3px) var(--input-padding-x); }
-input[type="file"]::file-selector-button { 
-  padding: var(--input-padding-y) var(--input-padding-x); 
-  margin: calc(-1 * var(--input-padding-y) + 1px) calc(-1 * var(--input-padding-x) + 1px) calc(-1 * var(--input-padding-y) + 1px) calc(-1 * var(--input-padding-x) + 1px); 
-  margin-right: var(--input-padding-x); 
-  background-color: var(--head); border: 0; border-right: 1px solid var(--bd); 
-  color: var(--dark); cursor: pointer; transition: background-color 0.15s ease-in-out; 
-  font-weight: 500;
+/* Admin content panels styling and animation */
+.admin-content-panel {
+  animation: fadeInAdminPanel 0.3s ease-in-out; /* Fade-in animation for admin panels */
 }
-input[type="file"]::file-selector-button:hover { background-color: #dde2e7; }
-input:focus, select:focus, textarea:focus { border-color: var(--pri); outline: 0; box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25); } 
-input[readonly] { background-color: var(--sec-light) !important; cursor: default; opacity: 0.8; }
-textarea { min-height: 120px; resize: vertical; }
-
-.chk { font-size: 0.95rem; color: var(--dark) !important; margin-bottom: 18px; display: flex; align-items: center; cursor: pointer; }
-.chk input[type="checkbox"] { width: auto; margin-right: 10px; margin-bottom: 0; transform: scale(1.2); cursor:pointer; accent-color: var(--pri); }
-.chk.no-margin { margin-bottom: 0; }
-
-.row { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 0; } 
-.row > div { flex: 1; min-width: 220px; } 
-
-.form-actions { margin-top: 25px; display: flex; gap: 12px; flex-wrap: wrap; }
-.form-actions button i { margin-right: 6px; }
-
-/* ========== TABLES ========== */
-.table-responsive { overflow-x: auto; margin-top: 18px; border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background-color: var(--bg) !important; }
-th, td { border: 1px solid var(--bd); padding: 13px 15px; text-align: left; vertical-align: middle; border-left: none; border-right:none; color: var(--dark) !important;}
-th { background: var(--head) !important; font-weight: 600; white-space: nowrap; color: var(--sec-dark) !important; border-top:none; border-bottom-width: 2px; }
-td { border-top: none; }
-tbody tr:nth-child(even) { background: var(--row-alt) !important; }
-tbody tr:hover { background-color: var(--pri-light) !important; }
-
-td input[type="text"], td input[type="number"], td input[type="date"], td select,
-.invoice-input-condensed { padding: 0.5rem 0.7rem; font-size: 0.9rem; margin-bottom: 0; border-radius: calc(var(--radius) - 2px); }
-td .custom-time-picker-container { margin-bottom: 0; }
-td .chk { margin-bottom: 0; padding: 5px 0; }
-td .delete-row-btn { padding: 6px 10px; font-size: 0.8rem; }
-
-.column-code, .column-rate-type { display: none; } 
-.code-print-value, .rate-type-print-value, .description-print-value { display: none; } 
-
-/* ========== BUTTONS ========== */
-button, .button, .btn-primary, .btn-secondary, .btn-danger { 
-  padding: 10px 20px; border: 1px solid transparent; border-radius: var(--radius); 
-  font-size: 0.95rem; cursor: pointer; margin-right: 8px; margin-bottom: 8px; 
-  transition: all 0.15s ease-in-out; font-weight: 500; 
-  display: inline-flex; align-items: center; justify-content: center; 
-  text-decoration: none; line-height: 1.5; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-button i, .button i { margin-right: 8px; }
-
-.btn-primary { background: var(--pri) !important; color: var(--bg) !important; border-color: var(--pri) !important; }
-.btn-primary:hover { background: var(--pri-dark) !important; border-color: var(--pri-dark) !important; box-shadow: 0 3px 7px rgba(0,91,179,0.2); transform: translateY(-2px); }
-
-.btn-secondary { background: var(--sec) !important; color: var(--bg) !important; border-color: var(--sec) !important; }
-.btn-secondary:hover { background: var(--sec-dark) !important; border-color: var(--sec-dark) !important; box-shadow: 0 3px 7px rgba(84,91,98,0.2); transform: translateY(-2px); }
-
-.btn-danger { background: var(--danger) !important; color: var(--bg) !important; border-color: var(--danger) !important; }
-.btn-danger:hover { background: var(--danger-dark) !important; border-color: var(--danger-dark) !important; box-shadow: 0 3px 7px rgba(189,33,48,0.2); transform: translateY(-2px); }
-
-button:disabled, .button:disabled { background-color: #ccc !important; border-color: #ccc !important; cursor: not-allowed; opacity: 0.6; box-shadow: none; transform: none; }
-.btn-large { padding: 14px 28px; font-size: 1.05rem; font-weight: 600; }
-.btn-small { padding: 7px 12px; font-size: 0.8rem; }
-.btn-full-width { width: 100%; margin-right: 0; }
-
-.home-buttons-container { display: flex; flex-direction: column; align-items: stretch; gap: 18px; margin: 30px 0; }
-.welcome-message { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; color: var(--dark) !important;}
-
-.invoice-actions, .agreement-actions, .modal-actions { margin-top: 25px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; }
-.modal-actions { justify-content: flex-end; border-top: 1px solid var(--bd); padding-top: 20px; margin-top: 30px;}
-.modal-actions button { margin-right: 0; }
-.modal-actions button:not(:last-child) { margin-right: 12px; }
-
-/* ========== TOTALS & CHIPS ========== */
-.totals { text-align: right; margin-top: 30px; font-size: 1.05rem; padding-top: 20px; border-top: 1px solid var(--bd); color: var(--dark) !important;}
-.totals div { margin-bottom: 10px; font-weight: 500; }
-.totals b { font-weight: 700; color: var(--dark) !important; margin-left: 12px; }
-.chip { display: inline-block; padding: 8px 16px; border-radius: 25px; font-size: 0.8rem; font-weight: 600; line-height: 1; text-transform: uppercase; letter-spacing: 0.5px; }
-.chip.yellow { background: var(--warn); color: var(--warn-text) !important; border: 1px solid #ffc1074d;}
-.chip.green { background: var(--ok); color: var(--bg) !important; border: 1px solid #28a7454d;}
-.chip.blue { background-color: #0dcaf0; color: white !important; border: 1px solid #0dcaf04d; }
-
-
-/* ========== SIGNATURE & AGREEMENT ========== */
-.signWrap { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 25px; padding: 15px 0; justify-content: space-around; }
-.signWrap div { text-align: center; color: var(--dark) !important;}
-.signature-image { width: 250px; height: 85px; border: 1px dashed var(--bd); background: #fdfdfd; border-radius: var(--radius); object-fit: contain; padding: 5px;}
-.agreement-content { border: 1px solid var(--bd); padding: 25px; border-radius: var(--radius); background-color: #fdfdfd !important; min-height: 250px; margin-bottom: 25px; overflow-y: auto; max-height: 65vh; color: var(--dark) !important;}
-.agreement-content h3 { margin-top: 1.1em; margin-bottom: 0.5em; font-size: 1.2rem; color: var(--pri-dark) !important; }
-.agreement-content h4 { margin-top: 1em; margin-bottom: 0.4em; font-size: 1.05rem; color: var(--sec-dark) !important; }
-.agreement-content p, .agreement-content li { font-size: 0.95rem; line-height: 1.7; margin-bottom: 0.9em; }
-.agreement-content ul { padding-left: 25px; margin-bottom: 1em;}
-.agreement-content strong { font-weight: 600; }
-
-/* ========== MODALS (General overlay modals, not the auth screen) ========== */
-.modal { 
-  display: none; 
-  position: fixed; 
-  inset: 0; 
-  background: rgba(30, 41, 59, 0.8); 
-  align-items: center; 
-  justify-content: center; 
-  z-index: 2000; 
-  padding: 20px; 
-  overflow-y: auto; 
-  animation: fadeInBackdrop 0.3s ease-out; 
-}
-@keyframes fadeInBackdrop { from { opacity: 0; } to { opacity: 1; } }
-
-.modal .dlg { 
-  background: var(--bg) !important; 
-  color: var(--dark) !important; 
-  padding: 30px 35px; 
-  border-radius: var(--radius); 
-  width: 100%; 
-  max-width: 650px; 
-  text-align: left; 
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-  margin: 20px auto; 
-  animation: slideInModal 0.3s ease-out; 
-}
-@keyframes slideInModal { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-
-.modal .dlg h3 { margin-top: 0; margin-bottom: 25px; font-size: 1.6rem; color: var(--pri) !important; text-align: left; } 
-.modal .dlg h3 i { margin-right: 10px; }
-.modal .dlg canvas#signatureCanvas { 
-  border: 1px dashed var(--bd); 
-  touch-action: none; 
-  width: 100%; 
-  max-width: 300px; 
-  height: 100px; 
-  border-radius: var(--radius); 
-  margin-bottom: 18px; 
-  background-color: #fcfcfc !important; 
-  display: block; 
-  margin-left: auto; 
-  margin-right: auto;
-}
-
-.modal-list-container { max-height: 300px; overflow-y: auto; border: 1px solid var(--bd); padding: 10px; border-radius: var(--radius); margin-top: 10px; margin-bottom: 15px; background-color: var(--light) !important; }
-.modal-selectable-list { list-style-type: none; padding: 0; margin: 0; }
-.modal-selectable-list li { padding: 10px 12px; border-bottom: 1px solid var(--bd); cursor: pointer; border-radius: calc(var(--radius) - 2px); margin: 2px 0; transition: background-color 0.15s ease; color: var(--dark) !important;}
-.modal-selectable-list li:last-child { border-bottom: none; }
-.modal-selectable-list li:hover { background-color: var(--pri-light) !important; }
-.modal-selectable-list li.selected { background-color: var(--pri) !important; color: white !important; font-weight: 500; border-color: var(--pri-dark) !important; }
-
-
-/* ========== WIZARD STYLES ========== */
-.wizard-steps { display: flex; justify-content: center; margin-bottom: 30px; gap: 15px; }
-.wizard-step-indicator { width: 40px; height: 40px; border-radius: 50%; background-color: var(--bd) !important; color: var(--dark) !important; display: flex; align-items: center; justify-content: center; font-weight: 600; transition: all 0.3s; border: 2px solid transparent; position: relative;}
-.wizard-step-indicator:not(:last-child)::after { 
-  content: ''; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
-  width: 20px;  height: 2px; background-color: var(--bd);
-  margin-left: 7px; 
-}
-.wizard-step-indicator.active { background-color: var(--pri) !important; color: white !important; border-color: var(--pri-dark) !important; transform: scale(1.1); box-shadow: 0 0 10px rgba(0,123,255,0.3); }
-.wizard-step-indicator.active::after { background-color: var(--pri) !important; }
-.wizard-step-indicator.completed { background-color: var(--ok) !important; color: white !important; }
-.wizard-step-indicator.completed::after { background-color: var(--ok) !important; }
-
-.files-list { margin-top: 12px; font-size: 0.9rem; color: var(--sec-dark) !important; max-height: 120px; overflow-y: auto; border: 1px solid var(--bd); padding: 12px; border-radius: var(--radius); background: var(--light) !important; }
-.files-list div, #profileFilesList li { padding: 8px 10px; background-color: var(--bg) !important; border: 1px solid var(--bd); border-radius: var(--radius); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; color: var(--dark) !important;}
-.files-list div:last-child, #profileFilesList li:last-child { margin-bottom: 0; }
-#profileFilesList { list-style-type: none; padding-left: 0; margin-top: 10px; }
-
-/* Admin Panel Specific Styles */
-.admin-nav-tabs { display: flex; border-bottom: 2px solid var(--bd); margin-bottom: 25px; flex-wrap: wrap; }
-.admin-tab-btn { background: none; border: none; padding: 13px 22px; cursor: pointer; font-size: 1rem; font-weight: 500; color: var(--sec-dark) !important; border-bottom: 3px solid transparent; margin-right: 6px; margin-bottom: -2px; border-radius: var(--radius) var(--radius) 0 0; white-space: nowrap; transition: color 0.2s, border-color 0.2s; }
-.admin-tab-btn i { margin-right: 8px; }
-.admin-tab-btn:hover { color: var(--pri) !important; background-color: var(--sec-light) !important; }
-.admin-tab-btn.active { color: var(--pri) !important; border-bottom-color: var(--pri) !important; font-weight: 600; background-color: var(--bg) !important; }
-.admin-content-panel { display: none; padding-top: 10px; animation: fadeInAdminPanel 0.3s ease-in-out; }
-.admin-content-panel.active { display: block; }
-
 @keyframes fadeInAdminPanel { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-
-.rate-inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; margin-bottom: 18px; }
-.invite-link-container { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-#invite { padding: 10px 12px; background-color: var(--head) !important; border-radius: var(--radius); border: 1px solid var(--bd); user-select: all; flex-grow: 1; font-family: monospace; font-size: 0.9rem; color: var(--dark) !important;}
-.travel-code-selection-container { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-.travel-code-selection-container input[readonly] { flex-grow: 1; margin-bottom: 0; }
-.travel-code-selection-container button { margin-bottom: 0; }
-
-/* Admin Agreement Clause Editor */
-#adminAgreementClausesContainer .agreement-clause-editor {
-  border: 1px solid var(--sec-light);
-  padding: 20px;
-  margin-bottom: 20px;
-  border-radius: var(--radius);
-  background-color: #fdfdfd !important;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-#adminAgreementClausesContainer .agreement-clause-editor label {
-  font-weight: 600;
-  color: var(--sec-dark) !important;
-  font-size: 0.95rem; 
-}
-#adminAgreementClausesContainer .agreement-clause-editor input[type="text"],
-#adminAgreementClausesContainer .agreement-clause-editor textarea {
-  margin-bottom: 12px;
-  font-size: 0.9rem; 
-}
-#adminAgreementClausesContainer .agreement-clause-editor .remove-clause-btn {
-  margin-top: 10px;
-  float: right; 
-}
-.agreement-preview-box {
-  border: 1px dashed var(--bd);
-  padding: 20px;
-  margin-top: 20px;
-  background-color: var(--light) !important;
-  border-radius: var(--radius);
-  min-height: 150px;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--dark) !important;
-}
-.agreement-preview-box h2 { font-size: 1.5rem; color: var(--dark) !important; border-bottom: 1px solid var(--sec-light); padding-bottom: 8px; margin-bottom: 15px;}
-.agreement-preview-box h3 { font-size: 1.2rem; color: var(--pri-dark) !important; margin-top: 15px; margin-bottom: 8px; border-bottom: none; padding-bottom: 0;}
-.agreement-preview-box h4 { font-size: 1.05rem; color: var(--sec-dark) !important; margin-top: 10px; margin-bottom: 5px; border-bottom: none; padding-bottom: 0;}
-.agreement-preview-box p { margin-bottom: 10px; }
-.agreement-preview-box em { color: var(--sec) !important; font-style: italic;}
-
-
-/* ========== CUSTOM TIME PICKER ========== */
-.custom-time-picker-container { position: relative; }
-.custom-time-input { cursor: pointer; background-color: white !important; }
-.custom-time-picker-dropdown { display: flex; flex-direction: column; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white !important; border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1001; width: 330px; max-width: 90vw; padding: 20px; color: var(--dark) !important;}
-.custom-time-picker-dropdown.hide { display: none !important; }
-.time-picker-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; text-align: center; color: var(--pri) !important; }
-.time-picker-header #currentTimePickerStepLabel { font-size: 0.9rem; color: var(--sec-dark) !important; display: block; font-weight: 400; }
-.time-picker-step { margin-bottom: 18px; }
-.time-picker-step label { font-size: 0.9rem; font-weight: 500; margin-bottom: 10px; color: var(--dark) !important; }
-.time-options-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); gap: 10px; }
-.time-options-grid.time-options-grid-condensed { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
-.time-options-grid button { padding: 12px 10px; font-size: 0.9rem; background-color: var(--light) !important; color: var(--dark) !important; border: 1px solid var(--bd); border-radius: var(--radius); cursor: pointer; transition: all 0.2s ease; margin-right: 0; display: flex; align-items: center; justify-content: center; }
-.time-options-grid button:hover { background-color: var(--head) !important; border-color: var(--sec-dark) !important; }
-.time-options-grid button.selected { background-color: var(--pri) !important; color: white !important; border-color: var(--pri-dark) !important; font-weight: 500; transform: scale(1.05); }
-.time-picker-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; border-top: 1px solid var(--bd); padding-top: 15px;}
-.time-picker-actions button { min-width: 90px; flex-grow: 1; }
-.time-picker-actions button#setTimeButton { background-color: var(--ok) !important; border-color: var(--ok) !important; color: white !important;}
-.time-picker-actions button#setTimeButton:hover { background-color: var(--ok-dark) !important; border-color: var(--ok-dark) !important;}
-.time-picker-actions button#setTimeButton:disabled { background-color: #a0aec0 !important; border-color: #a0aec0 !important; }
-
-/* ========== UTILITIES ========== */
-.hide { display: none !important; }
-.text-center { text-align: center; }
-.tip { font-size: 0.85rem; color: var(--sec-dark) !important; margin-top: -8px; margin-bottom: 15px; display: block; font-style: italic; line-height: 1.45; background-color: #f0f3f5c9 !important; padding: 8px 12px; border-radius: calc(var(--radius) - 2px); border-left: 3px solid var(--pri-light); }
-
-/* ========== PROFILE SECTION ========== */
-#profileDetails p { margin-bottom: 15px; font-size: 1rem; color: var(--dark) !important;}
-#profileDetails strong { color: var(--sec-dark) !important; min-width: 180px; display: inline-block; font-weight: 500; }
-#profileDetails strong i { margin-right: 8px; width: 20px; }
-#profileFileUpload { margin-bottom: 12px; }
-#profileFilesDisplay { margin-bottom: 18px; }
-
-/* ========== RESPONSIVE DESIGN ========== */
-@media(max-width: 768px) {
-  nav#side { 
-    display: none; 
-  }
-  nav#bottom { 
-    display: flex; 
-    position: fixed; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
-    background: var(--pri-dark); 
-    height: 60px; 
-    align-items: center; 
-    justify-content: space-around; 
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.15); 
-    z-index: 999; 
-  }
-  nav#bottom a.bLink { 
-    color: rgba(255,255,255,0.85); 
-    font-size: 1.6rem; 
-    text-decoration: none; 
-    padding: 10px; 
-    flex-grow: 1; 
-    text-align: center; 
-    transition: color 0.2s, transform 0.2s;
-  }
-  nav#bottom a.bLink.active { 
-    transform: scale(1.1); 
-    color: var(--warn); 
-  }
-  
-  main { padding: 20px 15px 80px 15px; } 
-  .card { padding: 20px; }
-  h2 { font-size: 1.6rem; } h3 {font-size: 1.25rem;}
-  .row { flex-direction: column; gap: 0; } 
-  .row > div { margin-bottom: 18px; min-width: unset; } 
-  
-  #authScreen .dlg { width: 95%; padding: 25px; } 
-  #authScreen .dlg h3 { font-size: 1.5rem; }
-
-  .modal .dlg { width: 95%; padding: 25px; } 
-  .modal .dlg h3 { font-size: 1.4rem; }
-  .modal .dlg canvas#signatureCanvas { max-width: 100%; }
-
-
-  .home-buttons-container { flex-direction: column; }
-  .custom-time-picker-dropdown { width: calc(100% - 30px); left: 15px; right: 15px; transform: translate(0, -50%); }
-  .time-options-grid { grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); }
-  .invoice-actions, .agreement-actions, .modal-actions { justify-content: center; }
-  .totals { text-align: center; }
-  .totals div { display: flex; justify-content: space-between; max-width: 300px; margin-left: auto; margin-right: auto;}
-  .rate-inputs-grid { grid-template-columns: 1fr; }
-  .admin-nav-tabs { flex-direction: column; border-bottom: none;}
-  .admin-tab-btn { width: 100%; margin-bottom: 5px; border-bottom: 2px solid var(--bd); text-align: left;}
-  .admin-tab-btn.active { border-bottom-color: var(--pri); }
+/* Styling for the invite link input field */
+#invite {
+  user-select: all; /* Allow users to easily select and copy the invite link */
 }
 
-/* ========== PRINT STYLES ========== */
+/* Utility class to hide elements (Bootstrap's d-none is preferred) */
+.hide {
+  display: none !important;
+}
+
+/* Custom scrollbar styling (optional) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--sec-light); /* Light track for scrollbar */
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sec); /* Secondary color for scrollbar thumb */
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sec-dark); /* Darken thumb on hover */
+}
+
+/* Specific styling for Flatpickr input fields if needed */
+.flatpickr-date, .flatpickr-time {
+  /* background-color: white; */ /* Example: ensure white background */
+}
+
+/* Loading overlay modal specific styling */
+#loadingOverlay.modal {
+    background-color: rgba(0, 0, 0, 0.65); /* Darker, more prominent overlay */
+}
+#loadingOverlay .modal-dialog {
+    background-color: transparent; /* Ensure dialog itself is transparent */
+    box-shadow: none;
+}
+
+
+/* Print-specific styles */
 @media print {
-  body { display: block; font-size: 10pt; color: #000 !important; background: #fff !important; border: none !important; }
-  #authScreen, nav#side, nav#bottom, #adminTab, 
-  #rqModal, #sigModal, #wiz, #customTimePicker, #messageModal, #setInitialInvoiceModal, #adminSetupWizard, #travelCodeSelectionModal, #confirmationModal,
-  #invoice .invoice-actions button:not(.print-only-btn), #agreement .agreement-actions button:not(.print-only-btn),
-  #invoice table th.no-print, #invoice table td.no-print, .modal-actions button, #agreement #agrChip,
-  #admin, .home-buttons-container, /* #homeGuest, */ /* Consider if #homeUser content is printable */
-  .invite-link-container, .admin-nav-tabs,
-  button i, #logoutBtn, #editProfileBtn, #uploadProfileDocumentsBtn, #addInvRowUserActionBtn, #saveDraftBtn, #signBtn, #participantSignBtn,
-  #adminAddAgreementClauseBtn, #saveAdminAgreementCustomizationsBtn, #saveAdminPortalSettingsBtn, #resetGlobalSettingsToDefaultsBtn,
-  #saveAdminServiceBtn, #clearAdminServiceFormBtn, #selectTravelCodeBtn, #saveWorkerAuthorizationsBtn, #copyLinkBtn,
-  #adminAgreementWorkerSelector button, #initialInvoiceNumberInput + .modal-actions button,
-  #saveRequestBtn, #closeRqModalBtn, #saveShiftFromModalToInvoiceBtn, #closeLogShiftModalBtn, #saveSigBtn, #closeSigModalBtn, #clearSigBtn,
-  .wizard-steps + div button, 
-  #closeMessageModalBtn, #confirmTravelCodeSelectionBtn, #closeTravelCodeSelectionModalBtn,
-  #logTodayShiftBtn, #rqBtn 
-   { display: none !important; }
+  body {
+    font-size: 10pt; /* Standard print font size */
+    background-color: #fff !important; /* Ensure white background for print */
+    color: #000 !important; /* Ensure black text for print */
+  }
+  /* Hide elements not relevant for printing */
+  nav#side, nav#bottom, #adminTab, #logoutBtn,
+  .modal, .modal-backdrop, /* Hide all modals and their backdrops */
+  .d-print-none { /* Bootstrap class to hide elements specifically for print */
+    display: none !important;
+  }
+  main {
+    padding: 0 !important; /* Remove padding in print view */
+    overflow: visible !important; /* Ensure all content is visible */
+  }
+  .card {
+    box-shadow: none !important; /* Remove shadows for print */
+    border: none !important; /* Remove borders for print */
+    margin-bottom: 20px !important; /* Space between printed sections */
+  }
+  /* Ensure only the active section is displayed if others are not explicitly hidden */
+  section.card.active { 
+    display: block !important;
+  }
   
-  #portalApp { display: block !important; } 
-  main { padding: 0; margin: 0; overflow: visible; }
-  .card { box-shadow: none; border: none; padding: 0; margin: 0 auto; max-width: 100%; background: #fff !important; color: #000 !important;}
-  section.card.active { display: block !important; }
+  /* Invoice table styling for print */
+  #invoicePdfContent .table th,
+  #invoicePdfContent .table td {
+      font-size: 9pt;
+      padding: 0.25rem 0.4rem; /* Reduced padding for print */
+      border: 1px solid #ccc !important; /* Ensure borders are visible */
+      color: #000 !important; /* Black text */
+  }
+   #invoicePdfContent table thead {
+      background-color: #eee !important; /* Light grey for table header */
+   }
+
+  /* Show columns specifically designated for print */
+  .column-code.d-print-table-cell, 
+  .column-rate-type.d-print-table-cell,
+  .print-only-column.d-print-table-cell { 
+      display: table-cell !important;
+  }
+
+  /* Show content of print-specific spans */
+  .date-print-value, .code-print-value, .description-print-value, 
+  .start-time-print-value, .end-time-print-value, .rate-type-print-value, 
+  .rate-unit-print-value, .hours-km-print-value, .total-print-value {
+      display: inline !important;
+  }
+  /* Hide interactive inputs within the table for print */
+  #invTbl input, #invTbl select { display: none !important; }
 
 
-  #agreementContentContainer { border: none; padding: 0; background-color: transparent !important; max-height: none; overflow: visible; color: #000 !important;}
-  #agreementDynamicTitle { text-align: center; font-size: 18pt; margin-bottom: 20px; color: #000 !important;}
-  #invoice h2 { text-align: center; font-size: 16pt; margin-bottom: 15px; color: #000 !important;}
-  #invoice .row { margin-bottom: 8px; }
-  #invoice .row div label { font-weight: bold; font-size: 9pt; color: #000 !important;}
-  #invoice #invNo, #invoice #invDate, #invoice #provName, #invoice #provAbn, #invoice #gstFlag { border: none; padding: 1px; background: transparent !important; font-size: 9pt; width: auto; margin-bottom: 0; color: #000 !important;}
-  #providerDetailsRow #gstFlagContainer { display: block !important; } 
-  #invTbl { font-size: 9pt; margin-top: 10px; background: #fff !important; }
-  #invTbl th, #invTbl td { padding: 4px 6px; border: 1px solid #999 !important; color: #000 !important;}
-  #invTbl th { background-color: #f0f0f0 !important; }
-  #invTbl .column-code, #invTbl .column-rate-type, #invTbl .print-only-column { display: table-cell !important; }
-  #invTbl input, #invTbl select, #invTbl textarea, #invTbl .custom-time-input, #invTbl .chk { display: none !important; }
-  #invTbl .code-print-value, #invTbl .description-print-value, #invTbl .rate-type-print-value, 
-  #invTbl .date-print-value, #invTbl .start-time-print-value, #invTbl .end-time-print-value,
-  #invTbl .hours-km-print-value, #invTbl .total-print-value { display: inline !important; }
-  
-  .totals { text-align: right; margin-top: 15px; font-size: 10pt; page-break-inside: avoid; color: #000 !important;}
-  .totals div { margin-bottom: 3px; }
-  #gstRow { display: block !important; } 
-  .signWrap { margin-top: 15px; page-break-inside: avoid; }
-  .signWrap img { width: 180px; height: 60px; border: 1px solid #ccc; } 
-  .signature-image[src*="placehold.co"] { border: 1px dashed #999 !important; } 
+  /* Totals section styling for print */
+  .totals {
+    text-align: right;
+    margin-top: 15px;
+    font-size: 10pt;
+    page-break-inside: avoid; /* Prevent totals from splitting across pages */
+  }
+  /* Ensure GST row is visible if applicable */
+  #gstRow { 
+    display: block !important; 
+  }
 
-  .pdf-show { display: table-cell !important; }
-  .pdf-hide { display: none !important; }
+  /* Agreement content styling for print */
+  #agreementContentWrapper {
+    border: none !important;
+    padding: 0 !important;
+  }
+  .signWrap img.signature-image {
+    border: 1px solid #999 !important; /* Ensure signature images have a border */
+    max-width: 200px; /* Control size on print */
+  }
+  /* Hide status chips on print */
+  .chip {
+    display: none !important; 
+  }
 }
